@@ -9,10 +9,13 @@ type Props = {
   series: LineSeries[];
   height?: number;
   yLabel?: string;
+  xTickFormatter?: (v: number) => string;
+  xLabel?: string;
+  showLegend?: boolean;
 };
 
-export default function LineChart({ series, height = 220, yLabel }: Props) {
-  const padding = { top: 10, right: 12, bottom: 22, left: 28 };
+export default function LineChart({ series, height = 220, yLabel, xTickFormatter, xLabel, showLegend = true }: Props) {
+  const padding = { top: 10, right: 12, bottom: 28, left: 36 };
   const width = 800; // SVG viewBox width; scales responsively via CSS
 
   const allPoints = series.flatMap((s) => s.points);
@@ -72,7 +75,7 @@ export default function LineChart({ series, height = 220, yLabel }: Props) {
           <g key={`xt-${i}`}>
             <line x1={sx(v)} y1={padding.top + innerH} x2={sx(v)} y2={padding.top + innerH + 4} stroke="#999" strokeWidth={1} />
             <text x={sx(v)} y={padding.top + innerH + 14} fontSize={10} textAnchor="middle" fill="#666">
-              {Math.round(v)}
+              {xTickFormatter ? xTickFormatter(v) : String(Math.round(v))}
             </text>
           </g>
         ))}
@@ -82,20 +85,24 @@ export default function LineChart({ series, height = 220, yLabel }: Props) {
           <path key={s.id} d={pathFor(s.points)} stroke={s.color} strokeWidth={2} fill="none" />
         ))}
 
-        {/* Legend */}
-        <g transform={`translate(${padding.left}, ${padding.top})`}>
-          {series.map((s, i) => (
-            <g key={`lg-${s.id}`} transform={`translate(${i * 120}, 0)`}>
-              <rect width={12} height={2} y={5} fill={s.color} />
-              <text x={16} y={8} fontSize={11} fill="#333">
-                {s.id}
-              </text>
-            </g>
-          ))}
-        </g>
+        {/* Legend (optional) */}
+        {showLegend && (
+          <g transform={`translate(${padding.left}, ${padding.top})`}>
+            {series.map((s, i) => (
+              <g key={`lg-${s.id}`} transform={`translate(${i * 120}, 0)`}>
+                <rect width={12} height={2} y={5} fill={s.color} />
+                <text x={16} y={8} fontSize={11} fill="#333">{s.id}</text>
+              </g>
+            ))}
+          </g>
+        )}
 
         {yLabel && (
           <text x={padding.left} y={padding.top - 2} fontSize={11} fill="#333">{yLabel}</text>
+        )}
+
+        {xLabel && (
+          <text x={padding.left + innerW / 2} y={padding.top + innerH + 24} fontSize={11} fill="#333" textAnchor="middle">{xLabel}</text>
         )}
       </svg>
     </div>
