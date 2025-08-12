@@ -34,6 +34,8 @@ function formatMonthLabel(m: string) {
   return `${year} ${name}`;
 }
 
+type ChannelMetric = "Temperature" | "Luftfeuchtigkeit" | "Taupunkt" | "Wärmeindex";
+
 type Dataset = "allsensors" | "main";
 
 type Resolution = "minute" | "hour" | "day";
@@ -51,34 +53,71 @@ const COLORS = [
 
 export default function Dashboard() {
   const [months, setMonths] = useState<string[]>([]);
-  const [month, setMonth] = useState<string>("");
+  const [year, setYear] = useState<string>("");
+  const [mon, setMon] = useState<string>(""); // MM
+  const [resolution, setResolution] = useState<Resolution>("minute");
+  const [mode, setMode] = useState<"main" | "channel">("main");
+  const [selectedChannel, setSelectedChannel] = useState<string>("ch1");
+  const [metric, setMetric] = useState<ChannelMetric>("Temperature");
   const [dataAll, setDataAll] = useState<DataResp | null>(null);
   const [dataMain, setDataMain] = useState<DataResp | null>(null);
   const [channelsCfg, setChannelsCfg] = useState<ChannelsConfig>({});
+
+  const monthsByYear = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const ym of months) {
+      const y = ym.slice(0, 4);
+      const m = ym.slice(4, 6);
+      if (!map[y]) map[y] = [];
+      if (!map[y].includes(m)) map[y].push(m);
+    }
+    for (const y of Object.keys(map)) {
+      map[y].sort((a, b) => b.localeCompare(a));
+    }
+    return map;
+  }, [months]);
+  const years = useMemo(() => Object.keys(monthsByYear).sort((a, b) => b.localeCompare(a)), [monthsByYear]);
 
   useEffect(() => {
     fetch("/api/data/months")
       .then((r) => r.json())
       .then((j: MonthsResp) => {
         setMonths(j.months);
-        if (j.months.length && !month) setMonth(j.months[0]);
+        // initialize year/month defaults to most recent available
+        if (!year || !mon) {
+          const byY: Record<string, string[]> = {};
+          for (const ym of j.months) {
+            const y = ym.slice(0, 4);
+            const m = ym.slice(4, 6);
+            if (!byY[y]) byY[y] = [];
+            if (!byY[y].includes(m)) byY[y].push(m);
+          }
+          const ys = Object.keys(byY).sort((a, b) => b.localeCompare(a));
+          if (ys.length) {
+            const y = ys[0];
+            byY[y].sort((a, b) => b.localeCompare(a));
+            const m = byY[y][0];
+            setYear((prev) => prev || y);
+            setMon((prev) => prev || m);
+          }
+        }
       })
       .catch(() => {});
     fetch("/api/config/channels")
       .then((r) => r.json())
-      .then((j: ChannelsConfig) => setChannelsCfg(j))
+      .then((cfg) => setChannelsCfg(cfg))
       .catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (!month) return;
-    // Always fetch both datasets, no selections
+    if (!year || !mon) return;
+    const monthStr = `${year}${mon}`;
     const uAll = new URL("/api/data/allsensors", window.location.origin);
-    uAll.searchParams.set("month", month);
-    uAll.searchParams.set("resolution", "minute");
+    uAll.searchParams.set("month", monthStr);
+    uAll.searchParams.set("resolution", resolution);
     const uMain = new URL("/api/data/main", window.location.origin);
-    uMain.searchParams.set("month", month);
-    uMain.searchParams.set("resolution", "minute");
+    uMain.searchParams.set("month", monthStr);
+    uMain.searchParams.set("resolution", resolution);
     Promise.all([
       fetch(uAll.toString()).then((r) => r.json()).catch(() => null),
       fetch(uMain.toString()).then((r) => r.json()).catch(() => null),
@@ -86,7 +125,7 @@ export default function Dashboard() {
       setDataAll(a);
       setDataMain(m);
     });
-  }, [month]);
+  }, [year, mon, resolution]);
   // Helpers to build x scaling per dataset
   const xBaseAll = useMemo(() => {
     if (!dataAll?.rows?.length) return null as number | null;
@@ -102,30 +141,64 @@ export default function Dashboard() {
   return (
     <div className="w-full max-w-screen-lg mx-auto flex flex-col gap-4">
       <h1 className="text-2xl font-semibold">Wetterstation Dashboard</h1>
-      {/* Monat-Auswahl (lesbar) */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      {/* Steuerung: Jahr/Monat, Auflösung, Ansicht, Kanal/Metrik */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <div className="flex flex-col gap-1">
-          <label className="text-sm">Monat</label>
-          <select className="border rounded p-2" value={month} onChange={(e) => setMonth(e.target.value)}>
-            {months.map((m) => (
-              <option key={m} value={m}>{formatMonthLabel(m)}</option>
+          <label className="text-sm">Jahr</label>
+          <select className="border rounded p-2" value={year} onChange={(e) => setYear(e.target.value)}>
+            {years.map((y) => (
+              <option key={y} value={y}>{y}</option>
             ))}
           </select>
         </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm">Monat</label>
+          <select className="border rounded p-2" value={mon} onChange={(e) => setMon(e.target.value)}>
+            {(monthsByYear[year] || []).map((m) => (
+              <option key={m} value={m}>{DE_MONTHS[Number(m) - 1] || m}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm">Auflösung</label>
+          <select className="border rounded p-2" value={resolution} onChange={(e) => setResolution(e.target.value as Resolution)}>
+            <option value="minute">Minuten</option>
+            <option value="hour">Stunden</option>
+            <option value="day">Tage</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm">Ansicht</label>
+          <select className="border rounded p-2" value={mode} onChange={(e) => setMode(e.target.value as any)}>
+            <option value="main">Hauptsensoren</option>
+            <option value="channel">Sensor CH1–CH8</option>
+          </select>
+        </div>
+        {mode === "channel" && (
+          <div className="flex flex-col gap-1">
+            <label className="text-sm">Sensor</label>
+            <select className="border rounded p-2" value={selectedChannel} onChange={(e) => setSelectedChannel(e.target.value)}>
+              {getChannelKeys(channelsCfg).map((k) => (
+                <option key={k} value={k}>{channelName(k, channelsCfg)}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {mode === "channel" && (
+          <div className="flex flex-col gap-1">
+            <label className="text-sm">Metrik</label>
+            <select className="border rounded p-2" value={metric} onChange={(e) => setMetric(e.target.value as ChannelMetric)}>
+              <option value="Temperature">Temperatur (℃)</option>
+              <option value="Luftfeuchtigkeit">Luftfeuchte (%)</option>
+              <option value="Taupunkt">Taupunkt (℃)</option>
+              <option value="Wärmeindex">Wärmeindex (℃)</option>
+            </select>
+          </div>
+        )}
       </div>
 
-      {/* Allsensors: alle Reihen einzeln */}
-      {dataAll && (
-        <div className="rounded-lg border border-gray-200 bg-white dark:bg-black">
-          <div className="px-3 py-2 border-b border-gray-200 text-sm font-medium">Allsensors • Datei: {dataAll.file}</div>
-          <div className="p-3 flex flex-col gap-4">
-            {renderAllCharts(dataAll, channelsCfg, xBaseAll)}
-          </div>
-        </div>
-      )}
-
-      {/* Hauptdaten: alle Reihen einzeln */}
-      {dataMain && (
+      {/* Ansicht: Hauptsensoren (gestapelte Charts) */}
+      {mode === "main" && dataMain && (
         <div className="rounded-lg border border-gray-200 bg-white dark:bg-black">
           <div className="px-3 py-2 border-b border-gray-200 text-sm font-medium">Hauptdaten (A) • Datei: {dataMain.file}</div>
           <div className="p-3 flex flex-col gap-4">
@@ -133,34 +206,39 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Ansicht: Ein Sensor (CH1–CH8) mit gewählter Metrik */}
+      {mode === "channel" && dataAll && (
+        <div className="rounded-lg border border-gray-200 bg-white dark:bg-black">
+          <div className="px-3 py-2 border-b border-gray-200 text-sm font-medium">{channelName(selectedChannel, channelsCfg)} • {metric} • Datei: {dataAll.file}</div>
+          <div className="p-3 flex flex-col gap-4">
+            {renderChannelChart(dataAll, selectedChannel, metric, channelsCfg, xBaseAll)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function renderAllCharts(data: DataResp, channelsCfg: ChannelsConfig, xBase: number | null) {
+function renderChannelChart(data: DataResp, chKey: string, metric: ChannelMetric, channelsCfg: ChannelsConfig, xBase: number | null) {
   const rows = data.rows || [];
   if (!rows.length || !xBase) return <div className="text-xs text-gray-500">Keine Daten</div>;
   const times = rows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
   const xVals = times.map((t) => Math.round((t.getTime() - xBase) / 60000));
-  const cols = inferNumericColumns(data);
+  const chNum = (chKey.match(/\d+/)?.[0]) || "1";
+  const col = headerKeyForAllsensors(data.header || [], metric, chNum);
+  const label = `${channelName(chKey, channelsCfg)} ${metric}`;
   const fmt = makeTimeTickFormatter(xBase);
+  const series: LineSeries = {
+    id: label,
+    color: COLORS[0],
+    points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) })),
+  };
+  if (!series.points.some((p) => Number.isFinite(p.y))) return <div className="text-xs text-gray-500">Keine numerischen Werte</div>;
   return (
-    <>
-      {cols.map((col, i) => {
-        const label = prettyAllsensorsLabel(col, channelsCfg);
-        const series: LineSeries = {
-          id: label,
-          color: COLORS[i % COLORS.length],
-          points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) })),
-        };
-        if (!series.points.some((p) => Number.isFinite(p.y))) return null;
-        return (
-          <div key={col} className="rounded border border-gray-200 p-3">
-            <LineChart series={[series]} yLabel={label} xLabel="Zeit" xTickFormatter={fmt} showLegend={false} />
-          </div>
-        );
-      })}
-    </>
+    <div className="rounded border border-gray-200 p-3">
+      <LineChart series={[series]} yLabel={label} xLabel="Zeit" xTickFormatter={fmt} showLegend={false} />
+    </div>
   );
 }
 
@@ -217,6 +295,31 @@ function prettyAllsensorsLabel(header: string, cfg: ChannelsConfig) {
     return `${name} ${m[2]}`;
   }
   return header;
+}
+
+function channelName(key: string, cfg: ChannelsConfig) {
+  const c = cfg[key];
+  if (!c) return key.toUpperCase();
+  return c.name || key.toUpperCase();
+}
+
+function getChannelKeys(cfg: ChannelsConfig): string[] {
+  const keys = Object.keys(cfg);
+  if (keys.length) return keys.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  return ["ch1","ch2","ch3","ch4","ch5","ch6","ch7","ch8"];
+}
+
+function headerKeyForAllsensors(header: string[], metric: string, chNum: string): string {
+  // Prefer CHx <metric>
+  const direct = header.find((h) => h.startsWith(`CH${chNum} ${metric}`));
+  if (direct) return direct;
+  // Humidity alternative from WN35CHxhum
+  if (metric === "Luftfeuchtigkeit") {
+    const alt = header.find((h) => h.startsWith(`WN35CH${chNum}hum`));
+    if (alt) return alt;
+  }
+  // fallback to first CH for metric
+  return header.find((h) => h.includes(metric)) || header[1] || "";
 }
 
 function inferNumericColumns(data: DataResp | null): string[] {
