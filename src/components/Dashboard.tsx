@@ -13,6 +13,81 @@ type DataResp = {
 
 type ChannelsConfig = Record<string, { name: string }>; // { ch1: { name: "Living" }, ... }
 
+function TimeRangeControls(props: {
+  mode: "main" | "channel";
+  times: Date[];
+  startIdx: number | null;
+  endIdx: number | null;
+  setStartIdx: (n: number) => void;
+  setEndIdx: (n: number) => void;
+}) {
+  const { times, startIdx, endIdx, setStartIdx, setEndIdx } = props;
+  const len = times.length;
+  if (len < 2) return null;
+  const start = startIdx != null ? clamp(startIdx, 0, len - 2) : 0;
+  const end = endIdx != null ? clamp(endIdx, start + 1, len - 1) : len - 1;
+
+  const startDisp = formatDisplay(times[start]);
+  const endDisp = formatDisplay(times[end]);
+  const startLocal = formatLocal(times[start]);
+  const endLocal = formatLocal(times[end]);
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white dark:bg-black p-3">
+      <div className="text-sm font-medium mb-2">Zeitraum</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm">Start</label>
+          <input
+            type="datetime-local"
+            className="border rounded p-2"
+            value={startLocal}
+            onChange={(e) => {
+              const d = new Date(e.target.value);
+              if (isNaN(d.getTime())) return;
+              const idx = nearestIndex(times, d.getTime());
+              setStartIdx(Math.min(idx, end - 1));
+            }}
+          />
+          <div className="text-xs text-gray-500">{startDisp}</div>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm">Ende</label>
+          <input
+            type="datetime-local"
+            className="border rounded p-2"
+            value={endLocal}
+            onChange={(e) => {
+              const d = new Date(e.target.value);
+              if (isNaN(d.getTime())) return;
+              const idx = nearestIndex(times, d.getTime());
+              setEndIdx(Math.max(idx, start + 1));
+            }}
+          />
+          <div className="text-xs text-gray-500">{endDisp}</div>
+        </div>
+      </div>
+      <div className="flex flex-col gap-2">
+        <input
+          type="range"
+          min={0}
+          max={len - 2}
+          value={start}
+          onChange={(e) => setStartIdx(Math.min(Number(e.target.value), end - 1))}
+        />
+        <input
+          type="range"
+          min={1}
+          max={len - 1}
+          value={end}
+          onChange={(e) => setEndIdx(Math.max(Number(e.target.value), start + 1))}
+        />
+        <div className="text-xs text-gray-500">{startDisp} — {endDisp}</div>
+      </div>
+    </div>
+  );
+}
+
 function pad2(n: number) { return n < 10 ? `0${n}` : String(n); }
 function makeTimeTickFormatter(t0: number) {
   return (v: number) => {
@@ -63,6 +138,10 @@ export default function Dashboard() {
   const [dataMain, setDataMain] = useState<DataResp | null>(null);
   const [channelsCfg, setChannelsCfg] = useState<ChannelsConfig>({});
 
+  // Zeitbereich (Index in Zeitreihe des aktiven Datensatzes)
+  const [startIdx, setStartIdx] = useState<number | null>(null);
+  const [endIdx, setEndIdx] = useState<number | null>(null);
+
   const monthsByYear = useMemo(() => {
     const map: Record<string, string[]> = {};
     for (const ym of months) {
@@ -108,24 +187,7 @@ export default function Dashboard() {
       .then((cfg) => setChannelsCfg(cfg))
       .catch(() => {});
   }, []);
-
-  useEffect(() => {
-    if (!year || !mon) return;
-    const monthStr = `${year}${mon}`;
-    const uAll = new URL("/api/data/allsensors", window.location.origin);
-    uAll.searchParams.set("month", monthStr);
-    uAll.searchParams.set("resolution", resolution);
-    const uMain = new URL("/api/data/main", window.location.origin);
-    uMain.searchParams.set("month", monthStr);
-    uMain.searchParams.set("resolution", resolution);
-    Promise.all([
-      fetch(uAll.toString()).then((r) => r.json()).catch(() => null),
-      fetch(uMain.toString()).then((r) => r.json()).catch(() => null),
-    ]).then(([a, m]) => {
-      setDataAll(a);
-      setDataMain(m);
-    });
-  }, [year, mon, resolution]);
+  // Datenfetch wird weiter unten ausgelöst, nachdem Start/End berechnet sind.
   // Helpers to build x scaling per dataset
   const xBaseAll = useMemo(() => {
     if (!dataAll?.rows?.length) return null as number | null;
@@ -137,6 +199,48 @@ export default function Dashboard() {
     const times = dataMain.rows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
     return times.length ? times[0].getTime() : null;
   }, [dataMain]);
+
+  // Zeitachsen der geladenen Daten
+  const timesAll = useMemo(() => (dataAll?.rows || []).map((r) => toDate(r.time as string)).filter(Boolean) as Date[], [dataAll]);
+  const timesMain = useMemo(() => (dataMain?.rows || []).map((r) => toDate(r.time as string)).filter(Boolean) as Date[], [dataMain]);
+
+  // Standardbereich bei Datenwechsel setzen (voller Bereich)
+  useEffect(() => {
+    const times = mode === "channel" ? timesAll : timesMain;
+    if (!times.length) return;
+    // Nur initial oder wenn größer als letzter Index
+    setStartIdx((s) => (s == null || s < 0 ? 0 : Math.min(s, times.length - 1)));
+    setEndIdx((e) => (e == null || e < 0 ? times.length - 1 : Math.min(Math.max(e, 0), times.length - 1)));
+  }, [mode, timesAll, timesMain]);
+
+  // Aus gewählten Indizes Start/End ableiten
+  const selectedTimes = mode === "channel" ? timesAll : timesMain;
+  const selStart = useMemo(() => (startIdx != null && selectedTimes[startIdx]) ? selectedTimes[startIdx] : null, [startIdx, selectedTimes]);
+  const selEnd = useMemo(() => (endIdx != null && selectedTimes[endIdx]) ? selectedTimes[endIdx] : null, [endIdx, selectedTimes]);
+  const startParam = useMemo(() => (selStart ? formatForApi(selStart) : undefined), [selStart]);
+  const endParam = useMemo(() => (selEnd ? formatForApi(selEnd) : undefined), [selEnd]);
+
+  useEffect(() => {
+    if (!year || !mon) return;
+    const monthStr = `${year}${mon}`;
+    const uAll = new URL("/api/data/allsensors", window.location.origin);
+    uAll.searchParams.set("month", monthStr);
+    uAll.searchParams.set("resolution", resolution);
+    if (startParam) uAll.searchParams.set("start", startParam);
+    if (endParam) uAll.searchParams.set("end", endParam);
+    const uMain = new URL("/api/data/main", window.location.origin);
+    uMain.searchParams.set("month", monthStr);
+    uMain.searchParams.set("resolution", resolution);
+    if (startParam) uMain.searchParams.set("start", startParam);
+    if (endParam) uMain.searchParams.set("end", endParam);
+    Promise.all([
+      fetch(uAll.toString()).then((r) => r.json()).catch(() => null),
+      fetch(uMain.toString()).then((r) => r.json()).catch(() => null),
+    ]).then(([a, m]) => {
+      setDataAll(a);
+      setDataMain(m);
+    });
+  }, [year, mon, resolution, startParam, endParam]);
 
   return (
     <div className="w-full max-w-screen-lg mx-auto flex flex-col gap-4">
@@ -151,6 +255,16 @@ export default function Dashboard() {
             ))}
           </select>
         </div>
+
+      {/* Zeitraum: Start/Ende via Slider + Datumsfelder */}
+      <TimeRangeControls
+        mode={mode}
+        times={selectedTimes}
+        startIdx={startIdx}
+        endIdx={endIdx}
+        setStartIdx={setStartIdx}
+        setEndIdx={setEndIdx}
+      />
         <div className="flex flex-col gap-1">
           <label className="text-sm">Monat</label>
           <select className="border rounded p-2" value={mon} onChange={(e) => setMon(e.target.value)}>
@@ -284,6 +398,48 @@ function numOrNaN(v: any): number {
   if (v == null) return NaN;
   const n = typeof v === "number" ? v : Number(v);
   return isNaN(n) ? NaN : n;
+}
+
+// Helpers for time range controls
+function clamp(n: number, min: number, max: number) { return Math.max(min, Math.min(max, n)); }
+function nearestIndex(times: Date[], ms: number) {
+  if (!times.length) return 0;
+  let lo = 0, hi = times.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const t = times[mid].getTime();
+    if (t === ms) return mid;
+    if (t < ms) lo = mid + 1; else hi = mid - 1;
+  }
+  const i0 = clamp(lo, 0, times.length - 1);
+  const i1 = clamp(hi, 0, times.length - 1);
+  const d0 = Math.abs(times[i0].getTime() - ms);
+  const d1 = Math.abs(times[i1].getTime() - ms);
+  return d0 < d1 ? i0 : i1;
+}
+function formatDisplay(d: Date) {
+  const dd = pad2(d.getDate());
+  const mm = pad2(d.getMonth() + 1);
+  const yyyy = d.getFullYear();
+  const hh = pad2(d.getHours());
+  const mi = pad2(d.getMinutes());
+  return `${dd}.${mm}.${yyyy} ${hh}:${mi}`;
+}
+function formatLocal(d: Date) {
+  const yyyy = d.getFullYear();
+  const mm = pad2(d.getMonth() + 1);
+  const dd = pad2(d.getDate());
+  const hh = pad2(d.getHours());
+  const mi = pad2(d.getMinutes());
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+}
+function formatForApi(d: Date) {
+  const yyyy = d.getFullYear();
+  const mm = pad2(d.getMonth() + 1);
+  const dd = pad2(d.getDate());
+  const hh = pad2(d.getHours());
+  const mi = pad2(d.getMinutes());
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
 }
 
 function prettyAllsensorsLabel(header: string, cfg: ChannelsConfig) {
