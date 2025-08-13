@@ -13,6 +13,10 @@ export async function readCsvFile(relPath: string): Promise<string> {
 export function parseCsv(content: string): { header: string[]; rows: Row[] } {
   const lines = content.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length === 0) return { header: [], rows: [] };
+  // Strip potential UTF-8 BOM
+  if (lines[0].charCodeAt(0) === 0xfeff) {
+    lines[0] = lines[0].slice(1);
+  }
   const header = lines[0].split(",").map((s) => s.trim());
   const rows: Row[] = [];
   for (let i = 1; i < lines.length; i++) {
@@ -23,13 +27,14 @@ export function parseCsv(content: string): { header: string[]; rows: Row[] } {
       const key = header[c];
       const valRaw = cols[c] ?? "";
       const val = valRaw.trim();
-      if (c === 0 && (key === "Zeit" || key === "Time")) {
+      // Always treat first column as time; header may vary or include BOM
+      if (c === 0) {
         row.time = val;
-      } else {
-        if (val === "--" || val === "") row[key] = null;
-        else if (!isNaN(Number(val))) row[key] = Number(val);
-        else row[key] = val;
+        continue;
       }
+      if (val === "--" || val === "") row[key] = null;
+      else if (!isNaN(Number(val))) row[key] = Number(val);
+      else row[key] = val;
     }
     if (row.time) rows.push(row);
   }

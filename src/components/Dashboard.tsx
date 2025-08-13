@@ -13,6 +13,40 @@ type DataResp = {
 
 type ChannelsConfig = Record<string, { name: string }>; // { ch1: { name: "Living" }, ... }
 
+function renderChannelCardCharts(
+  data: DataResp,
+  channelsCfg: ChannelsConfig,
+  xBase: number | null,
+  chKey: string
+) {
+  const rows = data.rows || [];
+  if (!rows.length || !xBase) return <div className="text-xs text-gray-500">Keine Daten</div>;
+  const times = rows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
+  const xVals = times.map((t) => Math.round((t.getTime() - xBase) / 60000));
+  const fmt = makeTimeTickFormatter(xBase);
+  const metrics: ChannelMetric[] = ["Temperature", "Luftfeuchtigkeit", "Taupunkt", "Wärmeindex"];
+  const chNum = (chKey.match(/\d+/)?.[0]) || "1";
+  const out: React.ReactNode[] = [];
+  for (let i = 0; i < metrics.length; i++) {
+    const metric = metrics[i];
+    const col = headerKeyForAllsensors(data.header || [], metric, chNum);
+    if (!col) continue;
+    const series: LineSeries = {
+      id: `${channelName(chKey, channelsCfg)} ${metric}`,
+      color: COLORS[i % COLORS.length],
+      points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) })),
+    };
+    if (!series.points.some((p) => Number.isFinite(p.y))) continue;
+    out.push(
+      <div key={`${chKey}-${metric}`} className="rounded border border-gray-100 p-3">
+        <LineChart series={[series]} yLabel={`${metric}`} xLabel="Zeit" xTickFormatter={fmt} showLegend={false} />
+      </div>
+    );
+  }
+  if (!out.length) return <div className="text-xs text-gray-500">Keine numerischen Werte</div>;
+  return <>{out}</>;
+}
+
 function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xBase: number | null) {
   const rows = data.rows || [];
   if (!rows.length || !xBase) return <div className="text-xs text-gray-500">Keine Daten</div>;
@@ -23,9 +57,7 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
   const out: React.ReactNode[] = [];
   for (const chKey of getChannelKeys(channelsCfg)) {
     const chNum = (chKey.match(/\d+/)?.[0]) || "1";
-    out.push(
-      <div key={`header-${chKey}`} className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-2">{channelName(chKey, channelsCfg)}</div>
-    );
+    const channelCharts: React.ReactNode[] = [];
     for (let i = 0; i < metrics.length; i++) {
       const metric = metrics[i];
       const col = headerKeyForAllsensors(data.header || [], metric, chNum);
@@ -36,9 +68,19 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
         points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) })),
       };
       if (!series.points.some((p) => Number.isFinite(p.y))) continue;
-      out.push(
-        <div key={`${chKey}-${metric}`} className="rounded border border-gray-200 p-3">
+      channelCharts.push(
+        <div key={`${chKey}-${metric}`} className="rounded border border-gray-100 p-3">
           <LineChart series={[series]} yLabel={`${metric}`} xLabel="Zeit" xTickFormatter={fmt} showLegend={false} />
+        </div>
+      );
+    }
+    if (channelCharts.length) {
+      out.push(
+        <div key={`ch-card-${chKey}`} className="rounded-lg border border-gray-200 bg-white dark:bg-black">
+          <div className="px-3 py-2 border-b border-gray-200 text-sm font-medium">{channelName(chKey, channelsCfg)}</div>
+          <div className="p-3 flex flex-col gap-4">
+            {channelCharts}
+          </div>
         </div>
       );
     }
@@ -166,15 +208,18 @@ export default function Dashboard() {
   const [year, setYear] = useState<string>("");
   const [mon, setMon] = useState<string>(""); // MM
   const [resolution, setResolution] = useState<Resolution>("minute");
-  const [mode, setMode] = useState<"main" | "channel">("main");
+  const [mode, setMode] = useState<"main" | "channel">("channel");
   const [selectedChannel, setSelectedChannel] = useState<string>("ch1");
   const [metric, setMetric] = useState<ChannelMetric>("Temperature");
   const [dataAll, setDataAll] = useState<DataResp | null>(null);
   const [dataMain, setDataMain] = useState<DataResp | null>(null);
   const [channelsCfg, setChannelsCfg] = useState<ChannelsConfig>({});
+  const [loading, setLoading] = useState<boolean>(false);
+  const [errAll, setErrAll] = useState<string | null>(null);
+  const [errMain, setErrMain] = useState<string | null>(null);
 
   // Globaler Zeitbereich (über alle Monate/Jahre)
-  const [useGlobalRange, setUseGlobalRange] = useState<boolean>(true);
+  const [useGlobalRange, setUseGlobalRange] = useState<boolean>(false);
   const [extentMin, setExtentMin] = useState<Date | null>(null);
   const [extentMax, setExtentMax] = useState<Date | null>(null);
   const [pctStart, setPctStart] = useState<number>(0);    // 0..1000
@@ -280,7 +325,16 @@ export default function Dashboard() {
   }, [useGlobalRange, extentMin, extentMax, pctEnd]);
 
   useEffect(() => {
-    if (useGlobalRange && (!startParam || !endParam)) return; // wait for extent and slider mapping
+    // Preconditions: Only proceed when required params are ready
+    if (useGlobalRange) {
+      if (!startParam || !endParam) return; // wait for extent mapping
+    } else {
+      if (!year || !mon) return; // wait for month selection
+    }
+
+    setLoading(true);
+    setErrAll(null);
+    setErrMain(null);
     const uAll = new URL("/api/data/allsensors", window.location.origin);
     const uMain = new URL("/api/data/main", window.location.origin);
     if (useGlobalRange) {
@@ -291,7 +345,6 @@ export default function Dashboard() {
       if (startParam) uMain.searchParams.set("start", startParam);
       if (endParam) uMain.searchParams.set("end", endParam);
     } else {
-      if (!year || !mon) return;
       const monthStr = `${year}${mon}`;
       uAll.searchParams.set("month", monthStr);
       uMain.searchParams.set("month", monthStr);
@@ -299,12 +352,24 @@ export default function Dashboard() {
       uMain.searchParams.set("resolution", resolution);
     }
     Promise.all([
-      fetch(uAll.toString()).then((r) => r.json()).catch(() => null),
-      fetch(uMain.toString()).then((r) => r.json()).catch(() => null),
-    ]).then(([a, m]) => {
-      setDataAll(a);
-      setDataMain(m);
-    });
+      fetch(uAll.toString()).then(async (r) => ({ ok: r.ok, body: await r.json() })).catch(() => ({ ok: false, body: null })),
+      fetch(uMain.toString()).then(async (r) => ({ ok: r.ok, body: await r.json() })).catch(() => ({ ok: false, body: null })),
+    ])
+      .then(([a, m]) => {
+        if (!a.ok || !a.body || a.body.error) {
+          setErrAll(a.body?.error || "Fehler beim Laden Allsensors");
+          setDataAll(null);
+        } else {
+          setDataAll(a.body);
+        }
+        if (!m.ok || !m.body || m.body.error) {
+          setErrMain(m.body?.error || "Fehler beim Laden Hauptdaten");
+          setDataMain(null);
+        } else {
+          setDataMain(m.body);
+        }
+      })
+      .finally(() => setLoading(false));
   }, [useGlobalRange, year, mon, resolution, startParam, endParam]);
 
   return (
@@ -363,9 +428,31 @@ export default function Dashboard() {
             <option value="channel">Sensor CH1–CH8</option>
           </select>
         </div>
-        {/* Keine Sensor-/Metrik-Auswahl im Channel-Modus: es werden alle Diagramme angezeigt */}
+        {mode === "channel" && (
+          <div className="flex flex-col gap-1">
+            <label className="text-sm">Kanal</label>
+            <select
+              className="border rounded p-2"
+              value={selectedChannel}
+              onChange={(e) => setSelectedChannel(e.target.value)}
+            >
+              {getChannelKeys(channelsCfg).map((k) => (
+                <option key={k} value={k}>{channelName(k, channelsCfg)}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
+      {loading && (
+        <div className="rounded border border-yellow-300 bg-yellow-50 text-yellow-800 p-3 text-sm">Lade Daten…</div>
+      )}
+      {errMain && (
+        <div className="rounded border border-red-300 bg-red-50 text-red-800 p-3 text-sm">{errMain}</div>
+      )}
+      {errAll && (
+        <div className="rounded border border-red-300 bg-red-50 text-red-800 p-3 text-sm">{errAll}</div>
+      )}
       {/* Ansicht: Hauptsensoren (gestapelte Charts) */}
       {mode === "main" && dataMain && (
         <div className="rounded-lg border border-gray-200 bg-white dark:bg-black">
@@ -376,12 +463,12 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Ansicht: Alle Channels (CH1–CH8), je alle vorhandenen Metriken */}
+      {/* Ansicht: Einzelner Channel (Auswahl) */}
       {mode === "channel" && dataAll && (
         <div className="rounded-lg border border-gray-200 bg-white dark:bg-black">
-          <div className="px-3 py-2 border-b border-gray-200 text-sm font-medium">Alle Sensoren (CH1–CH8) • Datei: {dataAll.file}</div>
+          <div className="px-3 py-2 border-b border-gray-200 text-sm font-medium">{channelName(selectedChannel, channelsCfg)} • Datei: {dataAll.file}</div>
           <div className="p-3 flex flex-col gap-4">
-            {renderAllChannelsCharts(dataAll, channelsCfg, xBaseAll)}
+            {renderChannelCardCharts(dataAll, channelsCfg, xBaseAll, selectedChannel)}
           </div>
         </div>
       )}
