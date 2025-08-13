@@ -95,6 +95,22 @@ Names appear in the dashboard (labels/options). Undefined channels fall back to 
 
 All API routes run in the Node.js runtime and read from the local filesystem.
 
+## Realtime data (Ecowitt API v3)
+
+The homepage is split into two tabs:
+
+- **Echtzeit**: Fetches live data from Ecowitt API v3 via a server-side proxy (`/api/rt`).
+- **Gespeicherte Daten**: Historical dashboard powered by DuckDB/Parquet over your `DNT/` CSVs.
+
+Realtime proxy route:
+
+- `GET /api/rt?all=1` — returns the full "all" payload from Ecowitt
+- `GET /api/rt` — returns a small subset (indoor/outdoor temps)
+
+The proxy uses credentials from `eco.ts` (server-only) so your keys aren’t exposed to the browser.
+
+Docs: https://doc.ecowitt.net/web/#/apiv3en?page_id=17 (Getting Device Real-Time Data)
+
 ## Development
 
 ```bash
@@ -102,6 +118,31 @@ npm install
 npm run dev
 # usually opens http://localhost:3000
 ```
+
+### Configuration (.env and eco.ts)
+
+1) Environment variables
+
+- Copy `env.example` to `.env` and adjust as needed.
+- Supported variable(s):
+
+```
+NEXT_PUBLIC_RT_REFRESH_MS=300000  # Realtime refresh interval in ms (default 300000 = 5 min)
+```
+
+2) Ecowitt credentials (server-side)
+
+- Copy `eco.example.ts` to `eco.ts` and fill in your values:
+  - `applicationKey`
+  - `apiKey`
+  - `mac` (station MAC, e.g., `F0:08:D1:07:AF:83`)
+  - `server` (usually `api.ecowitt.net`)
+- `eco.ts` is imported by the server-side proxy at `src/app/api/rt/route.ts`.
+
+Security notes:
+
+- `.env*` files and `eco.ts` are ignored by Git (see `.gitignore`).
+- Do not commit your real keys.
 
 ## Scripts
 
