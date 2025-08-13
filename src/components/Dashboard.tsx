@@ -209,7 +209,7 @@ export default function Dashboard() {
   const [mon, setMon] = useState<string>(""); // MM
   const [resolution, setResolution] = useState<Resolution>("minute");
   const [mode, setMode] = useState<"main" | "channel">("channel");
-  const [selectedChannel, setSelectedChannel] = useState<string>("ch1");
+  const [selectedChannel, setSelectedChannel] = useState<string>("all");
   const [metric, setMetric] = useState<ChannelMetric>("Temperature");
   const [dataAll, setDataAll] = useState<DataResp | null>(null);
   const [dataMain, setDataMain] = useState<DataResp | null>(null);
@@ -295,8 +295,26 @@ export default function Dashboard() {
           if (!isNaN(dMin.getTime()) && !isNaN(dMax.getTime())) {
             setExtentMin(dMin);
             setExtentMax(dMax);
-            setPctStart(0);
-            setPctEnd(1000);
+            // Default: aktuelles Jahr als Zeitraum (auf Extent begrenzt)
+            const now = new Date();
+            const y = now.getFullYear();
+            const yStart = new Date(y, 0, 1, 0, 0, 0, 0);
+            const yEnd = new Date(y, 11, 31, 23, 59, 59, 999);
+            const defStartMs = Math.max(dMin.getTime(), yStart.getTime());
+            const defEndMs = Math.min(dMax.getTime(), yEnd.getTime());
+            if (defStartMs <= defEndMs) {
+              const span = dMax.getTime() - dMin.getTime();
+              const pStart = Math.round(((defStartMs - dMin.getTime()) / span) * 1000);
+              const pEnd = Math.round(((defEndMs - dMin.getTime()) / span) * 1000);
+              const safeStart = Math.max(0, Math.min(pStart, 999));
+              const safeEnd = Math.max(Math.min(pEnd, 1000), Math.min(1000, safeStart + 1));
+              setPctStart(safeStart);
+              setPctEnd(safeEnd);
+            } else {
+              // Falls aktuelles Jahr ausserhalb des Extents liegt, gesamten Extent verwenden
+              setPctStart(0);
+              setPctEnd(1000);
+            }
             return;
           }
         }
@@ -436,6 +454,7 @@ export default function Dashboard() {
               value={selectedChannel}
               onChange={(e) => setSelectedChannel(e.target.value)}
             >
+              <option value="all">Alle Kanäle</option>
               {getChannelKeys(channelsCfg).map((k) => (
                 <option key={k} value={k}>{channelName(k, channelsCfg)}</option>
               ))}
@@ -466,9 +485,11 @@ export default function Dashboard() {
       {/* Ansicht: Einzelner Channel (Auswahl) */}
       {mode === "channel" && dataAll && (
         <div className="rounded-lg border border-gray-200 bg-white dark:bg-black">
-          <div className="px-3 py-2 border-b border-gray-200 text-sm font-medium">{channelName(selectedChannel, channelsCfg)} • Datei: {dataAll.file}</div>
+          <div className="px-3 py-2 border-b border-gray-200 text-sm font-medium">{selectedChannel === "all" ? "Alle Sensoren (CH1–CH8)" : channelName(selectedChannel, channelsCfg)} • Datei: {dataAll.file}</div>
           <div className="p-3 flex flex-col gap-4">
-            {renderChannelCardCharts(dataAll, channelsCfg, xBaseAll, selectedChannel)}
+            {selectedChannel === "all"
+              ? renderAllChannelsCharts(dataAll, channelsCfg, xBaseAll)
+              : renderChannelCardCharts(dataAll, channelsCfg, xBaseAll, selectedChannel)}
           </div>
         </div>
       )}
