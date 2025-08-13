@@ -41,3 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 DNT/
+data/
+parquet/
+weather.duckdb
+weather.duckdb.lock
