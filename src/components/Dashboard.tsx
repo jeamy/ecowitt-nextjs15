@@ -26,25 +26,70 @@ function renderChannelCardCharts(
   const spanMin = times.length >= 2 ? Math.round((times[times.length - 1].getTime() - times[0].getTime()) / 60000) : 0;
   const fmt = makeTimeTickFormatter(xBase, spanMin);
   const hoverFmt = makeHoverTimeFormatter(xBase);
-  const metrics: ChannelMetric[] = ["Temperature", "Luftfeuchtigkeit", "Taupunkt", "Wärmeindex"];
+  
+  // Temperaturmetriken gruppieren
+  const tempMetrics: ChannelMetric[] = ["Temperatur", "Taupunkt", "Gefühlte Temperatur"];
   const chNum = (chKey.match(/\d+/)?.[0]) || "1";
   const out: React.ReactNode[] = [];
-  for (let i = 0; i < metrics.length; i++) {
-    const metric = metrics[i];
+  
+  // Temperaturdiagramm erstellen
+  const tempSeries: LineSeries[] = [];
+  for (let i = 0; i < tempMetrics.length; i++) {
+    const metric = tempMetrics[i];
     const col = headerKeyForAllsensors(data.header || [], metric, chNum);
     if (!col) continue;
     const series: LineSeries = {
-      id: `${channelName(chKey, channelsCfg)} ${metric}`,
+      id: `${metric}`,
       color: COLORS[i % COLORS.length],
       points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) })),
     };
-    if (!series.points.some((p) => Number.isFinite(p.y))) continue;
+    if (series.points.some((p) => Number.isFinite(p.y))) {
+      tempSeries.push(series);
+    }
+  }
+  
+  if (tempSeries.length > 0) {
     out.push(
-      <div key={`${chKey}-${metric}`} className="rounded border border-gray-100 p-3">
-        <LineChart series={[series]} yLabel={`${metric}`} xLabel="Zeit" xTickFormatter={fmt} hoverTimeFormatter={hoverFmt} showLegend={false} yUnit={unitForMetric(metric)} />
+      <div key={`${chKey}-temperatures`} className="rounded border border-gray-100 p-3">
+        <LineChart 
+          series={tempSeries} 
+          yLabel="Temperatur (°C)" 
+          xLabel="Zeit" 
+          xTickFormatter={fmt} 
+          hoverTimeFormatter={hoverFmt} 
+          showLegend={true} 
+          yUnit="°C" 
+        />
       </div>
     );
   }
+  
+  // Luftfeuchtigkeit separat darstellen
+  const humidityMetric: ChannelMetric = "Luftfeuchtigkeit";
+  const humidityCol = headerKeyForAllsensors(data.header || [], humidityMetric, chNum);
+  if (humidityCol) {
+    const humiditySeries: LineSeries = {
+      id: `${humidityMetric}`,
+      color: COLORS[3],
+      points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[humidityCol]) })),
+    };
+    if (humiditySeries.points.some((p) => Number.isFinite(p.y))) {
+      out.push(
+        <div key={`${chKey}-${humidityMetric}`} className="rounded border border-gray-100 p-3">
+          <LineChart 
+            series={[humiditySeries]} 
+            yLabel={`${humidityMetric}`} 
+            xLabel="Zeit" 
+            xTickFormatter={fmt} 
+            hoverTimeFormatter={hoverFmt} 
+            showLegend={false} 
+            yUnit={unitForMetric(humidityMetric)} 
+          />
+        </div>
+      );
+    }
+  }
+  
   if (!out.length) return <div className="text-xs text-gray-500">Keine numerischen Werte</div>;
   return <>{out}</>;
 }
@@ -56,27 +101,73 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
   const xVals = times.map((t) => Math.round((t.getTime() - xBase) / 60000));
   const fmt = makeTimeTickFormatter(xBase);
   const hoverFmt = makeHoverTimeFormatter(xBase);
-  const metrics: ChannelMetric[] = ["Temperature", "Luftfeuchtigkeit", "Taupunkt", "Wärmeindex"];
+  
+  // Temperaturmetriken und Luftfeuchtigkeit definieren
+  const tempMetrics: ChannelMetric[] = ["Temperatur", "Taupunkt", "Gefühlte Temperatur"];
   const out: React.ReactNode[] = [];
+  
   for (const chKey of getChannelKeys(channelsCfg)) {
     const chNum = (chKey.match(/\d+/)?.[0]) || "1";
     const channelCharts: React.ReactNode[] = [];
-    for (let i = 0; i < metrics.length; i++) {
-      const metric = metrics[i];
+    
+    // Temperaturdiagramm erstellen
+    const tempSeries: LineSeries[] = [];
+    for (let i = 0; i < tempMetrics.length; i++) {
+      const metric = tempMetrics[i];
       const col = headerKeyForAllsensors(data.header || [], metric, chNum);
       if (!col) continue;
       const series: LineSeries = {
-        id: `${channelName(chKey, channelsCfg)} ${metric}`,
+        id: `${metric}`,
         color: COLORS[i % COLORS.length],
         points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) })),
       };
-      if (!series.points.some((p) => Number.isFinite(p.y))) continue;
+      if (series.points.some((p) => Number.isFinite(p.y))) {
+        tempSeries.push(series);
+      }
+    }
+    
+    if (tempSeries.length > 0) {
       channelCharts.push(
-        <div key={`${chKey}-${metric}`} className="rounded border border-gray-100 p-3">
-          <LineChart series={[series]} yLabel={`${metric}`} xLabel="Zeit" xTickFormatter={fmt} hoverTimeFormatter={hoverFmt} showLegend={false} yUnit={unitForMetric(metric)} />
+        <div key={`${chKey}-temperatures`} className="rounded border border-gray-100 p-3">
+          <LineChart 
+            series={tempSeries} 
+            yLabel="Temperatur (°C)" 
+            xLabel="Zeit" 
+            xTickFormatter={fmt} 
+            hoverTimeFormatter={hoverFmt} 
+            showLegend={true} 
+            yUnit="°C" 
+          />
         </div>
       );
     }
+    
+    // Luftfeuchtigkeit separat darstellen
+    const humidityMetric: ChannelMetric = "Luftfeuchtigkeit";
+    const humidityCol = headerKeyForAllsensors(data.header || [], humidityMetric, chNum);
+    if (humidityCol) {
+      const humiditySeries: LineSeries = {
+        id: `${humidityMetric}`,
+        color: COLORS[3],
+        points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[humidityCol]) })),
+      };
+      if (humiditySeries.points.some((p) => Number.isFinite(p.y))) {
+        channelCharts.push(
+          <div key={`${chKey}-${humidityMetric}`} className="rounded border border-gray-100 p-3">
+            <LineChart 
+              series={[humiditySeries]} 
+              yLabel={`${humidityMetric}`} 
+              xLabel="Zeit" 
+              xTickFormatter={fmt} 
+              hoverTimeFormatter={hoverFmt} 
+              showLegend={false} 
+              yUnit={unitForMetric(humidityMetric)} 
+            />
+          </div>
+        );
+      }
+    }
+    
     if (channelCharts.length) {
       out.push(
         <div key={`ch-card-${chKey}`} className="rounded-lg border border-gray-200 bg-white dark:bg-black">
@@ -88,6 +179,7 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
       );
     }
   }
+  
   if (!out.length) return <div className="text-xs text-gray-500">Keine numerischen Werte</div>;
   return <>{out}</>;
 }
@@ -198,7 +290,7 @@ function formatMonthLabel(m: string) {
   return `${year} ${name}`;
 }
 
-type ChannelMetric = "Temperature" | "Luftfeuchtigkeit" | "Taupunkt" | "Wärmeindex";
+type ChannelMetric = "Temperatur" | "Luftfeuchtigkeit" | "Taupunkt" | "Gefühlte Temperatur";
 
 type Dataset = "allsensors" | "main";
 
@@ -222,7 +314,7 @@ export default function Dashboard() {
   const [resolution, setResolution] = useState<Resolution>("day");
   const [mode, setMode] = useState<"main" | "channel">("channel");
   const [selectedChannel, setSelectedChannel] = useState<string>("all");
-  const [metric, setMetric] = useState<ChannelMetric>("Temperature");
+  const [metric, setMetric] = useState<ChannelMetric>("Temperatur");
   const [dataAll, setDataAll] = useState<DataResp | null>(null);
   const [dataMain, setDataMain] = useState<DataResp | null>(null);
   const [channelsCfg, setChannelsCfg] = useState<ChannelsConfig>({});
@@ -542,8 +634,49 @@ function renderMainCharts(data: DataResp, xBase: number | null) {
   const spanMin = times.length >= 2 ? Math.round((times[times.length - 1].getTime() - times[0].getTime()) / 60000) : 0;
   const fmt = makeTimeTickFormatter(xBase, spanMin);
   const hoverFmt = makeHoverTimeFormatter(xBase);
-  // Detect rain column in main header
   const header = (data.header || []).slice();
+  
+  // Temperaturmetriken identifizieren und gruppieren
+  const tempColumns = findTemperatureColumns(header);
+  
+  // Regenmetriken identifizieren und gruppieren
+  const rainColumns = findRainColumns(header);
+  
+  const nonTempRainColumns = cols.filter(col => !tempColumns.includes(col) && !rainColumns.includes(col));
+  
+  // Temperaturdiagramm erstellen
+  const tempSeries: LineSeries[] = [];
+  const tempColors = [COLORS[0], COLORS[2], COLORS[4]]; // Blau, Orange, Lila
+  
+  for (let i = 0; i < tempColumns.length; i++) {
+    const col = tempColumns[i];
+    const series: LineSeries = {
+      id: col,
+      color: tempColors[i % tempColors.length],
+      points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) })),
+    };
+    if (series.points.some((p) => Number.isFinite(p.y))) {
+      tempSeries.push(series);
+    }
+  }
+  
+  // Regendiagramm erstellen
+  const rainSeries: LineSeries[] = [];
+  const rainColors = [COLORS[1], COLORS[3], COLORS[5]]; // Grün, Gelb, Rot
+  
+  for (let i = 0; i < rainColumns.length; i++) {
+    const col = rainColumns[i];
+    const series: LineSeries = {
+      id: col,
+      color: rainColors[i % rainColors.length],
+      points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) })),
+    };
+    if (series.points.some((p) => Number.isFinite(p.y))) {
+      rainSeries.push(series);
+    }
+  }
+  
+  // Detect daily rain column for bar chart
   const pickRain = () => {
     // prefer daily rain, then hourly, then generic rain (exclude rate/year/month/week)
     const daily = header.find((h) => {
@@ -569,6 +702,7 @@ function renderMainCharts(data: DataResp, xBase: number | null) {
     return null;
   };
   const rainSel = pickRain();
+  
   // Aggregate to per-day totals (mm)
   const rainPoints: { x: number; y: number }[] = [];
   if (rainSel) {
@@ -596,11 +730,29 @@ function renderMainCharts(data: DataResp, xBase: number | null) {
       rainPoints.push({ x, y });
     }
   }
+  
   const totalRain = rainPoints.reduce((acc, p) => acc + (Number.isFinite(p.y) ? p.y : 0), 0);
-  const colsFiltered = rainSel ? cols.filter((c) => c !== rainSel.col) : cols;
+  const nonRainColumns = nonTempRainColumns.filter(c => rainSel ? c !== rainSel.col : true);
+  
   return (
     <>
-      {colsFiltered.map((col, i) => {
+      {/* Temperaturdiagramm */}
+      {tempSeries.length > 0 && (
+        <div className="rounded border border-gray-200 p-3">
+          <LineChart 
+            series={tempSeries} 
+            yLabel="Temperatur (°C)" 
+            xLabel="Zeit" 
+            xTickFormatter={fmt} 
+            hoverTimeFormatter={hoverFmt} 
+            showLegend={true} 
+            yUnit="°C" 
+          />
+        </div>
+      )}
+      
+      {/* Andere Metriken */}
+      {nonRainColumns.map((col, i) => {
         const series: LineSeries = {
           id: col,
           color: COLORS[i % COLORS.length],
@@ -613,6 +765,23 @@ function renderMainCharts(data: DataResp, xBase: number | null) {
           </div>
         );
       })}
+      
+      {/* Regenmetriken (Woche/Monat/Jahr) */}
+      {rainSeries.length > 0 && (
+        <div className="rounded border border-gray-200 p-3">
+          <LineChart 
+            series={rainSeries} 
+            yLabel="Niederschlag (mm)" 
+            xLabel="Zeit" 
+            xTickFormatter={fmt} 
+            hoverTimeFormatter={hoverFmt} 
+            showLegend={true} 
+            yUnit="mm" 
+          />
+        </div>
+      )}
+      
+      {/* Täglicher Regen (Balkendiagramm) */}
       {rainPoints.length > 0 && (
         <div className="rounded border border-gray-200 p-3">
           <div className="mb-2 text-sm text-gray-700 dark:text-gray-300">
@@ -633,6 +802,93 @@ function renderMainCharts(data: DataResp, xBase: number | null) {
       )}
     </>
   );
+}
+
+// Hilfsfunktion zum Identifizieren von Temperaturmetriken in den Hauptsensoren
+function findTemperatureColumns(header: string[]): string[] {
+  const tempColumns: string[] = [];
+  
+  // Debug-Ausgabe der Header
+  console.log("Verfügbare Header für Temperaturerkennung:", header);
+  
+  // Suche nach Temperatur Aussen/Außen
+  const tempAussen = header.find(h => {
+    const s = h.toLowerCase();
+    return (s.includes("temp") && (s.includes("aussen") || s.includes("außen") || s.includes("out"))) || 
+           (s.includes("außentemperatur") || s.includes("aussentemperatur") || 
+            s.includes("outdoor temp") || s.includes("temperature out"));
+  });
+  if (tempAussen) {
+    console.log("Temperatur Aussen gefunden:", tempAussen);
+    tempColumns.push(tempAussen);
+  }
+  
+  // Suche nach Taupunkt
+  const taupunkt = header.find(h => {
+    const s = h.toLowerCase();
+    return s.includes("taupunkt") || s.includes("dew");
+  });
+  if (taupunkt) {
+    console.log("Taupunkt gefunden:", taupunkt);
+    tempColumns.push(taupunkt);
+  }
+  
+  // Suche nach Gefühlte Temperatur / Wärmeindex
+  const gefuehlteTemp = header.find(h => {
+    const s = h.toLowerCase();
+    return s.includes("wärmeindex") || s.includes("gefühl") || 
+           s.includes("heat") || s.includes("feel");
+  });
+  if (gefuehlteTemp) {
+    console.log("Gefühlte Temperatur gefunden:", gefuehlteTemp);
+    tempColumns.push(gefuehlteTemp);
+  }
+  
+  console.log("Erkannte Temperaturmetriken:", tempColumns);
+  return tempColumns;
+}
+
+// Hilfsfunktion zum Identifizieren von Regenmetriken in den Hauptsensoren
+function findRainColumns(header: string[]): string[] {
+  const rainColumns: string[] = [];
+  
+  console.log("Verfügbare Header für Regenerkennung:", header);
+  
+  // Suche nach Regen/Woche
+  const regenWoche = header.find(h => {
+    const s = h.toLowerCase();
+    return (s.includes("rain") || s.includes("regen")) && 
+           (s.includes("week") || s.includes("woche"));
+  });
+  if (regenWoche) {
+    console.log("Regen/Woche gefunden:", regenWoche);
+    rainColumns.push(regenWoche);
+  }
+  
+  // Suche nach Regen/Monat
+  const regenMonat = header.find(h => {
+    const s = h.toLowerCase();
+    return (s.includes("rain") || s.includes("regen")) && 
+           (s.includes("month") || s.includes("monat"));
+  });
+  if (regenMonat) {
+    console.log("Regen/Monat gefunden:", regenMonat);
+    rainColumns.push(regenMonat);
+  }
+  
+  // Suche nach Regen/Jahr
+  const regenJahr = header.find(h => {
+    const s = h.toLowerCase();
+    return (s.includes("rain") || s.includes("regen")) && 
+           (s.includes("year") || s.includes("jahr"));
+  });
+  if (regenJahr) {
+    console.log("Regen/Jahr gefunden:", regenJahr);
+    rainColumns.push(regenJahr);
+  }
+  
+  console.log("Erkannte Regenmetriken:", rainColumns);
+  return rainColumns;
 }
 
 function toDate(s: string): Date | null {
@@ -721,10 +977,10 @@ function getChannelKeys(cfg: ChannelsConfig): string[] {
 function headerKeyForAllsensors(header: string[], metric: string, chNum: string): string {
   // Prefer CHx <metric>
   const synonyms: Record<string, string[]> = {
-    Temperature: ["Temperature", "Temperatur"],
+    Temperatur: ["Temperature", "Temperatur"],
     Luftfeuchtigkeit: ["Luftfeuchtigkeit"],
     Taupunkt: ["Taupunkt"],
-    "Wärmeindex": ["Wärmeindex"],
+    "Gefühlte Temperatur": ["Wärmeindex", "Gefühlte Temperatur"],
   };
   const metricsToTry = synonyms[metric as keyof typeof synonyms] || [metric];
   let direct: string | undefined;
@@ -767,9 +1023,9 @@ function inferNumericColumns(data: DataResp | null): string[] {
 // Units helpers
 function unitForMetric(metric: ChannelMetric): string {
   switch (metric) {
-    case "Temperature":
+    case "Temperatur":
     case "Taupunkt":
-    case "Wärmeindex":
+    case "Gefühlte Temperatur":
       return "°C";
     case "Luftfeuchtigkeit":
       return "%";

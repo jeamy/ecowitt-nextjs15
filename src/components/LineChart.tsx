@@ -29,7 +29,7 @@ type Props = {
 };
 
 export default function LineChart({ series, height = 220, yLabel, xTickFormatter, hoverTimeFormatter, xLabel, showLegend = true, bars = false, barWidth, barWidthPx, showHover = true, yUnit, valueFormatter }: Props) {
-  const padding = { top: 10, right: 12, bottom: 28, left: 36 };
+  const padding = { top: 20, right: 12, bottom: 28, left: 36 };
   const width = 800; // SVG viewBox width; scales responsively via CSS
 
   const allPoints = series.flatMap((s) => s.points);
@@ -48,14 +48,23 @@ export default function LineChart({ series, height = 220, yLabel, xTickFormatter
   function pickForHover(points: LinePoint[], x: number, _barsMode: boolean): LinePoint | null {
     const valid = points.filter((p) => Number.isFinite(p.y));
     if (valid.length === 0) return null;
-    // Always pick the last point whose x <= hover x ("left bin" behavior)
+    
+    // Find the closest point to the hover position
     const sorted = valid.slice().sort((a, b) => a.x - b.x);
-    let cand: LinePoint | null = null;
-    for (let i = 0; i < sorted.length; i++) {
-      const p = sorted[i];
-      if (p.x <= x) cand = p; else break;
+    
+    // Find the closest point to hover x
+    let closest: LinePoint | null = null;
+    let minDistance = Infinity;
+    
+    for (const p of sorted) {
+      const distance = Math.abs(p.x - x);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closest = p;
+      }
     }
-    return cand;
+    
+    return closest;
   }
   const spanX = maxX - minX || 1;
   const spanY = maxY - minY || 1;
@@ -107,13 +116,17 @@ export default function LineChart({ series, height = 220, yLabel, xTickFormatter
     return best;
   }
 
-  // Use primary (first) series for hover readout to avoid clutter
-  const hoverPrimary = useMemo(() => {
-    if (hoverX == null || !series.length) return null;
-    const s = series[0];
-    const p = pickForHover(s.points, hoverX, !!bars);
-    return p ? { color: s.color, p } : null;
-  }, [hoverX, series]);
+  // Get hover points for all series
+  const hoverPoints = useMemo(() => {
+    if (hoverX == null || !series.length) return [];
+    return series.map(s => {
+      const p = pickForHover(s.points, hoverX, !!bars);
+      return p ? { color: s.color, id: s.id, p } : null;
+    }).filter((hp): hp is {color: string; id: string; p: LinePoint} => hp !== null);
+  }, [hoverX, series, bars]);
+  
+  // Primary hover point (for crosshair)
+  const hoverPrimary = hoverPoints.length > 0 ? hoverPoints[0] : null;
 
   return (
     <div className="w-full overflow-hidden">
@@ -178,9 +191,9 @@ export default function LineChart({ series, height = 220, yLabel, xTickFormatter
 
         {/* Legend (optional) */}
         {showLegend && (
-          <g transform={`translate(${padding.left}, ${padding.top})`}>
+          <g transform={`translate(${padding.left + 120}, ${padding.top})`}>
             {series.map((s, i) => (
-              <g key={`lg-${s.id}`} transform={`translate(${i * 120}, 0)`}>
+              <g key={`lg-${s.id}`} transform={`translate(${i * 140}, 0)`}>
                 <rect width={12} height={2} y={5} fill={s.color} />
                 <text x={16} y={8} fontSize={11} fill="#333">{s.id}</text>
               </g>
@@ -189,7 +202,7 @@ export default function LineChart({ series, height = 220, yLabel, xTickFormatter
         )}
 
         {yLabel && (
-          <text x={padding.left} y={padding.top - 2} fontSize={11} fill="#333">{yLabel}</text>
+          <text x={padding.left} y={padding.top - 6} fontSize={12} fill="#333" fontWeight="500">{yLabel}</text>
         )}
 
         {xLabel && (
@@ -205,16 +218,42 @@ export default function LineChart({ series, height = 220, yLabel, xTickFormatter
             {hoverPrimary && (
               <circle cx={sx(hoverPrimary.p.x)} cy={sy(hoverPrimary.p.y)} r={3} fill={hoverPrimary.color} stroke="#fff" strokeWidth={1} />
             )}
-            {/* Compact tooltip: date time and value */}
-            <g transform={`translate(${padding.left + 6}, ${padding.top + 6})`}>
-              <rect width={180} height={22} fill="rgba(255,255,255,0.9)" stroke="#cbd5e1" />
-              <text x={6} y={14} fontSize={11} fill="#111">
-                {(hoverTimeFormatter ? hoverTimeFormatter(hoverPrimary ? hoverPrimary.p.x : hoverX) : (xTickFormatter ? xTickFormatter(hoverPrimary ? hoverPrimary.p.x : hoverX) : String(Math.round(hoverPrimary ? hoverPrimary.p.x : hoverX))))}{
-                  hoverPrimary && Number.isFinite(hoverPrimary.p.y)
-                    ? `: ${valueFormatter ? valueFormatter(hoverPrimary.p.y) : `${hoverPrimary.p.y.toFixed(2)}${yUnit ? " " + yUnit : ""}`}`
-                    : ""
-                }
+            {/* Enhanced tooltip: date time and values for all series */}
+            <g transform={`translate(${padding.left + 6}, ${padding.top + innerH - (42 + hoverPoints.length * 20)})`}>
+              <rect 
+                width={220} 
+                height={36 + hoverPoints.length * 20} 
+                fill="rgba(255,255,255,0.95)" 
+                stroke="#cbd5e1" 
+                rx={4}
+              />
+              {/* Time header */}
+              <text x={6} y={16} fontSize={11} fontWeight="bold" fill="#111">
+                {hoverTimeFormatter 
+                  ? hoverTimeFormatter(hoverPrimary ? hoverPrimary.p.x : hoverX) 
+                  : (xTickFormatter 
+                    ? xTickFormatter(hoverPrimary ? hoverPrimary.p.x : hoverX) 
+                    : String(Math.round(hoverPrimary ? hoverPrimary.p.x : hoverX)))}
               </text>
+              
+              {/* Separator line */}
+              <line x1={6} y1={24} x2={214} y2={24} stroke="#e2e8f0" strokeWidth={1.5} />
+              
+              {/* Values for each series */}
+              {hoverPoints.map((hp, idx) => (
+                <g key={`hp-${idx}`} transform={`translate(0, ${36 + idx * 20})`}>
+                  {/* Color indicator */}
+                  <rect x={6} y={-8} width={10} height={10} fill={hp.color} rx={2} />
+                  {/* Series name */}
+                  <text x={22} y={0} fontSize={11} fill="#333">{hp.id}</text>
+                  {/* Value */}
+                  <text x={214} y={0} fontSize={11} textAnchor="end" fill="#111" fontWeight="500">
+                    {valueFormatter 
+                      ? valueFormatter(hp.p.y) 
+                      : `${hp.p.y.toFixed(2)}${yUnit ? " " + yUnit : ""}`}
+                  </text>
+                </g>
+              ))}
             </g>
           </g>
         )}

@@ -96,11 +96,17 @@ export async function writeLiveToDNT(payload: any) {
   const allsRow: (string | number | null)[] = [timeString(now)];
   for (let i = 1; i <= 8; i++) {
     const ch = tryRead(payload, `ch${i}`) ?? tryRead(payload, `temp_and_humidity_ch${i}`);
-    allsHeader.push(`CH${i} Temperature`, `CH${i} Luftfeuchtigkeit`, `CH${i} Taupunkt`);
+    allsHeader.push(
+      `CH${i} Temperature(℃)`, 
+      `CH${i} Taupunkt(℃)`, 
+      `CH${i} Wärmeindex(℃)`, 
+      `CH${i} Luftfeuchtigkeit(%)`
+    );
     const t = numVal(ch?.temperature);
-    const h = numVal(ch?.humidity);
     const d = numVal(ch?.dew_point);
-    allsRow.push(t, h, d);
+    const hi = numVal(ch?.feels_like);
+    const h = numVal(ch?.humidity);
+    allsRow.push(t, d, hi, h);
   }
   await appendCsv(allsFile, allsHeader, allsRow);
 
