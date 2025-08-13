@@ -36,31 +36,31 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 # ecowitt-nextjs15
 
-## Überblick
+## Overview
 
-Mobile-first Dashboard für Wetterstationsdaten (Ecowitt) mit Next.js 15, React 19 und Tailwind CSS. CSV-Dateien aus `DNT/` werden eingelesen, zeitlich aggregiert (Minute/Stunde/Tag) und als interaktive Zeitreihen visualisiert. Sensor-Kanalnamen (CH1–CH8) sind per JSON konfigurierbar.
+Mobile-first dashboard for weather station data (Ecowitt) built with Next.js 15, React 19, and Tailwind CSS. CSV files from `DNT/` are loaded, time-aggregated (minute/hour/day), and visualized as interactive time series. Channel names (CH1–CH8) are configurable via JSON.
 
-## Voraussetzungen
+## Prerequisites
 
-- Node.js 18+ (empfohlen 20+)
-- CSV-Dateien im Ordner `DNT/` (liegt außerhalb der Versionskontrolle, siehe `.gitignore`).
+- Node.js 18+ (20+ recommended)
+- CSV files in folder `DNT/` (outside version control, see `.gitignore`).
 
-## Datenablage (`DNT/`)
+## Data location (`DNT/`)
 
-- Legen Sie Ihre monatlichen CSVs in `DNT/` ab.
-- Typische Muster:
-  - Hauptdaten: `YYYYMMA.CSV` (z. B. `202508A.CSV`)
-  - Allsensors: enthält mehrere Kanalblöcke CH1..CH8 (z. B. `202508Allsensors_A.CSV`)
-- CSV-Eigenschaften (aus Beobachtungen):
-  - Trennzeichen: Komma
-  - Platzhalter für fehlende Werte: `--`
-  - Datumsformat oft `YYYY/M/D H:MM` (Dashboard unterstützt zusätzlich ISO-ähnliche Varianten)
-  - Deutsche Header (z. B. `Zeit`, `Luftfeuchtigkeit`, `Taupunkt`, `Wärmeindex`)
+- Place your monthly CSVs in `DNT/`.
+- Typical patterns:
+  - Main data: `YYYYMMA.CSV` (e.g., `202508A.CSV`)
+  - Allsensors: contains multiple channel blocks CH1..CH8 (e.g., `202508Allsensors_A.CSV`)
+- CSV properties (observed):
+  - Delimiter: comma
+  - Placeholder for missing values: `--`
+  - Common date format `YYYY/M/D H:MM` (dashboard also supports ISO-like variants)
+  - German headers (e.g., `Zeit`, `Luftfeuchtigkeit`, `Taupunkt`, `Wärmeindex`)
 
-## Konfiguration der Kanalnamen
+## Channel name configuration
 
-- Datei: `src/config/channels.json`
-- Beispiel:
+- File: `src/config/channels.json`
+- Example:
 
 ```json
 {
@@ -70,49 +70,94 @@ Mobile-first Dashboard für Wetterstationsdaten (Ecowitt) mit Next.js 15, React
 }
 ```
 
-Die Namen erscheinen im Dashboard (Legende/Buttons). Nicht definierte Kanäle werden mit ihrer ID angezeigt (z. B. CH4).
+Names appear in the dashboard (labels/options). Undefined channels fall back to their ID (e.g., CH4).
 
-## API-Endpunkte
+## API endpoints
 
 - `GET /api/data/months`
-  - Liefert verfügbare Monate aus Dateinamen in `DNT/` (Format `YYYYMM`).
+  - Returns available months derived from filenames in `DNT/` (format `YYYYMM`).
 
 - `GET /api/data/allsensors?month=YYYYMM&resolution=minute|hour|day`
-  - Aggregiert Allsensors-Daten auf die gewünschte Auflösung. Optional kann clientseitig gefiltert werden.
+  - Aggregates Allsensors data to the desired resolution. Additional client-side filtering is possible.
 
 - `GET /api/data/main?month=YYYYMM&resolution=minute|hour|day`
-  - Aggregiert Hauptdaten A auf die gewünschte Auflösung.
+  - Aggregates main (A) data to the desired resolution.
 
 - `GET /api/config/channels`
-  - Liefert `channels.json`.
+  - Returns `channels.json`.
 
-Alle API-Routen laufen im Node.js-Runtime-Kontext und lesen lokal vom Dateisystem.
+All API routes run in the Node.js runtime and read from the local filesystem.
 
-## Entwicklung starten
+## Development
 
 ```bash
 npm install
 npm run dev
-# öffnet i. d. R. http://localhost:3000
+# usually opens http://localhost:3000
 ```
 
-## Nutzung des Dashboards
+## Using the dashboard
 
-- **Datensatz**: Allsensors (CH1–CH8) oder Hauptdaten (A)
-- **Monat**: Auswahl aus gefundenen `YYYYMM`
-- **Auflösung**: Minute / Stunde / Tag (serverseitige Mittelung je Bucket)
-- **Allsensors**: Metrik (Temperatur, Luftfeuchte, Taupunkt, Wärmeindex) + Kanäle auswählen
-- **Hauptdaten**: numerische Spalten werden erkannt und sind auswählbar
+- **Dataset**: Allsensors (CH1–CH8) or Main (A)
+- **Month**: choose from detected `YYYYMM`
+- **Resolution**: minute / hour / day (server-side average per bucket)
+- **Allsensors**: choose metric (Temperature, Humidity, Dew Point, Heat Index) and channels
+- **Main**: numeric columns are auto-detected and selectable
 
-## Hinweise zu Deployment
+Note: The UI does not display raw source filenames (e.g., CSV lists). Data is served via DuckDB/Parquet.
 
-- Das Projekt verwendet Dateisystemzugriffe (CSV aus `DNT/`). Auf Plattformen wie Vercel stehen Runtime-Dateien nicht persistiert zur Verfügung. Für Produktivbetrieb empfehlen sich:
-  - eigener Server/VPS oder Docker-Deployment mit gemountetem `DNT/`
-  - oder eine Datenquelle/Storage, die serverseitig eingebunden wird (und Anpassung der Datei-Zugriffslogik)
+## Deployment notes
+
+- The project reads from the filesystem (CSVs in `DNT/`). On platforms like Vercel, runtime files are not persisted. For production, consider:
+  - your own server/VPS or Docker deployment with `DNT/` mounted
+  - or an external storage/data source mounted server-side (and adapt file access as needed)
+
+## DuckDB/Parquet (Node Neo)
+
+This project uses DuckDB for fast queries and stores monthly CSV data on-the-fly as Parquet.
+
+- Engine: `@duckdb/node-api` (DuckDB Node “Neo”)
+- Database file: `data/weather.duckdb`
+- Parquet target: `data/parquet/allsensors/YYYYMM.parquet`
+
+### Setup
+
+```bash
+# remove legacy package if present
+npm remove duckdb
+
+# install Neo client
+npm install @duckdb/node-api
+```
+
+### Development (Node runtime)
+
+```bash
+npm run dev   # without --turbopack
+```
+
+Notes:
+
+- API routes run with `export const runtime = "nodejs"` (not Edge runtime).
+- `src/lib/db/duckdb.ts` dynamically imports `@duckdb/node-api` (prevents bundling native bindings).
+- `next.config.ts` externalizes DuckDB native packages for the server build.
+
+### On‑demand ingestion
+
+- On first request for a month/range, CSV(s) from `DNT/` are read and written as Parquet (mtime check).
+- Subsequent aggregations (minute/hour/day) run efficiently over Parquet via DuckDB.
+- Fallback: if DuckDB/Parquet is unavailable, the API parses CSV directly.
+
+### Useful API calls (test)
+
+- Month: `/api/data/allsensors?month=202501&resolution=hour`
+- Range: `/api/data/allsensors?start=2025-01-01 00:00&end=2025-08-13 00:00&resolution=day`
 
 ## Troubleshooting
 
-- **Keine Monate sichtbar**: Liegen CSVs im Ordner `DNT/` und entsprechen sie `YYYYMM*.CSV`?
-- **Leere Charts**: Prüfen, ob Spaltennamen/Headers den erwarteten Mustern entsprechen und Werte nicht ausschließlich `--` sind.
-- **Zeitachse seltsam**: Prüfen, ob das Datumsformat `YYYY/M/D H:MM` (oder ISO-ähnlich) vorliegt.
-- **Build/TS-Fehler**: Stellen Sie sicher, dass `tsconfig.json` `baseUrl`/`paths` für `@/*` gesetzt hat (bereitgestellt).
+- **No months found**: Are CSVs present in `DNT/` and named `YYYYMM*.CSV`?
+- **Empty charts**: Check if headers match expected patterns and values are not all `--`.
+- **Time axis looks off**: Check the date format is `YYYY/M/D H:MM` (or ISO-like alternative).
+- **Build/TS errors**: Ensure `tsconfig.json` has `baseUrl`/`paths` set for `@/*` (provided).
+- **Module not found `@duckdb/node-bindings-*/duckdb.node`**: Ensure `@duckdb/node-api` is installed, Turbopack is disabled in dev (`npm run dev` without the flag), routes run in Node runtime, and `src/lib/db/duckdb.ts` uses dynamic import. Remove `.next/` and restart if needed.
+- **Unknown module type (@mapbox/node-pre-gyp)**: Remove legacy `duckdb` (`npm remove duckdb`), use `@duckdb/node-api` only.

@@ -475,7 +475,7 @@ export default function Dashboard() {
       {/* Ansicht: Hauptsensoren (gestapelte Charts) */}
       {mode === "main" && dataMain && (
         <div className="rounded-lg border border-gray-200 bg-white dark:bg-black">
-          <div className="px-3 py-2 border-b border-gray-200 text-sm font-medium">Hauptdaten (A) • Datei: {dataMain.file}</div>
+          <div className="px-3 py-2 border-b border-gray-200 text-sm font-medium">Hauptdaten (A)</div>
           <div className="p-3 flex flex-col gap-4">
             {renderMainCharts(dataMain, xBaseMain)}
           </div>
@@ -485,7 +485,7 @@ export default function Dashboard() {
       {/* Ansicht: Einzelner Channel (Auswahl) */}
       {mode === "channel" && dataAll && (
         <div className="rounded-lg border border-gray-200 bg-white dark:bg-black">
-          <div className="px-3 py-2 border-b border-gray-200 text-sm font-medium">{selectedChannel === "all" ? "Alle Sensoren (CH1–CH8)" : channelName(selectedChannel, channelsCfg)} • Datei: {dataAll.file}</div>
+          <div className="px-3 py-2 border-b border-gray-200 text-sm font-medium">{selectedChannel === "all" ? "Alle Sensoren (CH1–CH8)" : channelName(selectedChannel, channelsCfg)}</div>
           <div className="p-3 flex flex-col gap-4">
             {selectedChannel === "all"
               ? renderAllChannelsCharts(dataAll, channelsCfg, xBaseAll)
