@@ -8,30 +8,67 @@ export async function listDntFiles(): Promise<string[]> {
   return items.filter((f) => f.toLowerCase().endsWith(".csv"));
 }
 
-export async function latestFileMatching(rx: RegExp): Promise<string | null> {
+function ymOf(d?: Date): number | null {
+  if (!d) return null;
+  return d.getFullYear() * 100 + (d.getMonth() + 1);
+}
+
+export async function getAllsensorsFilesInRange(start?: Date, end?: Date): Promise<string[]> {
   const files = await listDntFiles();
-  const m = files.filter((f) => rx.test(f)).sort();
+  // match case-insensitively: 202501Allsensors_A.csv / .CSV
+  const list = files
+    .filter((f) => /^\d{6}allsensors_a\.csv$/.test(f.toLowerCase()))
+    .sort();
+  const ys = ymOf(start);
+  const ye = ymOf(end);
+  if (!ys && !ye) return list;
+  return list.filter((f) => {
+    const ym = Number(f.slice(0, 6));
+    if (ys && ym < ys) return false;
+    if (ye && ym > ye) return false;
+    return true;
+  });
+}
+
+export async function getMainFilesInRange(start?: Date, end?: Date): Promise<string[]> {
+  const files = await listDntFiles();
+  // match case-insensitively: 202501A.csv / .CSV
+  const list = files
+    .filter((f) => /^\d{6}a\.csv$/.test(f.toLowerCase()))
+    .sort();
+  const ys = ymOf(start);
+  const ye = ymOf(end);
+  if (!ys && !ye) return list;
+  return list.filter((f) => {
+    const ym = Number(f.slice(0, 6));
+    if (ys && ym < ys) return false;
+    if (ye && ym > ye) return false;
+    return true;
+  });
+}
+
+export async function latestFileMatching(rxLower: RegExp): Promise<string | null> {
+  const files = await listDntFiles();
+  const m = files.filter((f) => rxLower.test(f.toLowerCase())).sort();
   return m.length ? m[m.length - 1] : null;
 }
 
 export async function getAllsensorsFilename(month?: string): Promise<string | null> {
+  const files = await listDntFiles();
   if (month && /^\d{6}$/.test(month)) {
-    const f = `${month}Allsensors_A.CSV`;
-    try {
-      await fs.access(path.join(DNT_DIR, f));
-      return f;
-    } catch {}
+    const targetLower = `${month}allsensors_a.csv`;
+    const found = files.find((f) => f.toLowerCase() === targetLower);
+    if (found) return found;
   }
-  return latestFileMatching(/^\d{6}Allsensors_A\.CSV$/);
+  return latestFileMatching(/^\d{6}allsensors_a\.csv$/);
 }
 
 export async function getMainFilename(month?: string): Promise<string | null> {
+  const files = await listDntFiles();
   if (month && /^\d{6}$/.test(month)) {
-    const f = `${month}A.CSV`;
-    try {
-      await fs.access(path.join(DNT_DIR, f));
-      return f;
-    } catch {}
+    const targetLower = `${month}a.csv`;
+    const found = files.find((f) => f.toLowerCase() === targetLower);
+    if (found) return found;
   }
-  return latestFileMatching(/^\d{6}A\.CSV$/);
+  return latestFileMatching(/^\d{6}a\.csv$/);
 }

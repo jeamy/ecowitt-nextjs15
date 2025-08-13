@@ -13,28 +13,63 @@ type DataResp = {
 
 type ChannelsConfig = Record<string, { name: string }>; // { ch1: { name: "Living" }, ... }
 
-function TimeRangeControls(props: {
-  mode: "main" | "channel";
-  times: Date[];
-  startIdx: number | null;
-  endIdx: number | null;
-  setStartIdx: (n: number) => void;
-  setEndIdx: (n: number) => void;
-}) {
-  const { times, startIdx, endIdx, setStartIdx, setEndIdx } = props;
-  const len = times.length;
-  if (len < 2) return null;
-  const start = startIdx != null ? clamp(startIdx, 0, len - 2) : 0;
-  const end = endIdx != null ? clamp(endIdx, start + 1, len - 1) : len - 1;
+function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xBase: number | null) {
+  const rows = data.rows || [];
+  if (!rows.length || !xBase) return <div className="text-xs text-gray-500">Keine Daten</div>;
+  const times = rows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
+  const xVals = times.map((t) => Math.round((t.getTime() - xBase) / 60000));
+  const fmt = makeTimeTickFormatter(xBase);
+  const metrics: ChannelMetric[] = ["Temperature", "Luftfeuchtigkeit", "Taupunkt", "Wärmeindex"];
+  const out: React.ReactNode[] = [];
+  for (const chKey of getChannelKeys(channelsCfg)) {
+    const chNum = (chKey.match(/\d+/)?.[0]) || "1";
+    out.push(
+      <div key={`header-${chKey}`} className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-2">{channelName(chKey, channelsCfg)}</div>
+    );
+    for (let i = 0; i < metrics.length; i++) {
+      const metric = metrics[i];
+      const col = headerKeyForAllsensors(data.header || [], metric, chNum);
+      if (!col) continue;
+      const series: LineSeries = {
+        id: `${channelName(chKey, channelsCfg)} ${metric}`,
+        color: COLORS[i % COLORS.length],
+        points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) })),
+      };
+      if (!series.points.some((p) => Number.isFinite(p.y))) continue;
+      out.push(
+        <div key={`${chKey}-${metric}`} className="rounded border border-gray-200 p-3">
+          <LineChart series={[series]} yLabel={`${metric}`} xLabel="Zeit" xTickFormatter={fmt} showLegend={false} />
+        </div>
+      );
+    }
+  }
+  if (!out.length) return <div className="text-xs text-gray-500">Keine numerischen Werte</div>;
+  return <>{out}</>;
+}
 
-  const startDisp = formatDisplay(times[start]);
-  const endDisp = formatDisplay(times[end]);
-  const startLocal = formatLocal(times[start]);
-  const endLocal = formatLocal(times[end]);
+function GlobalRangeControls(props: {
+  min: Date | null;
+  max: Date | null;
+  pctStart: number; // 0..1000
+  pctEnd: number;   // 0..1000
+  setPctStart: (n: number) => void;
+  setPctEnd: (n: number) => void;
+}) {
+  const { min, max, pctStart, pctEnd, setPctStart, setPctEnd } = props;
+  if (!min || !max) return null;
+  const span = max.getTime() - min.getTime();
+  const startMs = min.getTime() + Math.round(span * (pctStart / 1000));
+  const endMs = min.getTime() + Math.round(span * (pctEnd / 1000));
+  const start = new Date(Math.min(Math.max(startMs, min.getTime()), max.getTime()));
+  const end = new Date(Math.min(Math.max(endMs, min.getTime()), max.getTime()));
+  const startDisp = formatDisplay(start);
+  const endDisp = formatDisplay(end);
+  const startLocal = formatLocal(start);
+  const endLocal = formatLocal(end);
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white dark:bg-black p-3">
-      <div className="text-sm font-medium mb-2">Zeitraum</div>
+      <div className="text-sm font-medium mb-2">Gesamter Zeitraum</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
         <div className="flex flex-col gap-1">
           <label className="text-sm">Start</label>
@@ -45,8 +80,8 @@ function TimeRangeControls(props: {
             onChange={(e) => {
               const d = new Date(e.target.value);
               if (isNaN(d.getTime())) return;
-              const idx = nearestIndex(times, d.getTime());
-              setStartIdx(Math.min(idx, end - 1));
+              const p = Math.round(((d.getTime() - min.getTime()) / span) * 1000);
+              setPctStart(Math.min(Math.max(p, 0), Math.max(0, pctEnd - 1)));
             }}
           />
           <div className="text-xs text-gray-500">{startDisp}</div>
@@ -60,8 +95,8 @@ function TimeRangeControls(props: {
             onChange={(e) => {
               const d = new Date(e.target.value);
               if (isNaN(d.getTime())) return;
-              const idx = nearestIndex(times, d.getTime());
-              setEndIdx(Math.max(idx, start + 1));
+              const p = Math.round(((d.getTime() - min.getTime()) / span) * 1000);
+              setPctEnd(Math.max(Math.min(p, 1000), Math.min(1000, pctStart + 1)));
             }}
           />
           <div className="text-xs text-gray-500">{endDisp}</div>
@@ -71,16 +106,16 @@ function TimeRangeControls(props: {
         <input
           type="range"
           min={0}
-          max={len - 2}
-          value={start}
-          onChange={(e) => setStartIdx(Math.min(Number(e.target.value), end - 1))}
+          max={999}
+          value={Math.min(pctStart, pctEnd - 1)}
+          onChange={(e) => setPctStart(Math.min(Number(e.target.value), pctEnd - 1))}
         />
         <input
           type="range"
           min={1}
-          max={len - 1}
-          value={end}
-          onChange={(e) => setEndIdx(Math.max(Number(e.target.value), start + 1))}
+          max={1000}
+          value={Math.max(pctEnd, pctStart + 1)}
+          onChange={(e) => setPctEnd(Math.max(Number(e.target.value), pctStart + 1))}
         />
         <div className="text-xs text-gray-500">{startDisp} — {endDisp}</div>
       </div>
@@ -138,9 +173,12 @@ export default function Dashboard() {
   const [dataMain, setDataMain] = useState<DataResp | null>(null);
   const [channelsCfg, setChannelsCfg] = useState<ChannelsConfig>({});
 
-  // Zeitbereich (Index in Zeitreihe des aktiven Datensatzes)
-  const [startIdx, setStartIdx] = useState<number | null>(null);
-  const [endIdx, setEndIdx] = useState<number | null>(null);
+  // Globaler Zeitbereich (über alle Monate/Jahre)
+  const [useGlobalRange, setUseGlobalRange] = useState<boolean>(true);
+  const [extentMin, setExtentMin] = useState<Date | null>(null);
+  const [extentMax, setExtentMax] = useState<Date | null>(null);
+  const [pctStart, setPctStart] = useState<number>(0);    // 0..1000
+  const [pctEnd, setPctEnd] = useState<number>(1000);     // 0..1000
 
   const monthsByYear = useMemo(() => {
     const map: Record<string, string[]> = {};
@@ -200,39 +238,66 @@ export default function Dashboard() {
     return times.length ? times[0].getTime() : null;
   }, [dataMain]);
 
-  // Zeitachsen der geladenen Daten
-  const timesAll = useMemo(() => (dataAll?.rows || []).map((r) => toDate(r.time as string)).filter(Boolean) as Date[], [dataAll]);
-  const timesMain = useMemo(() => (dataMain?.rows || []).map((r) => toDate(r.time as string)).filter(Boolean) as Date[], [dataMain]);
-
-  // Standardbereich bei Datenwechsel setzen (voller Bereich)
+  // Extent laden (globaler Min/Max-Zeitpunkt)
   useEffect(() => {
-    const times = mode === "channel" ? timesAll : timesMain;
-    if (!times.length) return;
-    // Nur initial oder wenn größer als letzter Index
-    setStartIdx((s) => (s == null || s < 0 ? 0 : Math.min(s, times.length - 1)));
-    setEndIdx((e) => (e == null || e < 0 ? times.length - 1 : Math.min(Math.max(e, 0), times.length - 1)));
-  }, [mode, timesAll, timesMain]);
+    if (!useGlobalRange) return;
+    fetch("/api/data/extent")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.min && j?.max) {
+          const dMin = new Date(j.min.replace(" ", "T"));
+          const dMax = new Date(j.max.replace(" ", "T"));
+          if (!isNaN(dMin.getTime()) && !isNaN(dMax.getTime())) {
+            setExtentMin(dMin);
+            setExtentMax(dMax);
+            setPctStart(0);
+            setPctEnd(1000);
+            return;
+          }
+        }
+        // Fallback auf Monatsmodus, wenn Extent nicht ermittelbar
+        setUseGlobalRange(false);
+      })
+      .catch(() => { setUseGlobalRange(false); });
+  }, [useGlobalRange]);
 
-  // Aus gewählten Indizes Start/End ableiten
-  const selectedTimes = mode === "channel" ? timesAll : timesMain;
-  const selStart = useMemo(() => (startIdx != null && selectedTimes[startIdx]) ? selectedTimes[startIdx] : null, [startIdx, selectedTimes]);
-  const selEnd = useMemo(() => (endIdx != null && selectedTimes[endIdx]) ? selectedTimes[endIdx] : null, [endIdx, selectedTimes]);
-  const startParam = useMemo(() => (selStart ? formatForApi(selStart) : undefined), [selStart]);
-  const endParam = useMemo(() => (selEnd ? formatForApi(selEnd) : undefined), [selEnd]);
+  // Start/End-Parameter bestimmen
+  const startParam = useMemo(() => {
+    if (useGlobalRange && extentMin && extentMax) {
+      const span = extentMax.getTime() - extentMin.getTime();
+      const ms = extentMin.getTime() + Math.round(span * (pctStart / 1000));
+      return formatForApi(new Date(ms));
+    }
+    return undefined;
+  }, [useGlobalRange, extentMin, extentMax, pctStart]);
+  const endParam = useMemo(() => {
+    if (useGlobalRange && extentMin && extentMax) {
+      const span = extentMax.getTime() - extentMin.getTime();
+      const ms = extentMin.getTime() + Math.round(span * (pctEnd / 1000));
+      return formatForApi(new Date(ms));
+    }
+    return undefined;
+  }, [useGlobalRange, extentMin, extentMax, pctEnd]);
 
   useEffect(() => {
-    if (!year || !mon) return;
-    const monthStr = `${year}${mon}`;
+    if (useGlobalRange && (!startParam || !endParam)) return; // wait for extent and slider mapping
     const uAll = new URL("/api/data/allsensors", window.location.origin);
-    uAll.searchParams.set("month", monthStr);
-    uAll.searchParams.set("resolution", resolution);
-    if (startParam) uAll.searchParams.set("start", startParam);
-    if (endParam) uAll.searchParams.set("end", endParam);
     const uMain = new URL("/api/data/main", window.location.origin);
-    uMain.searchParams.set("month", monthStr);
-    uMain.searchParams.set("resolution", resolution);
-    if (startParam) uMain.searchParams.set("start", startParam);
-    if (endParam) uMain.searchParams.set("end", endParam);
+    if (useGlobalRange) {
+      uAll.searchParams.set("resolution", resolution);
+      uMain.searchParams.set("resolution", resolution);
+      if (startParam) uAll.searchParams.set("start", startParam);
+      if (endParam) uAll.searchParams.set("end", endParam);
+      if (startParam) uMain.searchParams.set("start", startParam);
+      if (endParam) uMain.searchParams.set("end", endParam);
+    } else {
+      if (!year || !mon) return;
+      const monthStr = `${year}${mon}`;
+      uAll.searchParams.set("month", monthStr);
+      uMain.searchParams.set("month", monthStr);
+      uAll.searchParams.set("resolution", resolution);
+      uMain.searchParams.set("resolution", resolution);
+    }
     Promise.all([
       fetch(uAll.toString()).then((r) => r.json()).catch(() => null),
       fetch(uMain.toString()).then((r) => r.json()).catch(() => null),
@@ -240,39 +305,49 @@ export default function Dashboard() {
       setDataAll(a);
       setDataMain(m);
     });
-  }, [year, mon, resolution, startParam, endParam]);
+  }, [useGlobalRange, year, mon, resolution, startParam, endParam]);
 
   return (
     <div className="w-full max-w-screen-lg mx-auto flex flex-col gap-4">
       <h1 className="text-2xl font-semibold">Wetterstation Dashboard</h1>
-      {/* Steuerung: Jahr/Monat, Auflösung, Ansicht, Kanal/Metrik */}
+      {/* Steuerung: Zeitraum, Jahr/Monat (optional), Auflösung, Ansicht, Kanal/Metrik */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm">Jahr</label>
-          <select className="border rounded p-2" value={year} onChange={(e) => setYear(e.target.value)}>
-            {years.map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
+        <div className="flex items-center gap-2">
+          <input id="global-range" type="checkbox" checked={useGlobalRange} onChange={(e) => setUseGlobalRange(e.target.checked)} />
+          <label htmlFor="global-range" className="text-sm">Gesamten Zeitraum verwenden</label>
         </div>
-
-      {/* Zeitraum: Start/Ende via Slider + Datumsfelder */}
-      <TimeRangeControls
-        mode={mode}
-        times={selectedTimes}
-        startIdx={startIdx}
-        endIdx={endIdx}
-        setStartIdx={setStartIdx}
-        setEndIdx={setEndIdx}
-      />
-        <div className="flex flex-col gap-1">
-          <label className="text-sm">Monat</label>
-          <select className="border rounded p-2" value={mon} onChange={(e) => setMon(e.target.value)}>
-            {(monthsByYear[year] || []).map((m) => (
-              <option key={m} value={m}>{DE_MONTHS[Number(m) - 1] || m}</option>
-            ))}
-          </select>
-        </div>
+        {!useGlobalRange && (
+          <>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm">Jahr</label>
+              <select className="border rounded p-2" value={year} onChange={(e) => setYear(e.target.value)}>
+                {years.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm">Monat</label>
+              <select className="border rounded p-2" value={mon} onChange={(e) => setMon(e.target.value)}>
+                {(monthsByYear[year] || []).map((m) => (
+                  <option key={m} value={m}>{DE_MONTHS[Number(m) - 1] || m}</option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
+        {useGlobalRange && (
+          <div className="sm:col-span-2 lg:col-span-3">
+            <GlobalRangeControls
+              min={extentMin}
+              max={extentMax}
+              pctStart={pctStart}
+              pctEnd={pctEnd}
+              setPctStart={setPctStart}
+              setPctEnd={setPctEnd}
+            />
+          </div>
+        )}
         <div className="flex flex-col gap-1">
           <label className="text-sm">Auflösung</label>
           <select className="border rounded p-2" value={resolution} onChange={(e) => setResolution(e.target.value as Resolution)}>
@@ -288,27 +363,7 @@ export default function Dashboard() {
             <option value="channel">Sensor CH1–CH8</option>
           </select>
         </div>
-        {mode === "channel" && (
-          <div className="flex flex-col gap-1">
-            <label className="text-sm">Sensor</label>
-            <select className="border rounded p-2" value={selectedChannel} onChange={(e) => setSelectedChannel(e.target.value)}>
-              {getChannelKeys(channelsCfg).map((k) => (
-                <option key={k} value={k}>{channelName(k, channelsCfg)}</option>
-              ))}
-            </select>
-          </div>
-        )}
-        {mode === "channel" && (
-          <div className="flex flex-col gap-1">
-            <label className="text-sm">Metrik</label>
-            <select className="border rounded p-2" value={metric} onChange={(e) => setMetric(e.target.value as ChannelMetric)}>
-              <option value="Temperature">Temperatur (℃)</option>
-              <option value="Luftfeuchtigkeit">Luftfeuchte (%)</option>
-              <option value="Taupunkt">Taupunkt (℃)</option>
-              <option value="Wärmeindex">Wärmeindex (℃)</option>
-            </select>
-          </div>
-        )}
+        {/* Keine Sensor-/Metrik-Auswahl im Channel-Modus: es werden alle Diagramme angezeigt */}
       </div>
 
       {/* Ansicht: Hauptsensoren (gestapelte Charts) */}
@@ -321,12 +376,12 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Ansicht: Ein Sensor (CH1–CH8) mit gewählter Metrik */}
+      {/* Ansicht: Alle Channels (CH1–CH8), je alle vorhandenen Metriken */}
       {mode === "channel" && dataAll && (
         <div className="rounded-lg border border-gray-200 bg-white dark:bg-black">
-          <div className="px-3 py-2 border-b border-gray-200 text-sm font-medium">{channelName(selectedChannel, channelsCfg)} • {metric} • Datei: {dataAll.file}</div>
+          <div className="px-3 py-2 border-b border-gray-200 text-sm font-medium">Alle Sensoren (CH1–CH8) • Datei: {dataAll.file}</div>
           <div className="p-3 flex flex-col gap-4">
-            {renderChannelChart(dataAll, selectedChannel, metric, channelsCfg, xBaseAll)}
+            {renderAllChannelsCharts(dataAll, channelsCfg, xBaseAll)}
           </div>
         </div>
       )}
@@ -467,7 +522,18 @@ function getChannelKeys(cfg: ChannelsConfig): string[] {
 
 function headerKeyForAllsensors(header: string[], metric: string, chNum: string): string {
   // Prefer CHx <metric>
-  const direct = header.find((h) => h.startsWith(`CH${chNum} ${metric}`));
+  const synonyms: Record<string, string[]> = {
+    Temperature: ["Temperature", "Temperatur"],
+    Luftfeuchtigkeit: ["Luftfeuchtigkeit"],
+    Taupunkt: ["Taupunkt"],
+    "Wärmeindex": ["Wärmeindex"],
+  };
+  const metricsToTry = synonyms[metric as keyof typeof synonyms] || [metric];
+  let direct: string | undefined;
+  for (const m of metricsToTry) {
+    direct = header.find((h) => h.startsWith(`CH${chNum} ${m}`));
+    if (direct) break;
+  }
   if (direct) return direct;
   // Humidity alternative from WN35CHxhum
   if (metric === "Luftfeuchtigkeit") {
@@ -475,7 +541,11 @@ function headerKeyForAllsensors(header: string[], metric: string, chNum: string)
     if (alt) return alt;
   }
   // fallback to first CH for metric
-  return header.find((h) => h.includes(metric)) || header[1] || "";
+  for (const m of metricsToTry) {
+    const any = header.find((h) => h.includes(m));
+    if (any) return any;
+  }
+  return header[1] || "";
 }
 
 function inferNumericColumns(data: DataResp | null): string[] {

@@ -5,7 +5,8 @@ export function parseTimestamp(ts: string): Date | null {
   if (!ts) return null;
   const [datePart, timePart] = ts.trim().split(/[\sT]+/);
   if (!datePart) return null;
-  const [y, m, d] = datePart.split("/").map((s) => Number(s));
+  const dateSep = datePart.includes("-") ? "-" : "/";
+  const [y, m, d] = datePart.split(dateSep).map((s) => Number(s));
   let hh = 0, mm = 0, ss = 0;
   if (timePart) {
     const [h, m2, s2] = timePart.split(":");
