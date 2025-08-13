@@ -45,6 +45,18 @@ export default function LineChart({ series, height = 220, yLabel, xTickFormatter
     maxY = Math.max(maxY, 0);
   }
 
+  // Detect temperature series (ignore dew point and felt temperature)
+  const isFeel = (id: string) => id.toLowerCase().includes("gefühlte temperatur");
+  const isDew = (id: string) => id.toLowerCase().includes("taupunkt");
+  const isTemp = (id: string) => id.toLowerCase().includes("temperatur") && !isFeel(id) && !isDew(id);
+  const tempValues: number[] = [];
+  for (const s of series) {
+    if (!isTemp(s.id)) continue;
+    for (const p of s.points) if (Number.isFinite(p.y)) tempValues.push(p.y as number);
+  }
+  const hasTemperature = tempValues.length > 0;
+  const avgTemp = hasTemperature ? (tempValues.reduce((a, b) => a + b, 0) / tempValues.length) : null;
+
   function pickForHover(points: LinePoint[], x: number, _barsMode: boolean): LinePoint | null {
     const valid = points.filter((p) => Number.isFinite(p.y));
     if (valid.length === 0) return null;
@@ -84,6 +96,24 @@ export default function LineChart({ series, height = 220, yLabel, xTickFormatter
     if (valid.length === 0) return "";
     return valid
       .map((p, i) => `${i === 0 ? "M" : "L"}${sx(p.x).toFixed(2)},${sy(p.y).toFixed(2)}`)
+      .join(" ");
+  }
+
+  // Variant that allows per-point pixel offsets in Y (screen space)
+  function pathForWithOffset(points: LinePoint[], offsetPx?: number[]) {
+    const valid: { p: LinePoint; i: number }[] = [];
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      if (Number.isFinite(p.y)) valid.push({ p, i });
+    }
+    if (!valid.length) return "";
+    return valid
+      .map(({ p, i }, idx) => {
+        const off = offsetPx ? (offsetPx[i] || 0) : 0;
+        const x = sx(p.x).toFixed(2);
+        const y = (sy(p.y) + off).toFixed(2);
+        return `${idx === 0 ? "M" : "L"}${x},${y}`;
+      })
       .join(" ");
   }
 
@@ -137,6 +167,51 @@ export default function LineChart({ series, height = 220, yLabel, xTickFormatter
         {/* X axis */}
         <line x1={padding.left} y1={padding.top + innerH} x2={padding.left + innerW} y2={padding.top + innerH} stroke="#999" strokeWidth={1} />
 
+        {/* Helper lines: average temperature and 0°C */}
+        {hasTemperature && !bars && (
+          <g>
+            {/* Average temperature line */}
+            {avgTemp != null && avgTemp >= minY && avgTemp <= maxY && (
+              <line
+                x1={padding.left}
+                x2={padding.left + innerW}
+                y1={sy(avgTemp)}
+                y2={sy(avgTemp)}
+                stroke="#f59e0b"
+                strokeWidth={1}
+                strokeDasharray="4,3"
+                opacity={0.9}
+              />
+            )}
+            {/* Average temperature label (left, above line) */}
+            {avgTemp != null && avgTemp >= minY && avgTemp <= maxY && (
+              <text
+                x={padding.left + 6}
+                y={Math.max(padding.top + 10, sy(avgTemp) - 4)}
+                fontSize={11}
+                textAnchor="start"
+                fill="#92400e"
+                fontWeight="600"
+              >
+                {`${avgTemp.toFixed(1)}${yUnit ? " " + yUnit : ""}`}
+              </text>
+            )}
+            {/* Zero Celsius line */}
+            {minY <= 0 && maxY >= 0 && (
+              <line
+                x1={padding.left}
+                x2={padding.left + innerW}
+                y1={sy(0)}
+                y2={sy(0)}
+                stroke="#94a3b8"
+                strokeWidth={1}
+                strokeDasharray="3,3"
+                opacity={0.8}
+              />
+            )}
+          </g>
+        )}
+
         {/* Y ticks */}
         {yTicks.map((v, i) => (
           <g key={`yt-${i}`}>
@@ -185,9 +260,43 @@ export default function LineChart({ series, height = 220, yLabel, xTickFormatter
         })}
 
         {/* Lines */}
-        {!bars && series.map((s) => (
-          <path key={s.id} d={pathFor(s.points)} stroke={s.color} strokeWidth={2} fill="none" />
-        ))}
+        {!bars && (() => {
+          // Compute 1px downward offset for 'Gefühlte Temperatur' when overlapping exactly with a base 'Temperatur' series
+          const isFeel = (id: string) => id.toLowerCase().includes("gefühlte temperatur");
+          const isBaseTemp = (id: string) => id.toLowerCase().includes("temperatur") && !id.toLowerCase().includes("gefühlte");
+          const eps = 1e-9;
+          // Build lookup maps for base temperature series: x -> y
+          const baseMaps = series.map((s) => {
+            if (!isBaseTemp(s.id)) return null as Map<number, number> | null;
+            const m = new Map<number, number>();
+            for (const pt of s.points) if (Number.isFinite(pt.y)) m.set(pt.x, pt.y);
+            return m;
+          });
+          // Offsets per series point
+          const offsets: number[][] = series.map((s) => new Array(s.points.length).fill(0));
+          series.forEach((s, si) => {
+            if (!isFeel(s.id)) return;
+            for (let pi = 0; pi < s.points.length; pi++) {
+              const pt = s.points[pi];
+              if (!Number.isFinite(pt.y)) continue;
+              // If any base map has same x and nearly equal y, offset by +1px
+              let overlap = false;
+              for (const bm of baseMaps) {
+                if (!bm) continue;
+                const y = bm.get(pt.x);
+                if (y != null && Number.isFinite(y) && Math.abs(y - (pt.y as number)) < eps) { overlap = true; break; }
+              }
+              if (overlap) offsets[si][pi] = 2; // shift down by 1px
+            }
+          });
+          return (
+            <g>
+              {series.map((s, i) => (
+                <path key={s.id} d={pathForWithOffset(s.points, offsets[i])} stroke={s.color} strokeWidth={2} fill="none" />
+              ))}
+            </g>
+          );
+        })()}
 
         {/* Legend (optional) */}
         {showLegend && (
