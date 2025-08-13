@@ -635,12 +635,21 @@ function renderMainCharts(data: DataResp, xBase: number | null) {
   const fmt = makeTimeTickFormatter(xBase, spanMin);
   const hoverFmt = makeHoverTimeFormatter(xBase);
   const header = (data.header || []).slice();
+  // Debug main headers and sample row
+  try {
+    console.debug("[Main] Header:", header);
+    console.debug("[Main] Numeric cols:", cols);
+    console.debug("[Main] First row keys:", Object.keys(rows[0] || {}));
+    console.debug("[Main] First row sample:", rows[0]);
+  } catch {}
   
   // Temperaturmetriken identifizieren und gruppieren
   const tempColumns = findTemperatureColumns(header);
+  console.debug("[Main] Detected temp columns:", tempColumns);
   
   // Regenmetriken identifizieren und gruppieren
   const rainColumns = findRainColumns(header);
+  console.debug("[Main] Detected rain columns:", rainColumns);
   
   const nonTempRainColumns = cols.filter(col => !tempColumns.includes(col) && !rainColumns.includes(col));
   
@@ -650,6 +659,11 @@ function renderMainCharts(data: DataResp, xBase: number | null) {
   
   for (let i = 0; i < tempColumns.length; i++) {
     const col = tempColumns[i];
+    // Debug values for this column
+    try {
+      const samples = rows.slice(0, 5).map((r) => ({ v: r[col], t: typeof r[col] }));
+      console.debug(`[Main] Column '${col}' samples:`, samples);
+    } catch {}
     const series: LineSeries = {
       id: col,
       color: tempColors[i % tempColors.length],
@@ -659,6 +673,7 @@ function renderMainCharts(data: DataResp, xBase: number | null) {
       tempSeries.push(series);
     }
   }
+  console.debug("[Main] tempSeries length:", tempSeries.length);
   
   // Regendiagramm erstellen
   const rainSeries: LineSeries[] = [];
@@ -849,40 +864,13 @@ function renderMainCharts(data: DataResp, xBase: number | null) {
 function findTemperatureColumns(header: string[]): string[] {
   const tempColumns: string[] = [];
   
-  // Debug-Ausgabe der Header
-  console.log("Verfügbare Header für Temperaturerkennung:", header);
-  
-  // Suche nach Temperatur Aussen/Außen
-  const tempAussen = header.find(h => {
-    const s = h.toLowerCase();
-    return (s.includes("temp") && (s.includes("aussen") || s.includes("außen") || s.includes("out"))) || 
-           (s.includes("außentemperatur") || s.includes("aussentemperatur") || 
-            s.includes("outdoor temp") || s.includes("temperature out"));
-  });
-  if (tempAussen) {
-    console.log("Temperatur Aussen gefunden:", tempAussen);
-    tempColumns.push(tempAussen);
-  }
-  
-  // Suche nach Taupunkt
-  const taupunkt = header.find(h => {
-    const s = h.toLowerCase();
-    return s.includes("taupunkt") || s.includes("dew");
-  });
-  if (taupunkt) {
-    console.log("Taupunkt gefunden:", taupunkt);
-    tempColumns.push(taupunkt);
-  }
-  
-  // Suche nach Gefühlte Temperatur / Wärmeindex
-  const gefuehlteTemp = header.find(h => {
-    const s = h.toLowerCase();
-    return s.includes("wärmeindex") || s.includes("gefühl") || 
-           s.includes("heat") || s.includes("feel");
-  });
-  if (gefuehlteTemp) {
-    console.log("Gefühlte Temperatur gefunden:", gefuehlteTemp);
-    tempColumns.push(gefuehlteTemp);
+  // Suche nach den Temperatur-Strings (nur Anfang prüfen)
+  for (const h of header) {
+    if (h.startsWith("Temperatur Aussen") ||
+        h.startsWith("Taupunkt") ||
+        h.startsWith("Gefühlte Temperatur")) {
+      tempColumns.push(h);
+    }
   }
   
   console.log("Erkannte Temperaturmetriken:", tempColumns);

@@ -13,8 +13,8 @@ COPY . .
 RUN npm run build
 
 # Set environment variables
-EXPOSE 8080
-ENV PORT=8080
+EXPOSE 3010
+ENV PORT=3010
 ENV NODE_ENV=production
 
 # Start the server

@@ -39,13 +39,23 @@ export async function GET(req: Request) {
       const describeSql = `DESCRIBE SELECT * FROM read_parquet('${first}')`;
       const descReader = await conn.runAndReadAll(describeSql);
       const cols: any[] = descReader.getRowObjects();
-      const numericCols = cols
+      const allNames = cols.map((r: any) => String(r.column_name || r.ColumnName || r.column || ""));
+      let numericCols = cols
         .filter((r: any) => {
           const t = String(r.column_type || r.Type || r.type || "").toUpperCase();
           return t && !t.includes("VARCHAR") && !t.includes("BOOLEAN") && t !== "";
         })
         .map((r: any) => String(r.column_name || r.ColumnName || r.column || ""))
         .filter((c) => c && c !== "ts" && c !== "Time" && c !== "Zeit");
+      // Force-include known temperature columns even if inferred as VARCHAR
+      const forceCols = [
+        "Temperatur Aussen(℃)",
+        "Taupunkt(℃)",
+        "Gefühlte Temperatur(℃)",
+      ];
+      for (const f of forceCols) {
+        if (allNames.includes(f) && !numericCols.includes(f)) numericCols.push(f);
+      }
 
       // Build aggregation over bucket
       const bucketExpr =

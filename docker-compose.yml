@@ -1,18 +1,25 @@
 services:
   app:
-    image: eta2weather
+    image: ecowitt
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: eta2weather
+    container_name: ecowitt
     ports:
-      - "3000:3000"
+      - "3010:3010"
     environment:
       - NODE_ENV=production
+      - PORT=3010
+      - NEXT_PUBLIC_RT_REFRESH_MS=300000
+    env_file:
+      - .env
     volumes:
       - nodemodules:/app/node_modules
-      - ./public/log:/app/public/log
+      - ./DNT:/app/DNT
+      - ./data:/app/data
       - ./src/config:/app/src/config
+      - ./eco.ts:/app/eco.ts
 
 volumes:
-  nodemodules: {}
+  nodemodules:
+    driver: local
