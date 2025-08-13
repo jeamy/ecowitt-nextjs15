@@ -13,8 +13,11 @@ const nextConfig = {
   webpack: (config: any, { isServer }: { isServer: boolean }) => {
     if (isServer) {
       const externals = config.externals || [];
-      // Externalize base packages
+      // Externalize Node.js built-ins for server-only modules
       externals.push({
+        "fs": "commonjs fs",
+        "fs/promises": "commonjs fs/promises", 
+        "path": "commonjs path",
         "@duckdb/node-api": "commonjs @duckdb/node-api",
         "@duckdb/node-bindings": "commonjs @duckdb/node-bindings",
       });

@@ -1,33 +1,17 @@
 import { NextResponse } from "next/server";
 import EcoCon from "eco";
+import { buildTargetUrl, writeLiveToDNT } from "@/lib/realtimeArchiver";
 
 export const dynamic = "force-dynamic"; // always fetch fresh
+export const runtime = "nodejs"; // we need fs access
 
-function buildParams(all: boolean) {
-  const eco = EcoCon.getInstance().getConfig();
-  const params = new URLSearchParams({
-    mac: eco.mac,
-    api_key: eco.apiKey,
-    application_key: eco.applicationKey,
-    method: "device/real_time",
-    call_back: all ? "all" : "indoor.temperature,outdoor.temperature",
-    temp_unitid: "1",
-    pressure_unitid: "3",
-    wind_speed_unitid: "7",
-    rainfall_unitid: "12",
-    solar_irradiance_unitid: "16"
-  });
-  return params;
-}
+// (archiving logic moved to shared module)
 
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const all = url.searchParams.get("all") === "1";
-    const eco = EcoCon.getInstance().getConfig();
-    const baseUrl = `https://${eco.server}/api/v3/device/real_time`;
-    const qs = buildParams(all);
-    const target = `${baseUrl}?${qs.toString()}`;
+    const target = buildTargetUrl(all);
 
     const res = await fetch(target, { cache: "no-store" });
     if (!res.ok) {
@@ -35,6 +19,18 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: `Upstream ${res.status}`, body: text }, { status: res.status });
     }
     const data = await res.json();
+    // Optional: archive via API route (disabled by default to avoid duplicates with server poller)
+    if (process.env.RT_ARCHIVE_FROM_API === "1") {
+      try {
+        const payload = (data && (data.data || (data as any).payload || data)) as any;
+        if (payload && typeof payload === "object") {
+          await writeLiveToDNT(payload);
+        }
+      } catch (e) {
+        // Swallow write errors to not break realtime API
+        console.error("[rt] write to DNT failed:", e);
+      }
+    }
     return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
   } catch (err: any) {
     return NextResponse.json({ ok: false, error: String(err?.message || err) }, { status: 500 });

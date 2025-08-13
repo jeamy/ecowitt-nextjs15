@@ -76,11 +76,16 @@ export default function Realtime() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch("/api/rt?all=1", { cache: "no-store" });
+      const res = await fetch("/api/rt/last", { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      setData(json);
-      setLastUpdated(new Date());
+      const rec = await res.json();
+      if (!rec || rec.ok === false) {
+        const msg = rec?.error || "keine Daten";
+        setError(msg);
+        return;
+      }
+      setData(rec.data ?? null);
+      setLastUpdated(rec.updatedAt ? new Date(rec.updatedAt) : new Date());
     } catch (e: any) {
       setError(e?.message || String(e));
     } finally {
@@ -120,7 +125,7 @@ export default function Realtime() {
   }, [lastUpdated]);
 
   const d = data as any;
-  const payload = d?.data ?? d; // try common wrapper
+  const payload = d; // cached payload already unwrapped
 
   const indoorT = valueAndUnit(tryRead(payload, "indoor.temperature"));
   const indoorH = valueAndUnit(tryRead(payload, "indoor.humidity"));
@@ -166,11 +171,8 @@ export default function Realtime() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-start">
         <div className="text-sm text-gray-600 dark:text-gray-400">Letzte Aktualisierung: {timeText}</div>
-        <button onClick={fetchNow} className="px-3 py-1.5 text-sm rounded bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50" disabled={loading}>
-          {loading ? "Aktualisiere…" : "Aktualisieren"}
-        </button>
       </div>
 
       {error && (
