@@ -45,15 +45,14 @@ export default function LineChart({ series, height = 220, yLabel, xTickFormatter
     maxY = Math.max(maxY, 0);
   }
 
-  function pickForHover(points: LinePoint[], x: number, barsMode: boolean): LinePoint | null {
+  function pickForHover(points: LinePoint[], x: number, _barsMode: boolean): LinePoint | null {
     const valid = points.filter((p) => Number.isFinite(p.y));
     if (valid.length === 0) return null;
-    if (!barsMode) return nearest(valid, x);
-    // For bars: pick the last point with center <= mouse x (left bin)
-    // Assumes points are in ascending x order.
-    let cand: LinePoint | null = valid[0];
-    for (let i = 0; i < valid.length; i++) {
-      const p = valid[i];
+    // Always pick the last point whose x <= hover x ("left bin" behavior)
+    const sorted = valid.slice().sort((a, b) => a.x - b.x);
+    let cand: LinePoint | null = null;
+    for (let i = 0; i < sorted.length; i++) {
+      const p = sorted[i];
       if (p.x <= x) cand = p; else break;
     }
     return cand;
@@ -201,7 +200,7 @@ export default function LineChart({ series, height = 220, yLabel, xTickFormatter
         {showHover && hoverX != null && (
           <g>
             {/* Crosshair */}
-            <line x1={sx(hoverX)} y1={padding.top} x2={sx(hoverX)} y2={padding.top + innerH} stroke="#94a3b8" strokeDasharray="3,3" />
+            <line x1={sx(hoverPrimary ? hoverPrimary.p.x : hoverX)} y1={padding.top} x2={sx(hoverPrimary ? hoverPrimary.p.x : hoverX)} y2={padding.top + innerH} stroke="#94a3b8" strokeDasharray="3,3" />
             {/* Points markers */}
             {hoverPrimary && (
               <circle cx={sx(hoverPrimary.p.x)} cy={sy(hoverPrimary.p.y)} r={3} fill={hoverPrimary.color} stroke="#fff" strokeWidth={1} />
@@ -210,7 +209,7 @@ export default function LineChart({ series, height = 220, yLabel, xTickFormatter
             <g transform={`translate(${padding.left + 6}, ${padding.top + 6})`}>
               <rect width={180} height={22} fill="rgba(255,255,255,0.9)" stroke="#cbd5e1" />
               <text x={6} y={14} fontSize={11} fill="#111">
-                {(hoverTimeFormatter ? hoverTimeFormatter(hoverX) : (xTickFormatter ? xTickFormatter(hoverX) : String(Math.round(hoverX))))}{
+                {(hoverTimeFormatter ? hoverTimeFormatter(hoverPrimary ? hoverPrimary.p.x : hoverX) : (xTickFormatter ? xTickFormatter(hoverPrimary ? hoverPrimary.p.x : hoverX) : String(Math.round(hoverPrimary ? hoverPrimary.p.x : hoverX))))}{
                   hoverPrimary && Number.isFinite(hoverPrimary.p.y)
                     ? `: ${valueFormatter ? valueFormatter(hoverPrimary.p.y) : `${hoverPrimary.p.y.toFixed(2)}${yUnit ? " " + yUnit : ""}`}`
                     : ""

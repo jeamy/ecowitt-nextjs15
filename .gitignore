@@ -46,3 +46,4 @@ next-env.d.ts
 /data/parquet/
 /data/weather.duckdb
 /data/weather.duckdb.lock
+/eco.ts
