@@ -23,7 +23,9 @@ function renderChannelCardCharts(
   if (!rows.length || !xBase) return <div className="text-xs text-gray-500">Keine Daten</div>;
   const times = rows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
   const xVals = times.map((t) => Math.round((t.getTime() - xBase) / 60000));
-  const fmt = makeTimeTickFormatter(xBase);
+  const spanMin = times.length >= 2 ? Math.round((times[times.length - 1].getTime() - times[0].getTime()) / 60000) : 0;
+  const fmt = makeTimeTickFormatter(xBase, spanMin);
+  const hoverFmt = makeHoverTimeFormatter(xBase);
   const metrics: ChannelMetric[] = ["Temperature", "Luftfeuchtigkeit", "Taupunkt", "Wärmeindex"];
   const chNum = (chKey.match(/\d+/)?.[0]) || "1";
   const out: React.ReactNode[] = [];
@@ -39,7 +41,7 @@ function renderChannelCardCharts(
     if (!series.points.some((p) => Number.isFinite(p.y))) continue;
     out.push(
       <div key={`${chKey}-${metric}`} className="rounded border border-gray-100 p-3">
-        <LineChart series={[series]} yLabel={`${metric}`} xLabel="Zeit" xTickFormatter={fmt} showLegend={false} />
+        <LineChart series={[series]} yLabel={`${metric}`} xLabel="Zeit" xTickFormatter={fmt} hoverTimeFormatter={hoverFmt} showLegend={false} yUnit={unitForMetric(metric)} />
       </div>
     );
   }
@@ -53,6 +55,7 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
   const times = rows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
   const xVals = times.map((t) => Math.round((t.getTime() - xBase) / 60000));
   const fmt = makeTimeTickFormatter(xBase);
+  const hoverFmt = makeHoverTimeFormatter(xBase);
   const metrics: ChannelMetric[] = ["Temperature", "Luftfeuchtigkeit", "Taupunkt", "Wärmeindex"];
   const out: React.ReactNode[] = [];
   for (const chKey of getChannelKeys(channelsCfg)) {
@@ -70,14 +73,14 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
       if (!series.points.some((p) => Number.isFinite(p.y))) continue;
       channelCharts.push(
         <div key={`${chKey}-${metric}`} className="rounded border border-gray-100 p-3">
-          <LineChart series={[series]} yLabel={`${metric}`} xLabel="Zeit" xTickFormatter={fmt} showLegend={false} />
+          <LineChart series={[series]} yLabel={`${metric}`} xLabel="Zeit" xTickFormatter={fmt} hoverTimeFormatter={hoverFmt} showLegend={false} yUnit={unitForMetric(metric)} />
         </div>
       );
     }
     if (channelCharts.length) {
       out.push(
         <div key={`ch-card-${chKey}`} className="rounded-lg border border-gray-200 bg-white dark:bg-black">
-          <div className="px-3 py-2 border-b border-gray-200 text-sm font-medium">{channelName(chKey, channelsCfg)}</div>
+          <div className="px-3 py-2 border-b border-emerald-100 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 text-sm font-medium">{channelName(chKey, channelsCfg)}</div>
           <div className="p-3 flex flex-col gap-4">
             {channelCharts}
           </div>
@@ -166,14 +169,23 @@ function GlobalRangeControls(props: {
 }
 
 function pad2(n: number) { return n < 10 ? `0${n}` : String(n); }
-function makeTimeTickFormatter(t0: number) {
+function makeTimeTickFormatter(t0: number, spanMin: number = 0) {
   return (v: number) => {
     const d = new Date(t0 + Math.round(v) * 60000);
-    const dd = pad2(d.getDate());
-    const mm = pad2(d.getMonth() + 1);
+    if (spanMin > 1440) {
+      const dd = pad2(d.getDate());
+      const mm = pad2(d.getMonth() + 1);
+      return `${dd}.${mm}.`;
+    }
     const hh = pad2(d.getHours());
-    const mi = pad2(d.getMinutes());
-    return `${dd}.${mm} ${hh}:${mi}`;
+    return `${hh}:00`;
+  };
+}
+
+function makeHoverTimeFormatter(t0: number) {
+  return (v: number) => {
+    const d = new Date(t0 + Math.round(v) * 60000);
+    return formatDisplay(d); // DD.MM.YYYY HH:MM
   };
 }
 
@@ -207,7 +219,7 @@ export default function Dashboard() {
   const [months, setMonths] = useState<string[]>([]);
   const [year, setYear] = useState<string>("");
   const [mon, setMon] = useState<string>(""); // MM
-  const [resolution, setResolution] = useState<Resolution>("minute");
+  const [resolution, setResolution] = useState<Resolution>("day");
   const [mode, setMode] = useState<"main" | "channel">("channel");
   const [selectedChannel, setSelectedChannel] = useState<string>("all");
   const [metric, setMetric] = useState<ChannelMetric>("Temperature");
@@ -397,7 +409,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <div className="flex items-center gap-2">
           <input id="global-range" type="checkbox" checked={useGlobalRange} onChange={(e) => setUseGlobalRange(e.target.checked)} />
-          <label htmlFor="global-range" className="text-sm">Gesamten Zeitraum verwenden</label>
+          <label htmlFor="global-range" className="text-sm">Ausgewählten Zeitraum verwenden</label>
         </div>
         {!useGlobalRange && (
           <>
@@ -475,7 +487,7 @@ export default function Dashboard() {
       {/* Ansicht: Hauptsensoren (gestapelte Charts) */}
       {mode === "main" && dataMain && (
         <div className="rounded-lg border border-gray-200 bg-white dark:bg-black">
-          <div className="px-3 py-2 border-b border-gray-200 text-sm font-medium">Hauptdaten (A)</div>
+          <div className="px-3 py-2 border-b border-sky-100 bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300 text-sm font-medium">Hauptdaten (A)</div>
           <div className="p-3 flex flex-col gap-4">
             {renderMainCharts(dataMain, xBaseMain)}
           </div>
@@ -485,7 +497,7 @@ export default function Dashboard() {
       {/* Ansicht: Einzelner Channel (Auswahl) */}
       {mode === "channel" && dataAll && (
         <div className="rounded-lg border border-gray-200 bg-white dark:bg-black">
-          <div className="px-3 py-2 border-b border-gray-200 text-sm font-medium">{selectedChannel === "all" ? "Alle Sensoren (CH1–CH8)" : channelName(selectedChannel, channelsCfg)}</div>
+          <div className="px-3 py-2 border-b border-emerald-100 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 text-sm font-medium">{selectedChannel === "all" ? "Alle Sensoren (CH1–CH8)" : channelName(selectedChannel, channelsCfg)}</div>
           <div className="p-3 flex flex-col gap-4">
             {selectedChannel === "all"
               ? renderAllChannelsCharts(dataAll, channelsCfg, xBaseAll)
@@ -505,7 +517,9 @@ function renderChannelChart(data: DataResp, chKey: string, metric: ChannelMetric
   const chNum = (chKey.match(/\d+/)?.[0]) || "1";
   const col = headerKeyForAllsensors(data.header || [], metric, chNum);
   const label = `${channelName(chKey, channelsCfg)} ${metric}`;
-  const fmt = makeTimeTickFormatter(xBase);
+  const spanMin = times.length >= 2 ? Math.round((times[times.length - 1].getTime() - times[0].getTime()) / 60000) : 0;
+  const fmt = makeTimeTickFormatter(xBase, spanMin);
+  const hoverFmt = makeHoverTimeFormatter(xBase);
   const series: LineSeries = {
     id: label,
     color: COLORS[0],
@@ -514,7 +528,7 @@ function renderChannelChart(data: DataResp, chKey: string, metric: ChannelMetric
   if (!series.points.some((p) => Number.isFinite(p.y))) return <div className="text-xs text-gray-500">Keine numerischen Werte</div>;
   return (
     <div className="rounded border border-gray-200 p-3">
-      <LineChart series={[series]} yLabel={label} xLabel="Zeit" xTickFormatter={fmt} showLegend={false} />
+      <LineChart series={[series]} yLabel={label} xLabel="Zeit" xTickFormatter={fmt} hoverTimeFormatter={hoverFmt} showLegend={false} yUnit={unitForMetric(metric)} />
     </div>
   );
 }
@@ -525,10 +539,68 @@ function renderMainCharts(data: DataResp, xBase: number | null) {
   const times = rows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
   const xVals = times.map((t) => Math.round((t.getTime() - xBase) / 60000));
   const cols = inferNumericColumns(data);
-  const fmt = makeTimeTickFormatter(xBase);
+  const spanMin = times.length >= 2 ? Math.round((times[times.length - 1].getTime() - times[0].getTime()) / 60000) : 0;
+  const fmt = makeTimeTickFormatter(xBase, spanMin);
+  const hoverFmt = makeHoverTimeFormatter(xBase);
+  // Detect rain column in main header
+  const header = (data.header || []).slice();
+  const pickRain = () => {
+    // prefer daily rain, then hourly, then generic rain (exclude rate/year/month/week)
+    const daily = header.find((h) => {
+      const s = h.toLowerCase();
+      return (s.includes("rain") || s.includes("regen")) && (s.includes("daily") || s.includes("tag")) && !s.includes("rate");
+    });
+    if (daily) return { mode: "daily" as const, col: daily };
+    const hourly = header.find((h) => {
+      const s = h.toLowerCase();
+      return (s.includes("rain") || s.includes("regen")) && (s.includes("hour") || s.includes("stunde")) && !s.includes("rate");
+    });
+    if (hourly) return { mode: "hourly" as const, col: hourly };
+    const generic = header.find((h) => {
+      const s = h.toLowerCase();
+      if (!(s.includes("rain") || s.includes("regen"))) return false;
+      if (s.includes("rate")) return false;
+      if (s.includes("year") || s.includes("jahr")) return false;
+      if (s.includes("month") || s.includes("monat")) return false;
+      if (s.includes("week") || s.includes("woche")) return false;
+      return true;
+    });
+    if (generic) return { mode: "interval" as const, col: generic };
+    return null;
+  };
+  const rainSel = pickRain();
+  // Aggregate to per-day totals (mm)
+  const rainPoints: { x: number; y: number }[] = [];
+  if (rainSel) {
+    const byDay = new Map<string, { date: Date; sum: number; max: number }>();
+    for (let i = 0; i < rows.length; i++) {
+      const d = times[i];
+      if (!d) continue;
+      const key = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+      const rec = byDay.get(key) || { date: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0), sum: 0, max: 0 };
+      const v = numOrNaN(rows[i][rainSel.col]);
+      if (Number.isFinite(v)) {
+        if (rainSel.mode === "daily") {
+          rec.max = Math.max(rec.max, v);
+        } else {
+          rec.sum += v; // hourly or interval
+        }
+      }
+      byDay.set(key, rec);
+    }
+    const entries = Array.from(byDay.values()).sort((a, b) => a.date.getTime() - b.date.getTime());
+    for (const e of entries) {
+      const y = rainSel.mode === "daily" ? e.max : e.sum;
+      if (!Number.isFinite(y)) continue;
+      const x = Math.round((e.date.getTime() - xBase) / 60000);
+      rainPoints.push({ x, y });
+    }
+  }
+  const totalRain = rainPoints.reduce((acc, p) => acc + (Number.isFinite(p.y) ? p.y : 0), 0);
+  const colsFiltered = rainSel ? cols.filter((c) => c !== rainSel.col) : cols;
   return (
     <>
-      {cols.map((col, i) => {
+      {colsFiltered.map((col, i) => {
         const series: LineSeries = {
           id: col,
           color: COLORS[i % COLORS.length],
@@ -537,10 +609,28 @@ function renderMainCharts(data: DataResp, xBase: number | null) {
         if (!series.points.some((p) => Number.isFinite(p.y))) return null;
         return (
           <div key={col} className="rounded border border-gray-200 p-3">
-            <LineChart series={[series]} yLabel={col} xLabel="Zeit" xTickFormatter={fmt} showLegend={false} />
+            <LineChart series={[series]} yLabel={col} xLabel="Zeit" xTickFormatter={fmt} hoverTimeFormatter={hoverFmt} showLegend={false} yUnit={unitForHeader(col)} />
           </div>
         );
       })}
+      {rainPoints.length > 0 && (
+        <div className="rounded border border-gray-200 p-3">
+          <div className="mb-2 text-sm text-gray-700 dark:text-gray-300">
+            <span className="font-medium">Summe im Zeitraum:</span> {totalRain.toFixed(1)} mm
+          </div>
+          <LineChart
+            series={[{ id: "Regen pro Tag (mm)", color: COLORS[1], points: rainPoints }]}
+            yLabel="Regen pro Tag (mm)"
+            xLabel="Zeit"
+            xTickFormatter={fmt}
+            hoverTimeFormatter={hoverFmt}
+            showLegend={false}
+            bars
+            yUnit="mm"
+            barWidthPx={2}
+          />
+        </div>
+      )}
     </>
   );
 }
@@ -672,4 +762,47 @@ function inferNumericColumns(data: DataResp | null): string[] {
     if (count > 0 && nums / Math.max(1, count) > 0.6) numeric.push(h);
   }
   return numeric;
+}
+
+// Units helpers
+function unitForMetric(metric: ChannelMetric): string {
+  switch (metric) {
+    case "Temperature":
+    case "Taupunkt":
+    case "Wärmeindex":
+      return "°C";
+    case "Luftfeuchtigkeit":
+      return "%";
+    default:
+      return "";
+  }
+}
+
+function unitForHeader(header: string): string {
+  const s = header.toLowerCase();
+  // Rain
+  if (s.includes("rain") || s.includes("regen")) {
+    if (s.includes("rate") || s.includes("/h") || s.includes("per hour")) return "mm/h";
+    return "mm";
+  }
+  // Temperature family
+  if (s.includes("temp") || s.includes("temperatur") || s.includes("taupunkt") || s.includes("dew") || s.includes("wärme") || s.includes("heat index")) return "°C";
+  // Humidity
+  if (s.includes("humidity") || s.includes("luftfeuchtigkeit") || /\bhum\b/.test(s)) return "%";
+  // Pressure
+  if (s.includes("druck") || s.includes("pressure") || s.includes("baro")) return "hPa";
+  // Wind
+  if (s.includes("wind direction") || s.includes("windrichtung") || s.includes("direction")) return "°";
+  if (s.includes("wind") || s.includes("gust") || s.includes("böe") || s.includes("b\u00f6e")) return "km/h";
+  // Solar/Light
+  if (s.includes("uv")) return "index";
+  if (s.includes("solar") || s.includes("radiation")) return "W/m²";
+  if (s.includes("lux")) return "lux";
+  // Air quality
+  if (s.includes("pm2.5") || s.includes("pm10") || s.includes("pm1")) return "µg/m³";
+  if (s.includes("co2")) return "ppm";
+  // Soil/Leaf
+  if (s.includes("soil") && s.includes("moist")) return "%";
+  if (s.includes("soil") && (s.includes("temp") || s.includes("temperatur"))) return "°C";
+  return "";
 }

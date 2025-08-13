@@ -1,13 +1,8 @@
 // Note: avoid strict typing here so we can use keys supported by the current Next version
 const nextConfig = {
   // Ensure native DuckDB modules are treated as externals in the server runtime
-  experimental: {
-    // Supported by Next to allow server components to require native deps
-    serverComponentsExternalPackages: [
-      "@duckdb/node-api",
-      "@duckdb/node-bindings",
-    ],
-  },
+  // Note: experimental.serverComponentsExternalPackages was moved in Next.js
+  // Use serverExternalPackages instead (see below).
   // For runtimes that honor this key (Next 14/15), also externalize at the server layer
   // If unsupported, Next will ignore it harmlessly
   serverExternalPackages: [
