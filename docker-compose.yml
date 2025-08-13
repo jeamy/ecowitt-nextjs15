@@ -1,0 +1,18 @@
+services:
+  app:
+    image: eta2weather
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: eta2weather
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - nodemodules:/app/node_modules
+      - ./public/log:/app/public/log
+      - ./src/config:/app/src/config
+
+volumes:
+  nodemodules: {}

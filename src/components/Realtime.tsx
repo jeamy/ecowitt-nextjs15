@@ -17,6 +17,58 @@ function tryRead(obj: any, path: string): any {
   return path.split(".").reduce((acc, key) => (acc && key in acc ? acc[key] : undefined), obj);
 }
 
+function numVal(v: any): number | null {
+  if (v == null) return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string") return isNaN(Number(v)) ? null : Number(v);
+  if (typeof v === "object" && v) {
+    const x = (v as any).value;
+    if (x == null) return null;
+    if (typeof x === "number") return Number.isFinite(x) ? x : null;
+    if (typeof x === "string") return isNaN(Number(x)) ? null : Number(x);
+  }
+  return null;
+}
+
+function calculateDewPoint(temperature: number, humidity: number): number {
+  // Magnus-Formel für Taupunktberechnung
+  const a = 17.27;
+  const b = 237.7;
+  
+  const alpha = ((a * temperature) / (b + temperature)) + Math.log(humidity / 100.0);
+  const dewPoint = (b * alpha) / (a - alpha);
+  
+  return Number.isFinite(dewPoint) ? Math.round(dewPoint * 10) / 10 : temperature;
+}
+
+function calculateHeatIndex(temperature: number, humidity: number): number {
+  // Vereinfachte Formel für den Wärmeindex (Heat Index)
+  if (temperature < 20) {
+    // Bei niedrigen Temperaturen ist der Wärmeindex gleich der Temperatur
+    return temperature;
+  }
+  
+  // Standardformel für Wärmeindex
+  const t = temperature;
+  const rh = humidity;
+  
+  // Koeffizienten für die Rothfusz-Gleichung
+  const c1 = -8.78469475556;
+  const c2 = 1.61139411;
+  const c3 = 2.33854883889;
+  const c4 = -0.14611605;
+  const c5 = -0.012308094;
+  const c6 = -0.0164248277778;
+  const c7 = 0.002211732;
+  const c8 = 0.00072546;
+  const c9 = -0.000003582;
+  
+  const heatIndex = c1 + (c2 * t) + (c3 * rh) + (c4 * t * rh) + (c5 * t * t) +
+                   (c6 * rh * rh) + (c7 * t * t * rh) + (c8 * t * rh * rh) + (c9 * t * t * rh * rh);
+  
+  return Number.isFinite(heatIndex) ? Math.round(heatIndex * 10) / 10 : temperature;
+}
+
 function valueAndUnit(v: any): { value: string | number | null; unit?: string } {
   if (v == null) return { value: null };
   if (typeof v === "object" && ("value" in v)) {
@@ -226,6 +278,28 @@ export default function Realtime() {
             {channelKeys.map((ck) => {
               const ch = payload[ck] || {};
               const entries = Object.entries(ch) as [string, any][];
+              
+              // Extrahiere Temperatur und Luftfeuchtigkeit für Berechnungen
+              const temp = numVal(ch?.temperature);
+              const humidity = numVal(ch?.humidity);
+              
+              // Prüfe, ob Taupunkt und Wärmeindex bereits vorhanden sind
+              let dewPoint = numVal(ch?.dew_point);
+              let heatIndex = numVal(ch?.feels_like);
+              
+              // Berechne fehlende Werte, wenn Temperatur und Luftfeuchtigkeit vorhanden sind
+              if (temp !== null && humidity !== null) {
+                // Berechne Taupunkt, wenn nicht vorhanden
+                if (dewPoint === null) {
+                  dewPoint = calculateDewPoint(temp, humidity);
+                }
+                
+                // Berechne Wärmeindex, wenn nicht vorhanden
+                if (heatIndex === null) {
+                  heatIndex = calculateHeatIndex(temp, humidity);
+                }
+              }
+              
               return (
                 <div key={ck} className="rounded border border-gray-100 p-3">
                   <div className="font-medium mb-1">{channelDisplayName(ck)}</div>
@@ -234,6 +308,18 @@ export default function Realtime() {
                     const vu = valueAndUnit(val);
                     return <LabelValue key={name} label={deLabel(name)} value={fmtVU(vu)} />;
                   })}
+                  
+                  {/* Zeige berechnete Werte an, wenn vorhanden */}
+                  {temp !== null && humidity !== null && (
+                    <>
+                      {dewPoint !== null && (
+                        <LabelValue label="Taupunkt" value={`${dewPoint.toFixed(1)} °C`} />
+                      )}
+                      {heatIndex !== null && (
+                        <LabelValue label="Gefühlte Temperatur" value={`${heatIndex.toFixed(1)} °C`} />
+                      )}
+                    </>
+                  )}
                 </div>
               );
             })}

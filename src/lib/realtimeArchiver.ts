@@ -68,6 +68,49 @@ function numVal(v: any): number | null {
   return null;
 }
 
+function calculateDewPoint(temperature: number | null, humidity: number | null): number | null {
+  if (temperature === null || humidity === null) return null;
+  
+  // Magnus-Formel für Taupunktberechnung
+  const a = 17.27;
+  const b = 237.7;
+  
+  const alpha = ((a * temperature) / (b + temperature)) + Math.log(humidity / 100.0);
+  const dewPoint = (b * alpha) / (a - alpha);
+  
+  return Number.isFinite(dewPoint) ? Math.round(dewPoint * 10) / 10 : null;
+}
+
+function calculateHeatIndex(temperature: number | null, humidity: number | null): number | null {
+  if (temperature === null || humidity === null) return null;
+  
+  // Vereinfachte Formel für den Wärmeindex (Heat Index)
+  if (temperature < 20) {
+    // Bei niedrigen Temperaturen ist der Wärmeindex gleich der Temperatur
+    return temperature;
+  }
+  
+  // Standardformel für Wärmeindex
+  const t = temperature;
+  const rh = humidity;
+  
+  // Koeffizienten für die Rothfusz-Gleichung
+  const c1 = -8.78469475556;
+  const c2 = 1.61139411;
+  const c3 = 2.33854883889;
+  const c4 = -0.14611605;
+  const c5 = -0.012308094;
+  const c6 = -0.0164248277778;
+  const c7 = 0.002211732;
+  const c8 = 0.00072546;
+  const c9 = -0.000003582;
+  
+  const heatIndex = c1 + (c2 * t) + (c3 * rh) + (c4 * t * rh) + (c5 * t * t) +
+                   (c6 * rh * rh) + (c7 * t * t * rh) + (c8 * t * rh * rh) + (c9 * t * t * rh * rh);
+  
+  return Number.isFinite(heatIndex) ? Math.round(heatIndex * 10) / 10 : temperature;
+}
+
 async function ensureDir(p: string) {
   await fs.mkdir(p, { recursive: true });
 }
@@ -103,9 +146,22 @@ export async function writeLiveToDNT(payload: any) {
       `CH${i} Luftfeuchtigkeit(%)`
     );
     const t = numVal(ch?.temperature);
-    const d = numVal(ch?.dew_point);
-    const hi = numVal(ch?.feels_like);
     const h = numVal(ch?.humidity);
+    
+    // Berechne Taupunkt und Wärmeindex, falls sie nicht in der API-Antwort vorhanden sind
+    let d = numVal(ch?.dew_point);
+    let hi = numVal(ch?.feels_like);
+    
+    // Falls Taupunkt fehlt, aber Temperatur und Luftfeuchtigkeit vorhanden sind, berechne ihn
+    if (d === null && t !== null && h !== null) {
+      d = calculateDewPoint(t, h);
+    }
+    
+    // Falls Wärmeindex fehlt, aber Temperatur und Luftfeuchtigkeit vorhanden sind, berechne ihn
+    if (hi === null && t !== null && h !== null) {
+      hi = calculateHeatIndex(t, h);
+    }
+    
     allsRow.push(t, d, hi, h);
   }
   await appendCsv(allsFile, allsHeader, allsRow);
