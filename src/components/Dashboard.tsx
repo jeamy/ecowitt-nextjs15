@@ -703,6 +703,17 @@ function renderMainCharts(data: DataResp, xBase: number | null) {
   };
   const rainSel = pickRain();
   
+  // Finde Regen/Stunde für Balkendiagramm
+  const hourlyRainCol = header.find(h => {
+    const s = h.toLowerCase();
+    return (s.includes("rain") || s.includes("regen")) && 
+           (s.includes("hour") || s.includes("stunde")) && 
+           !s.includes("rate");
+  });
+  
+  // Entferne Regen/Stunde aus den nonTempRainColumns, damit es nicht als separate Linie angezeigt wird
+  const nonTempRainColumnsFiltered = nonTempRainColumns.filter(col => col !== hourlyRainCol);
+  
   // Aggregate to per-day totals (mm)
   const rainPoints: { x: number; y: number }[] = [];
   if (rainSel) {
@@ -731,8 +742,21 @@ function renderMainCharts(data: DataResp, xBase: number | null) {
     }
   }
   
+  // Regen/Stunde als Balkendiagramm
+  const hourlyRainPoints: { x: number; y: number }[] = [];
+  if (hourlyRainCol) {
+    for (let i = 0; i < rows.length; i++) {
+      const d = times[i];
+      if (!d) continue;
+      const v = numOrNaN(rows[i][hourlyRainCol]);
+      if (!Number.isFinite(v) || v === 0) continue; // Nur Werte > 0 anzeigen
+      const x = Math.round((d.getTime() - xBase) / 60000);
+      hourlyRainPoints.push({ x, y: v });
+    }
+  }
+  
   const totalRain = rainPoints.reduce((acc, p) => acc + (Number.isFinite(p.y) ? p.y : 0), 0);
-  const nonRainColumns = nonTempRainColumns.filter(c => rainSel ? c !== rainSel.col : true);
+  const nonRainColumns = nonTempRainColumnsFiltered.filter(c => rainSel ? c !== rainSel.col : true);
   
   return (
     <>
@@ -790,6 +814,23 @@ function renderMainCharts(data: DataResp, xBase: number | null) {
           <LineChart
             series={[{ id: "Regen pro Tag (mm)", color: COLORS[1], points: rainPoints }]}
             yLabel="Regen pro Tag (mm)"
+            xLabel="Zeit"
+            xTickFormatter={fmt}
+            hoverTimeFormatter={hoverFmt}
+            showLegend={false}
+            bars
+            yUnit="mm"
+            barWidthPx={2}
+          />
+        </div>
+      )}
+      
+      {/* Stündlicher Regen (Balkendiagramm) */}
+      {hourlyRainPoints.length > 0 && (
+        <div className="rounded border border-gray-200 p-3">
+          <LineChart
+            series={[{ id: "Regen pro Stunde (mm)", color: COLORS[3], points: hourlyRainPoints }]}
+            yLabel="Regen pro Stunde (mm)"
             xLabel="Zeit"
             xTickFormatter={fmt}
             hoverTimeFormatter={hoverFmt}
@@ -886,6 +927,8 @@ function findRainColumns(header: string[]): string[] {
     console.log("Regen/Jahr gefunden:", regenJahr);
     rainColumns.push(regenJahr);
   }
+  
+  // Wichtig: Regen/Stunde NICHT in die Regenmetriken aufnehmen, da diese als Balkendiagramm dargestellt wird
   
   console.log("Erkannte Regenmetriken:", rainColumns);
   return rainColumns;
