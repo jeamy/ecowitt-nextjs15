@@ -14,12 +14,9 @@ services:
     env_file:
       - .env
     volumes:
-      - nodemodules:/app/node_modules
       - ./DNT:/app/DNT
       - ./data:/app/data
       - ./src/config:/app/src/config
       - ./eco.ts:/app/eco.ts
 
 volumes:
-  nodemodules:
-    driver: local

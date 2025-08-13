@@ -1,6 +1,11 @@
-FROM node:20-alpine
+FROM node:20-bookworm-slim
 
 WORKDIR /app
+
+## System deps (minimal)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 
 # Copy package files and install dependencies
 COPY package.json package-lock.json* ./
