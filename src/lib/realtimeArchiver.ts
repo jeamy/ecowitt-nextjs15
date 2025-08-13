@@ -92,7 +92,7 @@ export async function writeLiveToDNT(payload: any) {
 
   // Allsensors_A (channels)
   const allsFile = path.join(dnt, `${ym}Allsensors_A.CSV`);
-  const allsHeader: string[] = ["Time"];
+  const allsHeader: string[] = ["Zeit"];
   const allsRow: (string | number | null)[] = [timeString(now)];
   for (let i = 1; i <= 8; i++) {
     const ch = tryRead(payload, `ch${i}`) ?? tryRead(payload, `temp_and_humidity_ch${i}`);
@@ -107,46 +107,50 @@ export async function writeLiveToDNT(payload: any) {
   // Main A (station)
   const mainFile = path.join(dnt, `${ym}A.CSV`);
   const mainHeader = [
-    "Time",
-    "Outdoor Temperature",
-    "Outdoor Humidity",
-    "Indoor Temperature",
-    "Indoor Humidity",
-    "Pressure Relative",
-    "Pressure Absolute",
-    "Wind Speed",
-    "Wind Gust",
-    "Wind Direction",
-    "Wind Direction 10min",
-    "Rain Rate",
-    "Rain Hourly",
-    "Rain Daily",
-    "Rain Weekly",
-    "Rain Monthly",
-    "Rain Yearly",
-    "Solar",
-    "UVI"
+    "Zeit",
+    "Temperatur Innen(℃)",
+    "Luftfeuchtigkeit Innen(%)",
+    "Temperatur Aussen(℃)",
+    "Luftfeuchtigkeit Aussen(%)",
+    "Taupunkt(℃)",
+    "Gefühlte Temperatur(℃)",
+    "Wind(km/h)",
+    "Böe(km/h)",
+    "Windrichtung(°)",
+    "Abs. Luftdruck(hpa)",
+    "Rel. Luftdruck(hpa)",
+    "Sonneneinstrahlung(w/m2)",
+    "UVI",
+    "Regen/Stunde(mm)",
+    "Regen Event(mm)",
+    "Regen/Tag(mm)",
+    "Regen/Wochen(mm)",
+    "Regen/Monat(mm)",
+    "Regen/Jahre(mm)",
+    "Pm2.5(ug/m3)"
   ];
   const mainRow: (string | number | null)[] = [timeString(now)];
   mainRow.push(
-    numVal(tryRead(payload, "outdoor.temperature")),
-    numVal(tryRead(payload, "outdoor.humidity")),
     numVal(tryRead(payload, "indoor.temperature")),
     numVal(tryRead(payload, "indoor.humidity")),
-    numVal(tryRead(payload, "pressure.relative") ?? tryRead(payload, "barometer.relative") ?? tryRead(payload, "barometer.rel")),
-    numVal(tryRead(payload, "pressure.absolute") ?? tryRead(payload, "barometer.absolute") ?? tryRead(payload, "barometer.abs")),
+    numVal(tryRead(payload, "outdoor.temperature")),
+    numVal(tryRead(payload, "outdoor.humidity")),
+    numVal(tryRead(payload, "outdoor.dew_point")),
+    numVal(tryRead(payload, "outdoor.feels_like")),
     numVal(tryRead(payload, "wind.wind_speed")),
     numVal(tryRead(payload, "wind.wind_gust")),
     numVal(tryRead(payload, "wind.wind_direction")),
-    numVal(tryRead(payload, "wind.10_minute_average_wind_direction")),
-    numVal(tryRead(payload, "rainfall.rain_rate") ?? tryRead(payload, "rain.rate")),
+    numVal(tryRead(payload, "pressure.absolute") ?? tryRead(payload, "barometer.absolute") ?? tryRead(payload, "barometer.abs")),
+    numVal(tryRead(payload, "pressure.relative") ?? tryRead(payload, "barometer.relative") ?? tryRead(payload, "barometer.rel")),
+    numVal(tryRead(payload, "solar_and_uvi.solar")),
+    numVal(tryRead(payload, "solar_and_uvi.uvi")),
     numVal(tryRead(payload, "rainfall.hourly")),
+    numVal(tryRead(payload, "rainfall.rain_event")),
     numVal(tryRead(payload, "rainfall.daily")),
     numVal(tryRead(payload, "rainfall.weekly")),
     numVal(tryRead(payload, "rainfall.monthly")),
     numVal(tryRead(payload, "rainfall.yearly")),
-    numVal(tryRead(payload, "solar_and_uvi.solar")),
-    numVal(tryRead(payload, "solar_and_uvi.uvi"))
+    numVal(tryRead(payload, "pm25.pm25"))
   );
   await appendCsv(mainFile, mainHeader, mainRow);
 }

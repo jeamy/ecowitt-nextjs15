@@ -99,15 +99,28 @@ All API routes run in the Node.js runtime and read from the local filesystem.
 
 The homepage is split into two tabs:
 
-- **Echtzeit**: Fetches live data from Ecowitt API v3 via a server-side proxy (`/api/rt`).
+- **Echtzeit**: Fetches live data from Ecowitt API v3 via a server-side proxy (`/api/rt/last`).
 - **Gespeicherte Daten**: Historical dashboard powered by DuckDB/Parquet over your `DNT/` CSVs.
 
-Realtime proxy route:
+### Backend Realtime Processing
 
-- `GET /api/rt?all=1` — returns the full "all" payload from Ecowitt
-- `GET /api/rt` — returns a small subset (indoor/outdoor temps)
+The app now uses a server-side background poller (via Next.js instrumentation) to:
 
-The proxy uses credentials from `eco.ts` (server-only) so your keys aren’t exposed to the browser.
+1. Fetch data from Ecowitt API at configurable intervals (`RT_REFRESH_MS` in `.env`)
+2. Cache the latest data for quick client access (`/api/rt/last`)
+3. Automatically archive data to monthly CSV files in `DNT/` directory:
+   - `YYYYMMAllsensors_A.CSV` for channel data
+   - `YYYYMMA.CSV` for main station data
+
+This ensures seamless integration between realtime and historical data without client-side polling.
+
+Realtime API routes:
+
+- `GET /api/rt/last` — returns the latest cached data (used by the frontend)
+- `GET /api/rt?all=1` — direct proxy to Ecowitt API (full payload)
+- `GET /api/rt` — direct proxy to Ecowitt API (subset of data)
+
+The system uses credentials from `eco.ts` (server-only) so your keys aren't exposed to the browser.
 
 Docs: https://doc.ecowitt.net/web/#/apiv3en?page_id=17 (Getting Device Real-Time Data)
 
