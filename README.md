@@ -77,11 +77,18 @@ Names appear in the dashboard (labels/options). Undefined channels fall back to 
 - `GET /api/data/months`
   - Returns available months derived from filenames in `DNT/` (format `YYYYMM`).
 
-- `GET /api/data/allsensors?month=YYYYMM&resolution=minute|hour|day`
-  - Aggregates Allsensors data to the desired resolution. Additional client-side filtering is possible.
+- Allsensors
+  - `GET /api/data/allsensors?month=YYYYMM&resolution=minute|hour|day`
+  - `GET /api/data/allsensors?start=YYYY-MM-DD HH:MM&end=YYYY-MM-DD HH:MM&resolution=minute|hour|day`
+  - Aggregates over Parquet via DuckDB (CSV fallback). Multiple months are merged automatically for range queries.
 
-- `GET /api/data/main?month=YYYYMM&resolution=minute|hour|day`
-  - Aggregates main (A) data to the desired resolution.
+- Main (A)
+  - `GET /api/data/main?month=YYYYMM&resolution=minute|hour|day`
+  - `GET /api/data/main?start=YYYY-MM-DD HH:MM&end=YYYY-MM-DD HH:MM&resolution=minute|hour|day`
+  - Aggregates over Parquet via DuckDB (CSV fallback). Multiple months are merged automatically for range queries.
+
+- `GET /api/data/extent`
+  - Returns global min/max timestamps detected across available data to power the global range slider.
 
 - `GET /api/config/channels`
   - Returns `channels.json`.
@@ -96,6 +103,18 @@ npm run dev
 # usually opens http://localhost:3000
 ```
 
+## Scripts
+
+- `npm run prewarm`
+  - Scans `DNT/` and materializes Parquet files under `data/parquet/{allsensors,main}/` for all detected months.
+  - Logs per-month status (built, up-to-date, error) to the console.
+
+- `npm run dev`
+  - Runs the prewarm script first (via `predev` hook), then starts Next.js dev server.
+
+- `npm run start`
+  - Runs the prewarm script first (via `prestart` hook), then starts Next.js in production mode.
+
 ## Using the dashboard
 
 - **Dataset**: Allsensors (CH1–CH8) or Main (A)
@@ -105,6 +124,7 @@ npm run dev
 - **Main**: numeric columns are auto-detected and selectable
 
 Note: The UI does not display raw source filenames (e.g., CSV lists). Data is served via DuckDB/Parquet.
+Default view shows the last available month.
 
 ## Deployment notes
 
@@ -118,7 +138,9 @@ This project uses DuckDB for fast queries and stores monthly CSV data on-the-fly
 
 - Engine: `@duckdb/node-api` (DuckDB Node “Neo”)
 - Database file: `data/weather.duckdb`
-- Parquet target: `data/parquet/allsensors/YYYYMM.parquet`
+- Parquet targets:
+  - `data/parquet/allsensors/YYYYMM.parquet`
+  - `data/parquet/main/YYYYMM.parquet`
 
 ### Setup
 
@@ -147,6 +169,41 @@ Notes:
 - On first request for a month/range, CSV(s) from `DNT/` are read and written as Parquet (mtime check).
 - Subsequent aggregations (minute/hour/day) run efficiently over Parquet via DuckDB.
 - Fallback: if DuckDB/Parquet is unavailable, the API parses CSV directly.
+
+### Prewarm at startup (optional but recommended)
+
+Materialize Parquet files for all detected months before serving requests. This runs automatically before `dev`/`start`, and can also be run manually.
+
+```bash
+npm run prewarm           # manual
+# or via hooks
+npm run dev               # runs prewarm first
+npm run start             # runs prewarm first
+```
+
+Console output example:
+
+```
+[prewarm] Scanning DNT/ for new CSV files and materializing Parquet via DuckDB...
+[prewarm] Allsensors: found 39 month(s).
+[prewarm] Allsensors 202508: built data/parquet/allsensors/202508.parquet
+[prewarm] Allsensors 202507: up-to-date (data/parquet/allsensors/202507.parquet)
+[prewarm] Main 202508: built data/parquet/main/202508.parquet
+[prewarm] Main: 1 built, 38 up-to-date.
+[prewarm] Done.
+```
+
+If a month fails to ingest, the script logs a per-month `ERROR` and continues with the next month.
+
+### Timestamp detection (robust parsing)
+
+CSV time columns vary (`Time`, `Zeit`, `DateUTC`, `DateTimeUTC`, etc.). The ingestion step introspects the CSV header to find the time column and parses common formats:
+
+- `YYYY-M-D H:MM` / `YYYY/M/D H:MM` / `YYYY-MM-DDTHH:MM`
+- with seconds variants: `...:SS`
+- German: `DD.MM.YYYY HH:MM` (and with seconds)
+
+This avoids binder/type errors and handles mixed datasets reliably.
 
 ### Useful API calls (test)
 

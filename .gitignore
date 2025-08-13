@@ -40,8 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-DNT/
-data/
-parquet/
-weather.duckdb
-weather.duckdb.lock
+# data artifacts (root-only)
+/DNT/
+/data/
+/data/parquet/
+/data/weather.duckdb
+/data/weather.duckdb.lock
