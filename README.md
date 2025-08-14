@@ -34,12 +34,19 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
 # ECOWITT WEATHER STATION
 # DNT WLAN-Wetterstation WeatherScreen PRO
 
 ## Overview
 
-Mobile-first dashboard for weather station data (Ecowitt - DNT) built with Next.js 15, React 19, and Tailwind CSS. Stored CSV files copied to `DNT/` are loaded, time-aggregated (minute/hour/day), and visualized as interactive time series. Channel names (CH1–CH8) are configurable via JSON.
+Mobile-first dashboard for weather station data (Ecowitt - DNT) built with Next.js 15, React 19, and Tailwind CSS. CSV data stored on the weather station (microSD card) must be copied into the `DNT/` directory. From there, the app reads, processes, and aggregates the files (minute/hour/day) and visualizes them as interactive time series. Channel names (CH1–CH8) are configurable via JSON.
+
+Supported weather stations:
+
+- ECOWITT HP2551 Wi‑Fi Weather Station
+- DNT WeatherScreen PRO (WLAN)
+- Compatible ECOWITT/DNT models that save monthly CSV files
 
 ## Prerequisites
 
@@ -48,10 +55,14 @@ Mobile-first dashboard for weather station data (Ecowitt - DNT) built with Next.
 
 ## Data location (`DNT/`)
 
-- Place your monthly CSVs in `DNT/`.
+- Copy the monthly CSVs from the weather station's microSD card into `DNT/`.
 - Typical patterns:
   - Main data: `YYYYMMA.CSV` (e.g., `202508A.CSV`)
   - Allsensors: contains multiple channel blocks CH1..CH8 (e.g., `202508Allsensors_A.CSV`)
+ - Sample CSVs (for testing) are provided in the project root:
+   - `202501A.CSV` (Main A)
+   - `202501Allsensors_A.CSV` (Allsensors)
+   - Copy these files into `DNT/` to try the app without your own data.
 - CSV properties (observed):
   - Delimiter: comma
   - Placeholder for missing values: `--`
