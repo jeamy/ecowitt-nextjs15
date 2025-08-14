@@ -99,8 +99,8 @@ All API routes run in the Node.js runtime and read from the local filesystem.
 
 The homepage is split into two tabs:
 
-- **Echtzeit**: Fetches live data from Ecowitt API v3 via a server-side proxy (`/api/rt/last`).
-- **Gespeicherte Daten**: Historical dashboard powered by DuckDB/Parquet over your `DNT/` CSVs.
+- **Realtime**: Fetches live data from Ecowitt API v3 via a server-side proxy (`/api/rt/last`).
+- **Stored data**: Historical dashboard powered by DuckDB/Parquet over your `DNT/` CSVs.
 
 ### Backend Realtime Processing
 
@@ -179,6 +179,22 @@ Security notes:
 
 Note: The UI does not display raw source filenames (e.g., CSV lists). Data is served via DuckDB/Parquet.
 Default view shows the last available month.
+
+## Interactive charts (Zoom & Reset)
+
+Charts use Chart.js with zoom and pan support:
+
+- Mouse wheel: Horizontal zoom on the X‑axis.
+- Pinch (touch/touchpad): Zoom.
+- Shift + drag: Select a range to zoom (drag‑zoom).
+- Ctrl + drag: Pan horizontally.
+- Reset: Button at the top right of the chart (greyed out until you zoom) or double‑click the chart.
+
+Notes:
+
+- Tooltips and legend remain usable while zoomed.
+- The Reset button is always visible; it becomes highlighted when a zoom is active.
+- On touch devices, pinch‑zoom is active; panning requires Ctrl on desktop.
 
 ## Deployment notes
 

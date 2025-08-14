@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import LineChart, { type LineSeries } from "@/components/LineChart";
+import LineChart, { type LineSeries } from "@/components/LineChartChartJS";
 
 type MonthsResp = { months: string[] };
 
