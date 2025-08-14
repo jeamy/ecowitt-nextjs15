@@ -34,11 +34,12 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-# ecowitt-nextjs15
+# ECOWITT WEATHER STATION
+# DNT WLAN-Wetterstation WeatherScreen PRO
 
 ## Overview
 
-Mobile-first dashboard for weather station data (Ecowitt) built with Next.js 15, React 19, and Tailwind CSS. CSV files from `DNT/` are loaded, time-aggregated (minute/hour/day), and visualized as interactive time series. Channel names (CH1–CH8) are configurable via JSON.
+Mobile-first dashboard for weather station data (Ecowitt - DNT) built with Next.js 15, React 19, and Tailwind CSS. Stored CSV files copied to `DNT/` are loaded, time-aggregated (minute/hour/day), and visualized as interactive time series. Channel names (CH1–CH8) are configurable via JSON.
 
 ## Prerequisites
 
