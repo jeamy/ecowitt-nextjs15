@@ -41,9 +41,8 @@ yarn-error.log*
 next-env.d.ts
 
 # data artifacts (root-only)
-/DNT/
-/data/
-/data/parquet/
-/data/weather.duckdb
-/data/weather.duckdb.lock
-/eco.ts
+DNT/
+data/
+data/parquet/
+data/*.duckdb*
+eco.ts
