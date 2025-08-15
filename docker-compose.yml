@@ -5,6 +5,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: ecowitt
+    restart: always
     ports:
       - "3010:3010"
     environment:
