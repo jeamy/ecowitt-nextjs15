@@ -261,6 +261,116 @@ function GlobalRangeControls(props: {
 }
 
 function pad2(n: number) { return n < 10 ? `0${n}` : String(n); }
+
+// Hilfsfunktionen für Statistikberechnung
+function calculateTemperatureStats(rows: Array<Record<string, number | string | null>>, times: Date[], tempColumns: string[]) {
+  // Gruppiere nach Tagen
+  const dayMap = new Map<string, { date: Date; maxTemp: number; minTemp: number; hasOver30: boolean; hasUnder0: boolean }>(); 
+  
+  // Bestimme den gesamten Zeitraum (alle Tage zwischen erstem und letztem Datum)
+  let minDate: Date | null = null;
+  let maxDate: Date | null = null;
+  
+  for (let i = 0; i < rows.length; i++) {
+    const d = times[i];
+    if (!d) continue;
+    
+    if (!minDate || d < minDate) minDate = new Date(d);
+    if (!maxDate || d > maxDate) maxDate = new Date(d);
+    
+    const key = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    let entry = dayMap.get(key);
+    
+    if (!entry) {
+      entry = { 
+        date: new Date(d.getFullYear(), d.getMonth(), d.getDate()), 
+        maxTemp: -Infinity, 
+        minTemp: Infinity,
+        hasOver30: false,
+        hasUnder0: false
+      };
+      dayMap.set(key, entry);
+    }
+    
+    // Prüfe alle Temperaturwerte in dieser Zeile
+    for (const col of tempColumns) {
+      const temp = numOrNaN(rows[i][col]);
+      if (!Number.isFinite(temp)) continue;
+      
+      entry.maxTemp = Math.max(entry.maxTemp, temp);
+      entry.minTemp = Math.min(entry.minTemp, temp);
+      
+      if (temp > 30) entry.hasOver30 = true;
+      if (temp < 0) entry.hasUnder0 = true;
+    }
+  }
+  
+  // Berechne die Gesamtzahl der Tage im Zeitraum
+  let totalPeriodDays = 0;
+  if (minDate && maxDate) {
+    const dayInMs = 24 * 60 * 60 * 1000;
+    totalPeriodDays = Math.round((maxDate.getTime() - minDate.getTime()) / dayInMs) + 1;
+  }
+  
+  // Zähle Tage mit bestimmten Bedingungen
+  let daysOver30 = 0;
+  let daysUnder0 = 0;
+  
+  for (const entry of dayMap.values()) {
+    if (entry.hasOver30) daysOver30++;
+    if (entry.hasUnder0) daysUnder0++;
+  }
+  
+  return { daysOver30, daysUnder0, totalDays: dayMap.size, totalPeriodDays };
+}
+
+function calculateRainStats(rows: Array<Record<string, number | string | null>>, times: Date[], rainColumn: string | null) {
+  if (!rainColumn) return { daysOver30mm: 0, totalDays: 0, totalPeriodDays: 0 };
+  
+  // Gruppiere Regendaten nach Tagen und summiere
+  const dailyRain = new Map<string, number>();
+  
+  // Bestimme den gesamten Zeitraum (alle Tage zwischen erstem und letztem Datum)
+  let minDate: Date | null = null;
+  let maxDate: Date | null = null;
+  
+  // Wenn die Daten bereits nach Tagen aggregiert sind (z.B. bei Tagesauflösung),
+  // können wir sie direkt verwenden
+  for (let i = 0; i < times.length; i++) {
+    const d = times[i];
+    if (!d) continue;
+    
+    if (!minDate || d < minDate) minDate = new Date(d);
+    if (!maxDate || d > maxDate) maxDate = new Date(d);
+    
+    const key = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    const rain = numOrNaN(rows[i][rainColumn]);
+    
+    if (!Number.isFinite(rain)) continue;
+    
+    // Bei Tagesauflösung ist der Wert bereits der Tageswert
+    const current = dailyRain.get(key) || 0;
+    dailyRain.set(key, current + rain);
+  }
+  
+  // Berechne die Gesamtzahl der Tage im Zeitraum
+  let totalPeriodDays = 0;
+  if (minDate && maxDate) {
+    const dayInMs = 24 * 60 * 60 * 1000;
+    totalPeriodDays = Math.round((maxDate.getTime() - minDate.getTime()) / dayInMs) + 1;
+  }
+  
+  // Zähle Tage mit Regen > 30mm
+  let daysOver30mm = 0;
+  let rainDays = 0;
+  
+  for (const amount of dailyRain.values()) {
+    if (amount > 0) rainDays++;
+    if (amount > 30) daysOver30mm++;
+  }
+  
+  return { daysOver30mm, totalDays: rainDays, totalPeriodDays };
+}
 function makeTimeTickFormatter(t0: number, spanMin: number = 0) {
   return (v: number) => {
     const d = new Date(t0 + Math.round(v) * 60000);
@@ -314,6 +424,8 @@ export default function Dashboard() {
   const [metric, setMetric] = useState<ChannelMetric>("Temperatur");
   const [dataAll, setDataAll] = useState<DataResp | null>(null);
   const [dataMain, setDataMain] = useState<DataResp | null>(null);
+  // Minutendaten für Statistikberechnung
+  const [minuteDataMain, setMinuteDataMain] = useState<DataResp | null>(null);
   const [channelsCfg, setChannelsCfg] = useState<ChannelsConfig>({});
   const [loading, setLoading] = useState<boolean>(false);
   const [errAll, setErrAll] = useState<string | null>(null);
@@ -456,36 +568,64 @@ export default function Dashboard() {
     setErrMain(null);
     const uAll = new URL("/api/data/allsensors", window.location.origin);
     const uMain = new URL("/api/data/main", window.location.origin);
+    const uMinuteMain = new URL("/api/data/main", window.location.origin);
+    
     if (useGlobalRange) {
       uAll.searchParams.set("resolution", resolution);
       uMain.searchParams.set("resolution", resolution);
-      if (startParam) uAll.searchParams.set("start", startParam);
-      if (endParam) uAll.searchParams.set("end", endParam);
-      if (startParam) uMain.searchParams.set("start", startParam);
-      if (endParam) uMain.searchParams.set("end", endParam);
+      // Minutendaten immer mit Auflösung "minute" laden
+      uMinuteMain.searchParams.set("resolution", "minute");
+      
+      if (startParam) {
+        uAll.searchParams.set("start", startParam);
+        uMain.searchParams.set("start", startParam);
+        uMinuteMain.searchParams.set("start", startParam);
+      }
+      
+      if (endParam) {
+        uAll.searchParams.set("end", endParam);
+        uMain.searchParams.set("end", endParam);
+        uMinuteMain.searchParams.set("end", endParam);
+      }
     } else {
       const monthStr = `${year}${mon}`;
       uAll.searchParams.set("month", monthStr);
       uMain.searchParams.set("month", monthStr);
+      uMinuteMain.searchParams.set("month", monthStr);
+      
       uAll.searchParams.set("resolution", resolution);
       uMain.searchParams.set("resolution", resolution);
+      // Minutendaten immer mit Auflösung "minute" laden
+      uMinuteMain.searchParams.set("resolution", "minute");
     }
+    
     Promise.all([
       fetch(uAll.toString()).then(async (r) => ({ ok: r.ok, body: await r.json() })).catch(() => ({ ok: false, body: null })),
       fetch(uMain.toString()).then(async (r) => ({ ok: r.ok, body: await r.json() })).catch(() => ({ ok: false, body: null })),
+      fetch(uMinuteMain.toString()).then(async (r) => ({ ok: r.ok, body: await r.json() })).catch(() => ({ ok: false, body: null })),
     ])
-      .then(([a, m]) => {
+      .then(([a, m, mm]) => {
         if (!a.ok || !a.body || a.body.error) {
           setErrAll(a.body?.error || "Fehler beim Laden Allsensors");
           setDataAll(null);
         } else {
           setDataAll(a.body);
         }
+        
         if (!m.ok || !m.body || m.body.error) {
           setErrMain(m.body?.error || "Fehler beim Laden Hauptdaten");
           setDataMain(null);
         } else {
           setDataMain(m.body);
+        }
+        
+        // Minutendaten für Statistikberechnung setzen
+        if (!mm.ok || !mm.body || mm.body.error) {
+          // Fehler bei Minutendaten - nicht kritisch, da nur für Statistik
+          console.warn("Fehler beim Laden der Minutendaten für Statistik:", mm.body?.error);
+          setMinuteDataMain(null);
+        } else {
+          setMinuteDataMain(mm.body);
         }
       })
       .finally(() => setLoading(false));
@@ -578,7 +718,7 @@ export default function Dashboard() {
         <div className="rounded-lg border border-gray-200 bg-white dark:bg-black">
           <div className="px-3 py-2 border-b border-sky-100 bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300 text-sm font-medium">Hauptdaten (A)</div>
           <div className="p-3 flex flex-col gap-4">
-            {renderMainCharts(dataMain, xBaseMain)}
+            {renderMainCharts(dataMain, xBaseMain, minuteDataMain)}
           </div>
         </div>
       )}
@@ -622,7 +762,7 @@ function renderChannelChart(data: DataResp, chKey: string, metric: ChannelMetric
   );
 }
 
-function renderMainCharts(data: DataResp, xBase: number | null) {
+function renderMainCharts(data: DataResp, xBase: number | null, minuteData: DataResp | null) {
   const rows = data.rows || [];
   if (!rows.length || !xBase) return <div className="text-xs text-gray-500">Keine Daten</div>;
   const times = rows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
@@ -767,6 +907,9 @@ function renderMainCharts(data: DataResp, xBase: number | null) {
     }
   }
   
+  // Regenstatistik berechnen
+  const rainStats = calculateRainStats(rows, times, hourlyRainCol || null);
+  
   const totalRain = rainPoints.reduce((acc, p) => acc + (Number.isFinite(p.y) ? p.y : 0), 0);
   const nonRainColumns = nonTempRainColumnsFiltered.filter(c => rainSel ? c !== rainSel.col : true);
   
@@ -784,6 +927,40 @@ function renderMainCharts(data: DataResp, xBase: number | null) {
             showLegend={true} 
             yUnit="°C" 
           />
+          {/* Temperaturstatistik */}
+          {(() => {
+            // Verwende Minutendaten für die Statistikberechnung, falls verfügbar
+            let statsRows = rows;
+            let statsTimes = times;
+            let statsTempColumns = tempColumns;
+            
+            if (minuteData && minuteData.rows && minuteData.rows.length > 0) {
+              // Minutendaten verwenden
+              statsRows = minuteData.rows;
+              statsTimes = statsRows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
+              statsTempColumns = tempColumns.map(col => {
+                // Finde die entsprechende Spalte in den Minutendaten
+                const minuteHeader = minuteData.header || [];
+                return minuteHeader.find(h => h === col) || col;
+              }).filter(Boolean);
+            }
+            
+            const stats = calculateTemperatureStats(statsRows, statsTimes, statsTempColumns);
+            return (
+              <div className="mt-2 text-sm border-t border-gray-100 pt-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-amber-50 p-2 rounded">
+                    <div className="font-medium text-amber-700">Tage &gt; 30°C</div>
+                    <div className="text-lg">{stats.daysOver30} <span className="text-xs text-gray-500">von {stats.totalPeriodDays}</span></div>
+                  </div>
+                  <div className="bg-blue-50 p-2 rounded">
+                    <div className="font-medium text-blue-700">Tage &lt; 0°C</div>
+                    <div className="text-lg">{stats.daysUnder0} <span className="text-xs text-gray-500">von {stats.totalPeriodDays}</span></div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
       
@@ -802,12 +979,13 @@ function renderMainCharts(data: DataResp, xBase: number | null) {
         );
       })}
       
-      {/* Regenmetriken (Woche/Monat/Jahr) */}
-      {rainSeries.length > 0 && (
-        <div className="rounded border border-gray-200 p-3">
+      {/* Regen */}
+      {rainColumns.length > 0 && (
+        <div className="mb-4">
+          <h3 className="text-lg font-medium mb-2">Regen (mm)</h3>
           <LineChart 
             series={rainSeries} 
-            yLabel="Niederschlag (mm)" 
+            yLabel="Regen (mm)" 
             xLabel="Zeit" 
             xTickFormatter={fmt} 
             hoverTimeFormatter={hoverFmt} 
@@ -834,6 +1012,37 @@ function renderMainCharts(data: DataResp, xBase: number | null) {
             yUnit="mm"
             barWidthPx={2}
           />
+          
+          {/* Regenstatistik */}
+          {(() => {
+            // Verwende die Tageswerte für die Regenstatistik
+            // Bei Tagesauflösung sind die Werte bereits korrekt aggregiert
+            let statsRainCol = hourlyRainCol || null;
+            let statsRows = rows;
+            let statsTimes = times;
+            
+            // Berechne die Regenstatistik
+            const rainStats = calculateRainStats(statsRows, statsTimes, statsRainCol);
+            
+            return (
+              <div className="mt-2 text-sm border-t border-gray-100 pt-2">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-blue-50 p-2 rounded">
+                    <div className="font-medium text-blue-700">Tage &gt; 30mm</div>
+                    <div className="text-lg">{rainStats.daysOver30mm} <span className="text-xs text-gray-500">von {rainStats.totalPeriodDays}</span></div>
+                  </div>
+                  <div className="bg-gray-50 p-2 rounded">
+                    <div className="font-medium text-gray-700">Regentage</div>
+                    <div className="text-lg">{rainStats.totalDays} <span className="text-xs text-gray-500">von {rainStats.totalPeriodDays}</span></div>
+                  </div>
+                  <div className="bg-emerald-50 p-2 rounded">
+                    <div className="font-medium text-emerald-700">Gesamt</div>
+                    <div className="text-lg">{totalRain.toFixed(1)} <span className="text-xs text-gray-500">mm</span></div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
       
