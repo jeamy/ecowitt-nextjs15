@@ -237,6 +237,7 @@ function DonutGauge(props: {
   fullColorRing?: boolean;
   valueColor?: string;
   unitColor?: string;
+  valuePrecision?: number; // optional decimal precision for centered value text
   captionColor?: string;
   ringOpacity?: number;
   segments?: Array<{ from: number; to: number; color: string }>; // background bands
@@ -387,7 +388,7 @@ function DonutGauge(props: {
         {showTicks && tickEls}
         {showValueText && (
           <text x={cx} y={cy - 4} textAnchor="middle" fontSize={fontMain} fontWeight={500} fill={valueColor ?? "#1f2937"}>
-            {value == null || !isFinite(value) ? "—" : Math.round(value)}
+            {value == null || !isFinite(value) ? "—" : (props.valuePrecision != null ? value.toFixed(props.valuePrecision) : Math.round(value))}
           </text>
         )}
         {showUnitText && (
@@ -681,6 +682,7 @@ export default function Gauges() {
               max={45}
               unit="°C"
               color={tempColor(outdoorT)}
+              valuePrecision={1}
               showTicks={false}
               showTickLabels={false}
               showMinorTicks={false}
@@ -742,7 +744,7 @@ export default function Gauges() {
       {/* Third row: Indoor */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
-          <DonutGauge label="🏠 Innen-Temperatur" value={indoorT} min={10} max={35} unit="°C" color={tempColor(indoorT)} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
+          <DonutGauge label="🏠 Innen-Temperatur" value={indoorT} min={10} max={35} unit="°C" color={tempColor(indoorT)} valuePrecision={1} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
         </div>
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
           <DonutGauge label="🏠 Innen-Feuchte" value={indoorH} min={0} max={100} unit="%" color={humColor(indoorH)} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
@@ -768,7 +770,7 @@ export default function Gauges() {
                     <span className="align-middle">{channelName(ck)}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 items-center">
-                    <DonutGauge label="Temp" value={t} min={-20} max={45} unit="°C" color={colT} size={180} ticks={0} showTicks={false} showMinorTicks={false} showTickLabels={false} fullColorRing={true} ringOpacity={0.6} captionColor="#000" valueColor="#000" unitColor="#000" />
+                    <DonutGauge label="Temp" value={t} min={-20} max={45} unit="°C" color={colT} valuePrecision={1} size={180} ticks={0} showTicks={false} showMinorTicks={false} showTickLabels={false} fullColorRing={true} ringOpacity={0.6} captionColor="#000" valueColor="#000" unitColor="#000" />
                     <DonutGauge label="Feuchte" value={h} min={0} max={100} unit="%" color={humColor(h)} size={180} ticks={0} showTicks={false} showMinorTicks={false} showTickLabels={false} fullColorRing={true} ringOpacity={0.6} captionColor="#000" valueColor="#000" unitColor="#000" />
                   </div>
                 </div>
