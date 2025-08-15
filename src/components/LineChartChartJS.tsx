@@ -142,6 +142,11 @@ export default function LineChart({
 
   const hasTemperature = tempValues.length > 0;
   const avgTemp = hasTemperature ? tempValues.reduce((a, b) => a + b, 0) / tempValues.length : null;
+  const avgTempLabel = useMemo(() => {
+    if (!hasTemperature || avgTemp == null || !isFinite(avgTemp)) return null;
+    const v = avgTemp.toFixed(1);
+    return yUnit ? `${v} ${yUnit}` : v;
+  }, [hasTemperature, avgTemp, yUnit]);
 
   const datasets = useMemo(() => {
     const base = series.map((s) => {
@@ -170,7 +175,7 @@ export default function LineChart({
       };
     });
 
-    // Helper horizontal lines (avg temp and 0°C) as additional line datasets, hidden from legend
+    // Helper horizontal lines (avg temp, 0°C, 30°C) as additional line datasets, hidden from legend
     const extras: any[] = [];
     if (!bars && hasTemperature && avgTemp != null && isFinite(avgTemp) && xs.length) {
       extras.push({
@@ -189,7 +194,7 @@ export default function LineChart({
         skipLegend: true,
       });
     }
-    if (!bars && minY <= 0 && maxY >= 0 && xs.length) {
+    if (!bars && hasTemperature && xs.length) {
       extras.push({
         type: "line",
         label: "0°C",
@@ -197,7 +202,24 @@ export default function LineChart({
           { x: minX, y: 0 },
           { x: maxX, y: 0 },
         ],
-        borderColor: "#94a3b8",
+        borderColor: "#3b82f6",
+        borderWidth: 1,
+        borderDash: [3, 3],
+        pointRadius: 0,
+        tension: 0,
+        fill: false,
+        skipLegend: true,
+      });
+    }
+    if (!bars && hasTemperature && xs.length) {
+      extras.push({
+        type: "line",
+        label: "30°C",
+        data: [
+          { x: minX, y: 30 },
+          { x: maxX, y: 30 },
+        ],
+        borderColor: "#ef4444",
         borderWidth: 1,
         borderDash: [3, 3],
         pointRadius: 0,
@@ -209,6 +231,29 @@ export default function LineChart({
 
     return [...base, ...extras];
   }, [series, bars, barWidthPx, hasTemperature, avgTemp, minX, maxX, minY, maxY, xs.length]);
+
+  // Custom plugin to render average temperature label on the right edge above the line
+  const avgLabelPlugin = useMemo(() => {
+    return {
+      id: "avgLabelPlugin",
+      afterDraw: (chart: any) => {
+        if (!avgTempLabel || bars || !hasTemperature || avgTemp == null) return;
+        const { ctx, chartArea, scales } = chart;
+        if (!chartArea || !scales?.y) return;
+        const y = scales.y.getPixelForValue(avgTemp);
+        // ensure within chart area
+        if (y < chartArea.top || y > chartArea.bottom) return;
+        ctx.save();
+        ctx.fillStyle = "#f59e0b"; // same as average line color
+        ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "bottom";
+        const x = chartArea.left + 4;
+        ctx.fillText(avgTempLabel, x, y - 2);
+        ctx.restore();
+      },
+    };
+  }, [avgTempLabel, bars, hasTemperature, avgTemp]);
 
   // Options
   const options = useMemo(() => {
@@ -327,6 +372,7 @@ export default function LineChart({
       // Update existing chart
       chartRef.current.data.datasets = datasets as any;
       chartRef.current.options = options as any;
+      chartRef.current.config.plugins = [avgLabelPlugin];
       chartRef.current.update();
       return;
     }
@@ -337,6 +383,7 @@ export default function LineChart({
         datasets: datasets as any,
       },
       options: options as any,
+      plugins: [avgLabelPlugin],
     });
 
     return () => {
