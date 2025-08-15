@@ -129,7 +129,7 @@ Names appear in the dashboard (labels/options). Undefined channels fall back to 
 
 All API routes run in the Node.js runtime and read from the local filesystem.
 
-## Realtime data (Ecowitt API v3)
+## Data (Ecowitt API v3)
 
 The homepage is split into three tabs:
 
