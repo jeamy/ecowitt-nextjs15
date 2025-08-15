@@ -264,13 +264,10 @@ function pad2(n: number) { return n < 10 ? `0${n}` : String(n); }
 function makeTimeTickFormatter(t0: number, spanMin: number = 0) {
   return (v: number) => {
     const d = new Date(t0 + Math.round(v) * 60000);
-    if (spanMin > 1440) {
-      const dd = pad2(d.getDate());
-      const mm = pad2(d.getMonth() + 1);
-      return `${dd}.${mm}.`;
-    }
-    const hh = pad2(d.getHours());
-    return `${hh}:00`;
+    // Immer das Datumsformat anzeigen
+    const dd = pad2(d.getDate());
+    const mm = pad2(d.getMonth() + 1);
+    return `${dd}.${mm}.`;
   };
 }
 

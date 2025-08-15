@@ -264,6 +264,12 @@ export default function LineChart({
         x: {
           type: "linear",
           ticks: {
+            // Optimiert für Tagesanzeige
+            maxTicksLimit: 15,
+            autoSkip: true,
+            major: {
+              enabled: true
+            },
             callback: (value: any) => {
               const v = typeof value === "number" ? value : Number(value);
               if (Number.isFinite(v)) {
@@ -272,6 +278,12 @@ export default function LineChart({
               }
               return String(value);
             },
+          },
+          grid: {
+            display: true,
+            drawOnChartArea: true,
+            drawTicks: true,
+            color: 'rgba(200, 200, 200, 0.2)'
           },
           title: xLabel
             ? {
