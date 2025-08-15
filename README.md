@@ -48,6 +48,28 @@ Supported weather stations:
 - DNT WeatherScreen PRO (WLAN)
 - Compatible ECOWITT/DNT models that save monthly CSV files
 
+## Screenshots
+
+### Grafik
+
+<div align="center">
+  <img src="Grafik.png" alt="Grafik – Zeitreihen" width="49%" />
+  <img src="Grafik2.png" alt="Grafik 2 – Zeitreihen" width="49%" />
+  
+</div>
+
+### Echtzeit
+
+<p align="center">
+  <img src="Echtzeit.png" alt="Echtzeit-Ansicht" width="70%" />
+</p>
+
+### Gespeicherte Daten
+
+<p align="center">
+  <img src="Archiv.png" alt="Gespeicherte Daten – Archiv" width="70%" />
+</p>
+
 ## Prerequisites
 
 - Node.js 18+ (20+ recommended)
@@ -109,10 +131,16 @@ All API routes run in the Node.js runtime and read from the local filesystem.
 
 ## Realtime data (Ecowitt API v3)
 
-The homepage is split into two tabs:
+The homepage is split into three tabs:
 
-- **Realtime**: Fetches live data from Ecowitt API v3 via a server-side proxy (`/api/rt/last`).
-- **Stored data**: Historical dashboard powered by DuckDB/Parquet over your `DNT/` CSVs.
+- **Realtime (Echtzeit)**: Fetches live data from Ecowitt API v3 via a server-side proxy (`/api/rt/last`). Values are shown as key metrics and as gauges/charts.
+- **Grafik**: Visual, realtime gauges for the station: outdoor temperature and humidity (with gradient guides), wind compass with speed/gust, barometric pressure, rainfall KPIs (rate/hour/day/week/month/year), solar radiation, UV index, indoor temperature/humidity, plus mini‑gauges for CH1–CH8.
+- **Stored data (Gespeicherte Daten)**: Historical dashboard over local CSVs via DuckDB/Parquet.
+  - Default view: last available month; default resolution: day.
+  - Modes: Main sensors (A) and Channel sensors (CH1–CH8). Channel dropdown supports single‑channel or viewing all channels.
+  - Optional global time range: enable “Ausgewählten Zeitraum verwenden” to pick start/end and query across months.
+  - Charts are interactive (zoom/pan/reset) and labels are localized.
+  - Channel names are configurable via `src/config/channels.json`.
 
 ### Backend Realtime Processing
 
@@ -289,8 +317,56 @@ This avoids binder/type errors and handles mixed datasets reliably.
 
 ### Useful API calls (test)
 
-- Month: `/api/data/allsensors?month=202501&resolution=hour`
-- Range: `/api/data/allsensors?start=2025-01-01 00:00&end=2025-08-13 00:00&resolution=day`
+### Realtime
+
+- curl
+
+```bash
+curl 'http://localhost:3000/api/rt/last'
+curl 'http://localhost:3000/api/rt?all=1'
+```
+
+- fetch (client/server)
+
+```ts
+const rt = await fetch('/api/rt/last').then(r => r.json());
+```
+
+### Data (CSV/DuckDB-backed)
+
+- Months and global extent
+
+```bash
+curl 'http://localhost:3000/api/data/months'
+curl 'http://localhost:3000/api/data/extent'
+```
+
+- Main (A) — by month or by time range
+
+```bash
+curl 'http://localhost:3000/api/data/main?month=202501&resolution=day'
+curl 'http://localhost:3000/api/data/main?start=2025-01-01%2000:00&end=2025-01-31%2023:59&resolution=hour'
+```
+
+- Allsensors (CH1–CH8) — by month or by time range
+
+```bash
+curl 'http://localhost:3000/api/data/allsensors?month=202501&resolution=hour'
+curl 'http://localhost:3000/api/data/allsensors?start=2025-01-01%2000:00&end=2025-02-15%2000:00&resolution=day'
+```
+
+- fetch example
+
+```ts
+const res = await fetch('/api/data/allsensors?month=202501&resolution=hour');
+const json = await res.json();
+```
+
+- Config (channel names)
+
+```bash
+curl 'http://localhost:3000/api/config/channels'
+```
 
 ## Troubleshooting
 
