@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import LineChart, { type LineSeries } from "@/components/LineChartChartJS";
+import { useTranslation } from "react-i18next";
 
 type MonthsResp = { months: string[] };
 
@@ -18,15 +19,17 @@ function renderChannelCardCharts(
   channelsCfg: ChannelsConfig,
   xBase: number | null,
   chKey: string,
-  minuteDataAll: DataResp | null
+  minuteDataAll: DataResp | null,
+  t: (key: string) => string,
+  locale: string
 ) {
   const rows = data.rows || [];
-  if (!rows.length || !xBase) return <div className="text-xs text-gray-500">Keine Daten</div>;
+  if (!rows.length || !xBase) return <div className="text-xs text-gray-500">{t('statuses.noData')}</div>;
   const times = rows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
   const xVals = times.map((t) => Math.round((t.getTime() - xBase) / 60000));
   const spanMin = times.length >= 2 ? Math.round((times[times.length - 1].getTime() - times[0].getTime()) / 60000) : 0;
-  const fmt = makeTimeTickFormatter(xBase, spanMin);
-  const hoverFmt = makeHoverTimeFormatter(xBase);
+  const fmt = makeTimeTickFormatter(xBase, spanMin, locale);
+  const hoverFmt = makeHoverTimeFormatter(xBase, locale);
   
   // Temperaturmetriken gruppieren
   const tempMetrics: ChannelMetric[] = ["Temperatur", "Taupunkt", "Gefühlte Temperatur"];
@@ -40,7 +43,7 @@ function renderChannelCardCharts(
     const col = headerKeyForAllsensors(data.header || [], metric, chNum);
     if (!col) continue;
     const series: LineSeries = {
-      id: `${metric}`,
+      id: `${metricDisplayLabel(metric, t)}`,
       color: COLORS[i % COLORS.length],
       points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) })),
     };
@@ -54,8 +57,8 @@ function renderChannelCardCharts(
       <div key={`${chKey}-temperatures`} className="rounded border border-gray-100 p-3">
         <LineChart 
           series={tempSeries} 
-          yLabel="Temperatur (°C)" 
-          xLabel="Zeit" 
+          yLabel={`${t('fields.temperature')} (°C)`} 
+          xLabel={t('dashboard.time')} 
           xTickFormatter={fmt} 
           hoverTimeFormatter={hoverFmt} 
           showLegend={true} 
@@ -100,25 +103,25 @@ function renderChannelCardCharts(
               {statsTemp && (
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
                   <div className="bg-amber-50 p-2 rounded">
-                    <div className="font-medium text-amber-700">Tage &gt; 30°C</div>
-                    <div className="text-lg">{statsTemp.daysOver30} <span className="text-xs text-gray-500">von {statsTemp.totalPeriodDays}</span></div>
+                    <div className="font-medium text-amber-700">{t('dashboard.daysOver30C')}</div>
+                    <div className="text-lg">{statsTemp.daysOver30} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsTemp.totalPeriodDays}</span></div>
                   </div>
                   <div className="bg-blue-50 p-2 rounded">
-                    <div className="font-medium text-blue-700">Tage &lt; 0°C</div>
-                    <div className="text-lg">{statsTemp.daysUnder0} <span className="text-xs text-gray-500">von {statsTemp.totalPeriodDays}</span></div>
+                    <div className="font-medium text-blue-700">{t('dashboard.daysUnder0C')}</div>
+                    <div className="text-lg">{statsTemp.daysUnder0} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsTemp.totalPeriodDays}</span></div>
                   </div>
                   <div className="bg-rose-50 p-2 rounded">
-                    <div className="font-medium text-rose-700">Höchste Temperatur</div>
+                    <div className="font-medium text-rose-700">{t('dashboard.highestTemperature')}</div>
                     <div className="text-lg">{Number.isFinite(statsTemp.maxTemp) ? `${statsTemp.maxTemp.toFixed(1)} °C` : "—"}</div>
-                    {statsTemp.maxTime && (<div className="text-xs text-gray-500">{formatDisplay(statsTemp.maxTime)}</div>)}
+                    {statsTemp.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsTemp.maxTime, locale)}</div>)}
                   </div>
                   <div className="bg-indigo-50 p-2 rounded">
-                    <div className="font-medium text-indigo-700">Niedrigste Temperatur</div>
+                    <div className="font-medium text-indigo-700">{t('dashboard.lowestTemperature')}</div>
                     <div className="text-lg">{Number.isFinite(statsTemp.minTemp) ? `${statsTemp.minTemp.toFixed(1)} °C` : "—"}</div>
-                    {statsTemp.minTime && (<div className="text-xs text-gray-500">{formatDisplay(statsTemp.minTime)}</div>)}
+                    {statsTemp.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsTemp.minTime, locale)}</div>)}
                   </div>
                   <div className="bg-teal-50 p-2 rounded">
-                    <div className="font-medium text-teal-700">Durchschnitt</div>
+                    <div className="font-medium text-teal-700">{t('dashboard.average')}</div>
                     <div className="text-lg">{Number.isFinite(avgTemp) ? `${avgTemp.toFixed(1)} °C` : "—"}</div>
                   </div>
                 </div>
@@ -126,14 +129,14 @@ function renderChannelCardCharts(
               {statsFelt && (
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-orange-50 p-2 rounded">
-                    <div className="font-medium text-orange-700">Gefühlte (max)</div>
+                    <div className="font-medium text-orange-700">{t('dashboard.feelsLikeMax')}</div>
                     <div className="text-lg">{Number.isFinite(statsFelt.maxTemp) ? `${statsFelt.maxTemp.toFixed(1)} °C` : "—"}</div>
-                    {statsFelt.maxTime && (<div className="text-xs text-gray-500">{formatDisplay(statsFelt.maxTime)}</div>)}
+                    {statsFelt.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.maxTime, locale)}</div>)}
                   </div>
                   <div className="bg-cyan-50 p-2 rounded">
-                    <div className="font-medium text-cyan-700">Gefühlte (min)</div>
+                    <div className="font-medium text-cyan-700">{t('dashboard.feelsLikeMin')}</div>
                     <div className="text-lg">{Number.isFinite(statsFelt.minTemp) ? `${statsFelt.minTemp.toFixed(1)} °C` : "—"}</div>
-                    {statsFelt.minTime && (<div className="text-xs text-gray-500">{formatDisplay(statsFelt.minTime)}</div>)}
+                    {statsFelt.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.minTime, locale)}</div>)}
                   </div>
                 </div>
               )}
@@ -149,7 +152,7 @@ function renderChannelCardCharts(
   const humidityCol = headerKeyForAllsensors(data.header || [], humidityMetric, chNum);
   if (humidityCol) {
     const humiditySeries: LineSeries = {
-      id: `${humidityMetric}`,
+      id: `${metricDisplayLabel(humidityMetric, t)}`,
       color: COLORS[3],
       points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[humidityCol]) })),
     };
@@ -158,8 +161,8 @@ function renderChannelCardCharts(
         <div key={`${chKey}-${humidityMetric}`} className="rounded border border-gray-100 p-3">
           <LineChart 
             series={[humiditySeries]} 
-            yLabel={`${humidityMetric}`} 
-            xLabel="Zeit" 
+            yLabel={`${metricDisplayLabel(humidityMetric, t)}`} 
+            xLabel={t('dashboard.time')} 
             xTickFormatter={fmt} 
             hoverTimeFormatter={hoverFmt} 
             showLegend={false} 
@@ -170,17 +173,17 @@ function renderChannelCardCharts(
     }
   }
   
-  if (!out.length) return <div className="text-xs text-gray-500">Keine numerischen Werte</div>;
+  if (!out.length) return <div className="text-xs text-gray-500">{t('statuses.noNumeric')}</div>;
   return <>{out}</>;
 }
 
-function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xBase: number | null, minuteDataAll: DataResp | null) {
+function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xBase: number | null, minuteDataAll: DataResp | null, t: (key: string) => string, locale: string) {
   const rows = data.rows || [];
-  if (!rows.length || !xBase) return <div className="text-xs text-gray-500">Keine Daten</div>;
+  if (!rows.length || !xBase) return <div className="text-xs text-gray-500">{t('statuses.noData')}</div>;
   const times = rows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
   const xVals = times.map((t) => Math.round((t.getTime() - xBase) / 60000));
-  const fmt = makeTimeTickFormatter(xBase);
-  const hoverFmt = makeHoverTimeFormatter(xBase);
+  const fmt = makeTimeTickFormatter(xBase, 0, locale);
+  const hoverFmt = makeHoverTimeFormatter(xBase, locale);
   
   // Temperaturmetriken und Luftfeuchtigkeit definieren
   const tempMetrics: ChannelMetric[] = ["Temperatur", "Taupunkt", "Gefühlte Temperatur"];
@@ -197,7 +200,7 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
       const col = headerKeyForAllsensors(data.header || [], metric, chNum);
       if (!col) continue;
       const series: LineSeries = {
-        id: `${metric}`,
+        id: `${metricDisplayLabel(metric, t)}`,
         color: COLORS[i % COLORS.length],
         points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) })),
       };
@@ -212,8 +215,8 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
         <div key={`${chKey}-temperatures`} className="rounded border border-gray-100 p-3">
           <LineChart 
             series={tempSeries} 
-            yLabel="Temperatur (°C)" 
-            xLabel="Zeit" 
+            yLabel={`${t('fields.temperature')} (°C)`} 
+            xLabel={t('dashboard.time')} 
             xTickFormatter={fmt} 
             hoverTimeFormatter={hoverFmt} 
             showLegend={true} 
@@ -251,25 +254,25 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
                 {statsTemp && (
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
                     <div className="bg-amber-50 p-2 rounded">
-                      <div className="font-medium text-amber-700">Tage &gt; 30°C</div>
-                      <div className="text-lg">{statsTemp.daysOver30} <span className="text-xs text-gray-500">von {statsTemp.totalPeriodDays}</span></div>
+                      <div className="font-medium text-amber-700">{t('dashboard.daysOver30C')}</div>
+                      <div className="text-lg">{statsTemp.daysOver30} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsTemp.totalPeriodDays}</span></div>
                     </div>
                     <div className="bg-blue-50 p-2 rounded">
-                      <div className="font-medium text-blue-700">Tage &lt; 0°C</div>
-                      <div className="text-lg">{statsTemp.daysUnder0} <span className="text-xs text-gray-500">von {statsTemp.totalPeriodDays}</span></div>
+                      <div className="font-medium text-blue-700">{t('dashboard.daysUnder0C')}</div>
+                      <div className="text-lg">{statsTemp.daysUnder0} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsTemp.totalPeriodDays}</span></div>
                     </div>
                     <div className="bg-rose-50 p-2 rounded">
-                      <div className="font-medium text-rose-700">Höchste Temperatur</div>
+                      <div className="font-medium text-rose-700">{t('dashboard.highestTemperature')}</div>
                       <div className="text-lg">{Number.isFinite(statsTemp.maxTemp) ? `${statsTemp.maxTemp.toFixed(1)} °C` : "—"}</div>
-                      {statsTemp.maxTime && (<div className="text-xs text-gray-500">{formatDisplay(statsTemp.maxTime)}</div>)}
+                      {statsTemp.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsTemp.maxTime, locale)}</div>)}
                     </div>
                     <div className="bg-indigo-50 p-2 rounded">
-                      <div className="font-medium text-indigo-700">Niedrigste Temperatur</div>
+                      <div className="font-medium text-indigo-700">{t('dashboard.lowestTemperature')}</div>
                       <div className="text-lg">{Number.isFinite(statsTemp.minTemp) ? `${statsTemp.minTemp.toFixed(1)} °C` : "—"}</div>
-                      {statsTemp.minTime && (<div className="text-xs text-gray-500">{formatDisplay(statsTemp.minTime)}</div>)}
+                      {statsTemp.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsTemp.minTime, locale)}</div>)}
                     </div>
                     <div className="bg-teal-50 p-2 rounded">
-                      <div className="font-medium text-teal-700">Durchschnitt</div>
+                      <div className="font-medium text-teal-700">{t('dashboard.average')}</div>
                       <div className="text-lg">{Number.isFinite(avgTemp) ? `${avgTemp.toFixed(1)} °C` : "—"}</div>
                     </div>
                   </div>
@@ -277,14 +280,14 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
                 {statsFelt && (
                   <div className="grid grid-cols-2 gap-2">
                     <div className="bg-orange-50 p-2 rounded">
-                      <div className="font-medium text-orange-700">Gefühlte (max)</div>
+                      <div className="font-medium text-orange-700">{t('dashboard.feelsLikeMax')}</div>
                       <div className="text-lg">{Number.isFinite(statsFelt.maxTemp) ? `${statsFelt.maxTemp.toFixed(1)} °C` : "—"}</div>
-                      {statsFelt.maxTime && (<div className="text-xs text-gray-500">{formatDisplay(statsFelt.maxTime)}</div>)}
+                      {statsFelt.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.maxTime, locale)}</div>)}
                     </div>
                     <div className="bg-cyan-50 p-2 rounded">
-                      <div className="font-medium text-cyan-700">Gefühlte (min)</div>
+                      <div className="font-medium text-cyan-700">{t('dashboard.feelsLikeMin')}</div>
                       <div className="text-lg">{Number.isFinite(statsFelt.minTemp) ? `${statsFelt.minTemp.toFixed(1)} °C` : "—"}</div>
-                      {statsFelt.minTime && (<div className="text-xs text-gray-500">{formatDisplay(statsFelt.minTime)}</div>)}
+                      {statsFelt.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.minTime, locale)}</div>)}
                     </div>
                   </div>
                 )}
@@ -300,7 +303,7 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
     const humidityCol = headerKeyForAllsensors(data.header || [], humidityMetric, chNum);
     if (humidityCol) {
       const humiditySeries: LineSeries = {
-        id: `${humidityMetric}`,
+        id: `${metricDisplayLabel(humidityMetric, t)}`,
         color: COLORS[3],
         points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[humidityCol]) })),
       };
@@ -309,8 +312,8 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
           <div key={`${chKey}-${humidityMetric}`} className="rounded border border-gray-100 p-3">
             <LineChart 
               series={[humiditySeries]} 
-              yLabel={`${humidityMetric}`} 
-              xLabel="Zeit" 
+              yLabel={`${metricDisplayLabel(humidityMetric, t)}`} 
+              xLabel={t('dashboard.time')} 
               xTickFormatter={fmt} 
               hoverTimeFormatter={hoverFmt} 
               showLegend={false} 
@@ -333,7 +336,7 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
     }
   }
   
-  if (!out.length) return <div className="text-xs text-gray-500">Keine numerischen Werte</div>;
+  if (!out.length) return <div className="text-xs text-gray-500">{t('statuses.noNumeric')}</div>;
   return <>{out}</>;
 }
 
@@ -346,23 +349,24 @@ function GlobalRangeControls(props: {
   setPctEnd: (n: number) => void;
 }) {
   const { min, max, pctStart, pctEnd, setPctStart, setPctEnd } = props;
+  const { t, i18n } = useTranslation();
   if (!min || !max) return null;
   const span = max.getTime() - min.getTime();
   const startMs = min.getTime() + Math.round(span * (pctStart / 1000));
   const endMs = min.getTime() + Math.round(span * (pctEnd / 1000));
   const start = new Date(Math.min(Math.max(startMs, min.getTime()), max.getTime()));
   const end = new Date(Math.min(Math.max(endMs, min.getTime()), max.getTime()));
-  const startDisp = formatDisplay(start);
-  const endDisp = formatDisplay(end);
+  const startDisp = formatDisplayLocale(start, i18n.language || 'de');
+  const endDisp = formatDisplayLocale(end, i18n.language || 'de');
   const startLocal = formatLocal(start);
   const endLocal = formatLocal(end);
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white dark:bg-black p-3">
-      <div className="text-sm font-medium mb-2">Gesamter Zeitraum</div>
+      <div className="text-sm font-medium mb-2">{t('dashboard.globalRange')}</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
         <div className="flex flex-col gap-1">
-          <label className="text-sm">Start</label>
+          <label className="text-sm">{t('dashboard.start')}</label>
           <input
             type="datetime-local"
             className="border rounded p-2"
@@ -377,7 +381,7 @@ function GlobalRangeControls(props: {
           <div className="text-xs text-gray-500">{startDisp}</div>
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-sm">Ende</label>
+          <label className="text-sm">{t('dashboard.end')}</label>
           <input
             type="datetime-local"
             className="border rounded p-2"
@@ -544,33 +548,67 @@ function calculateRainStats(rows: Array<Record<string, number | string | null>>,
   
   return { daysOver30mm, totalDays: rainDays, totalPeriodDays };
 }
-function makeTimeTickFormatter(t0: number, spanMin: number = 0) {
+function makeTimeTickFormatter(t0: number, spanMin: number = 0, locale: string) {
   return (v: number) => {
     const d = new Date(t0 + Math.round(v) * 60000);
-    // Immer das Datumsformat anzeigen
+    try {
+      return new Intl.DateTimeFormat(locale || 'de', { day: '2-digit', month: '2-digit' }).format(d);
+    } catch {
+      const dd = pad2(d.getDate());
+      const mm = pad2(d.getMonth() + 1);
+      return `${dd}.${mm}.`;
+    }
+  };
+}
+
+function makeHoverTimeFormatter(t0: number, locale: string) {
+  return (v: number) => {
+    const d = new Date(t0 + Math.round(v) * 60000);
+    return formatDisplayLocale(d, locale);
+  };
+}
+
+// Locale-aware display formatter with safe fallback
+function formatDisplayLocale(d: Date, locale: string): string {
+  try {
+    return new Intl.DateTimeFormat(locale || 'de', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    }).format(d);
+  } catch {
     const dd = pad2(d.getDate());
     const mm = pad2(d.getMonth() + 1);
-    return `${dd}.${mm}.`;
-  };
+    const yyyy = d.getFullYear();
+    const hh = pad2(d.getHours());
+    const mi = pad2(d.getMinutes());
+    const ss = pad2(d.getSeconds());
+    return `${dd}.${mm}.${yyyy} ${hh}:${mi}:${ss}`;
+  }
 }
-
-function makeHoverTimeFormatter(t0: number) {
-  return (v: number) => {
-    const d = new Date(t0 + Math.round(v) * 60000);
-    return formatDisplay(d); // DD.MM.YYYY HH:MM
-  };
-}
-
-const DE_MONTHS = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
-function formatMonthLabel(m: string) {
-  // expects YYYYMM
-  const year = m.slice(0, 4);
-  const mo = Number(m.slice(4, 6));
-  const name = DE_MONTHS[(mo || 1) - 1] || m;
-  return `${year} ${name}`;
+// Locale-aware month name helper (1-12)
+function getMonthName(month: number, locale: string): string {
+  const m = Math.max(1, Math.min(12, Math.floor(month)));
+  try {
+    const d = new Date(2000, m - 1, 1);
+    const s = new Intl.DateTimeFormat(locale || 'de', { month: 'long' }).format(d);
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  } catch {
+    // Fallback to numeric month if Intl is unavailable
+    return String(m).padStart(2, '0');
+  }
 }
 
 type ChannelMetric = "Temperatur" | "Luftfeuchtigkeit" | "Taupunkt" | "Gefühlte Temperatur";
+
+function metricDisplayLabel(metric: ChannelMetric, t: (key: string) => string): string {
+  const map: Record<string, string> = {
+    "Temperatur": t('fields.temperature'),
+    "Taupunkt": t('fields.dewPoint'),
+    "Gefühlte Temperatur": t('fields.feelsLike'),
+    "Luftfeuchtigkeit": t('fields.humidity'),
+  };
+  return map[metric] || metric;
+}
 
 type Dataset = "allsensors" | "main";
 
@@ -588,6 +626,8 @@ const COLORS = [
 ];
 
 export default function Dashboard() {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language || 'de';
   const [months, setMonths] = useState<string[]>([]);
   const [year, setYear] = useState<string>("");
   const [mon, setMon] = useState<string>(""); // MM
@@ -756,6 +796,7 @@ export default function Dashboard() {
         uAll.searchParams.set("start", startParam);
         uMain.searchParams.set("start", startParam);
         uMinuteMain.searchParams.set("start", startParam);
+        uMinuteAll.searchParams.set("start", startParam);
       }
       
       if (endParam) {
@@ -786,14 +827,14 @@ export default function Dashboard() {
     ])
       .then(([a, m, mm, mma]) => {
         if (!a.ok || !a.body || a.body.error) {
-          setErrAll(a.body?.error || "Fehler beim Laden Allsensors");
+          setErrAll(a.body?.error || t('statuses.loadErrorAllsensors'));
           setDataAll(null);
         } else {
           setDataAll(a.body);
         }
         
         if (!m.ok || !m.body || m.body.error) {
-          setErrMain(m.body?.error || "Fehler beim Laden Hauptdaten");
+          setErrMain(m.body?.error || t('statuses.loadErrorMain'));
           setDataMain(null);
         } else {
           setDataMain(m.body);
@@ -801,14 +842,14 @@ export default function Dashboard() {
         
         // Minutendaten für Statistikberechnung setzen
         if (!mm.ok || !mm.body || mm.body.error) {
-          // Fehler bei Minutendaten - nicht kritisch, da nur für Statistik
-          console.warn("Fehler beim Laden der Minutendaten für Statistik:", mm.body?.error);
+          // Minute-data load error (non-critical, used only for statistics)
+          console.warn(t('statuses.minuteDataWarning'), mm.body?.error);
           setMinuteDataMain(null);
         } else {
           setMinuteDataMain(mm.body);
         }
         if (!mma.ok || !mma.body || mma.body.error) {
-          console.warn("Fehler beim Laden der Minutendaten (Allsensors) für Statistik:", mma.body?.error);
+          console.warn(t('statuses.minuteDataWarningAllsensors'), mma.body?.error);
           setMinuteDataAll(null);
         } else {
           setMinuteDataAll(mma.body);
@@ -819,17 +860,17 @@ export default function Dashboard() {
 
   return (
     <div className="w-full max-w-screen-lg mx-auto flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">Wetterstation Dashboard</h1>
+      <h1 className="text-2xl font-semibold">{t('dashboard.title')}</h1>
       {/* Steuerung: Zeitraum, Jahr/Monat (optional), Auflösung, Ansicht, Kanal/Metrik */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <div className="flex items-center gap-2">
           <input id="global-range" type="checkbox" checked={useGlobalRange} onChange={(e) => setUseGlobalRange(e.target.checked)} />
-          <label htmlFor="global-range" className="text-sm">Ausgewählten Zeitraum verwenden</label>
+          <label htmlFor="global-range" className="text-sm">{t('dashboard.useGlobalRange')}</label>
         </div>
         {!useGlobalRange && (
           <>
             <div className="flex flex-col gap-1">
-              <label className="text-sm">Jahr</label>
+              <label className="text-sm">{t('dashboard.year')}</label>
               <select className="border rounded p-2" value={year} onChange={(e) => setYear(e.target.value)}>
                 {years.map((y) => (
                   <option key={y} value={y}>{y}</option>
@@ -837,10 +878,10 @@ export default function Dashboard() {
               </select>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-sm">Monat</label>
+              <label className="text-sm">{t('dashboard.month')}</label>
               <select className="border rounded p-2" value={mon} onChange={(e) => setMon(e.target.value)}>
                 {(monthsByYear[year] || []).map((m) => (
-                  <option key={m} value={m}>{DE_MONTHS[Number(m) - 1] || m}</option>
+                  <option key={m} value={m}>{getMonthName(Number(m), i18n.language || 'de') || m}</option>
                 ))}
               </select>
             </div>
@@ -859,29 +900,29 @@ export default function Dashboard() {
           </div>
         )}
         <div className="flex flex-col gap-1">
-          <label className="text-sm">Auflösung</label>
+          <label className="text-sm">{t('dashboard.resolution')}</label>
           <select className="border rounded p-2" value={resolution} onChange={(e) => setResolution(e.target.value as Resolution)}>
-            <option value="minute">Minuten</option>
-            <option value="hour">Stunden</option>
-            <option value="day">Tage</option>
+            <option value="minute">{t('dashboard.minutes')}</option>
+            <option value="hour">{t('dashboard.hours')}</option>
+            <option value="day">{t('dashboard.days')}</option>
           </select>
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-sm">Ansicht</label>
+          <label className="text-sm">{t('dashboard.view')}</label>
           <select className="border rounded p-2" value={mode} onChange={(e) => setMode(e.target.value as any)}>
-            <option value="main">Hauptsensoren</option>
-            <option value="channel">Sensor CH1–CH8</option>
+            <option value="main">{t('dashboard.mainSensors')}</option>
+            <option value="channel">{t('dashboard.channelSensorsOption')}</option>
           </select>
         </div>
         {mode === "channel" && (
           <div className="flex flex-col gap-1">
-            <label className="text-sm">Kanal</label>
+            <label className="text-sm">{t('dashboard.channel')}</label>
             <select
               className="border rounded p-2"
               value={selectedChannel}
               onChange={(e) => setSelectedChannel(e.target.value)}
             >
-              <option value="all">Alle Kanäle</option>
+              <option value="all">{t('dashboard.allChannels')}</option>
               {getChannelKeys(channelsCfg).map((k) => (
                 <option key={k} value={k}>{channelName(k, channelsCfg)}</option>
               ))}
@@ -891,7 +932,7 @@ export default function Dashboard() {
       </div>
 
       {loading && (
-        <div className="rounded border border-yellow-300 bg-yellow-50 text-yellow-800 p-3 text-sm">Lade Daten…</div>
+        <div className="rounded border border-yellow-300 bg-yellow-50 text-yellow-800 p-3 text-sm">{t('statuses.loading')}</div>
       )}
       {errMain && (
         <div className="rounded border border-red-300 bg-red-50 text-red-800 p-3 text-sm">{errMain}</div>
@@ -899,64 +940,57 @@ export default function Dashboard() {
       {errAll && (
         <div className="rounded border border-red-300 bg-red-50 text-red-800 p-3 text-sm">{errAll}</div>
       )}
-      {/* Ansicht: Hauptsensoren (gestapelte Charts) */}
-      {mode === "main" && dataMain && (
-        <div className="rounded-lg border border-gray-200 bg-white dark:bg-black">
-          <div className="px-3 py-2 border-b border-sky-100 bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300 text-sm font-medium">Hauptdaten (A)</div>
-          <div className="p-3 flex flex-col gap-4">
-            {renderMainCharts(dataMain, xBaseMain, minuteDataMain)}
-          </div>
-        </div>
-      )}
-
-      {/* Ansicht: Einzelner Channel (Auswahl) */}
-      {mode === "channel" && dataAll && (
-        <div className="rounded-lg border border-gray-200 bg-white dark:bg-black">
-          <div className="px-3 py-2 border-b border-emerald-100 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 text-sm font-medium">{selectedChannel === "all" ? "Alle Sensoren (CH1–CH8)" : channelName(selectedChannel, channelsCfg)}</div>
-          <div className="p-3 flex flex-col gap-4">
-            {selectedChannel === "all"
-              ? renderAllChannelsCharts(dataAll, channelsCfg, xBaseAll, minuteDataAll)
-              : renderChannelCardCharts(dataAll, channelsCfg, xBaseAll, selectedChannel, minuteDataAll)}
-          </div>
+      {/* Charts */}
+      {!loading && (
+        <div className="flex flex-col gap-4">
+          {mode === 'main' && dataMain && (
+            <>{renderMainCharts(dataMain, xBaseMain, minuteDataMain, t, locale)}</>
+          )}
+          {mode === 'channel' && selectedChannel === 'all' && dataAll && (
+            <>{renderAllChannelsCharts(dataAll, channelsCfg, xBaseAll, minuteDataAll, t, locale)}</>
+          )}
+          {mode === 'channel' && selectedChannel !== 'all' && dataAll && (
+            <>{renderChannelCardCharts(dataAll, channelsCfg, xBaseAll, selectedChannel, minuteDataAll, t, locale)}</>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function renderChannelChart(data: DataResp, chKey: string, metric: ChannelMetric, channelsCfg: ChannelsConfig, xBase: number | null) {
+function renderChannelChart(data: DataResp, chKey: string, metric: ChannelMetric, channelsCfg: ChannelsConfig, xBase: number | null, t: (key: string) => string, locale: string) {
   const rows = data.rows || [];
-  if (!rows.length || !xBase) return <div className="text-xs text-gray-500">Keine Daten</div>;
+  if (!rows.length || !xBase) return <div className="text-xs text-gray-500">{t('statuses.noData')}</div>;
   const times = rows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
   const xVals = times.map((t) => Math.round((t.getTime() - xBase) / 60000));
   const chNum = (chKey.match(/\d+/)?.[0]) || "1";
   const col = headerKeyForAllsensors(data.header || [], metric, chNum);
-  const label = `${channelName(chKey, channelsCfg)} ${metric}`;
+  const label = `${channelName(chKey, channelsCfg)} ${metricDisplayLabel(metric, t)}`;
   const spanMin = times.length >= 2 ? Math.round((times[times.length - 1].getTime() - times[0].getTime()) / 60000) : 0;
-  const fmt = makeTimeTickFormatter(xBase, spanMin);
-  const hoverFmt = makeHoverTimeFormatter(xBase);
+  const fmt = makeTimeTickFormatter(xBase, spanMin, locale);
+  const hoverFmt = makeHoverTimeFormatter(xBase, locale);
   const series: LineSeries = {
     id: label,
     color: COLORS[0],
     points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) })),
   };
-  if (!series.points.some((p) => Number.isFinite(p.y))) return <div className="text-xs text-gray-500">Keine numerischen Werte</div>;
+  if (!series.points.some((p) => Number.isFinite(p.y))) return <div className="text-xs text-gray-500">{t('statuses.noNumeric')}</div>;
   return (
     <div className="rounded border border-gray-200 p-3">
-      <LineChart series={[series]} yLabel={label} xLabel="Zeit" xTickFormatter={fmt} hoverTimeFormatter={hoverFmt} showLegend={false} yUnit={unitForMetric(metric)} />
+      <LineChart series={[series]} yLabel={label} xLabel={t('dashboard.time')} xTickFormatter={fmt} hoverTimeFormatter={hoverFmt} showLegend={false} yUnit={unitForMetric(metric)} />
     </div>
   );
 }
 
-function renderMainCharts(data: DataResp, xBase: number | null, minuteData: DataResp | null) {
+function renderMainCharts(data: DataResp, xBase: number | null, minuteData: DataResp | null, t: (key: string) => string, locale: string) {
   const rows = data.rows || [];
-  if (!rows.length || !xBase) return <div className="text-xs text-gray-500">Keine Daten</div>;
+  if (!rows.length || !xBase) return <div className="text-xs text-gray-500">{t('statuses.noData')}</div>;
   const times = rows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
   const xVals = times.map((t) => Math.round((t.getTime() - xBase) / 60000));
   const cols = inferNumericColumns(data);
   const spanMin = times.length >= 2 ? Math.round((times[times.length - 1].getTime() - times[0].getTime()) / 60000) : 0;
-  const fmt = makeTimeTickFormatter(xBase, spanMin);
-  const hoverFmt = makeHoverTimeFormatter(xBase);
+  const fmt = makeTimeTickFormatter(xBase, spanMin, locale);
+  const hoverFmt = makeHoverTimeFormatter(xBase, locale);
   const header = (data.header || []).slice();
   // Debug main headers and sample row
   try {
@@ -1106,8 +1140,8 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
         <div className="rounded border border-gray-200 p-3">
           <LineChart 
             series={tempSeries} 
-            yLabel="Temperatur (°C)" 
-            xLabel="Zeit" 
+            yLabel={`${t('fields.temperature')} (°C)`} 
+            xLabel={t('dashboard.time')} 
             xTickFormatter={fmt} 
             hoverTimeFormatter={hoverFmt} 
             showLegend={true} 
@@ -1156,36 +1190,36 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
                 {statsTemp && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
                     <div className="bg-amber-50 p-2 rounded">
-                      <div className="font-medium text-amber-700">Tage &gt; 30°C</div>
-                      <div className="text-lg">{statsTemp.daysOver30} <span className="text-xs text-gray-500">von {statsTemp.totalPeriodDays}</span></div>
+                      <div className="font-medium text-amber-700">{t('dashboard.daysOver30C')}</div>
+                      <div className="text-lg">{statsTemp.daysOver30} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsTemp.totalPeriodDays}</span></div>
                     </div>
                     <div className="bg-blue-50 p-2 rounded">
-                      <div className="font-medium text-blue-700">Tage &lt; 0°C</div>
-                      <div className="text-lg">{statsTemp.daysUnder0} <span className="text-xs text-gray-500">von {statsTemp.totalPeriodDays}</span></div>
+                      <div className="font-medium text-blue-700">{t('dashboard.daysUnder0C')}</div>
+                      <div className="text-lg">{statsTemp.daysUnder0} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsTemp.totalPeriodDays}</span></div>
                     </div>
                     <div className="bg-rose-50 p-2 rounded">
-                      <div className="font-medium text-rose-700">Höchste Temperatur</div>
+                      <div className="font-medium text-rose-700">{t('dashboard.highestTemperature')}</div>
                       <div className="text-lg">{Number.isFinite(statsTemp.maxTemp) ? `${statsTemp.maxTemp.toFixed(1)} °C` : "—"}</div>
-                      {statsTemp.maxTime && (<div className="text-xs text-gray-500">{formatDisplay(statsTemp.maxTime)}</div>)}
+                      {statsTemp.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsTemp.maxTime, locale)}</div>)}
                     </div>
                     <div className="bg-indigo-50 p-2 rounded">
-                      <div className="font-medium text-indigo-700">Niedrigste Temperatur</div>
+                      <div className="font-medium text-indigo-700">{t('dashboard.lowestTemperature')}</div>
                       <div className="text-lg">{Number.isFinite(statsTemp.minTemp) ? `${statsTemp.minTemp.toFixed(1)} °C` : "—"}</div>
-                      {statsTemp.minTime && (<div className="text-xs text-gray-500">{formatDisplay(statsTemp.minTime)}</div>)}
+                      {statsTemp.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsTemp.minTime, locale)}</div>)}
                     </div>
                   </div>
                 )}
                 {statsFelt && (
                   <div className="grid grid-cols-2 gap-2">
                     <div className="bg-orange-50 p-2 rounded">
-                      <div className="font-medium text-orange-700">Gefühlte (max)</div>
+                      <div className="font-medium text-orange-700">{t('dashboard.feelsLikeMax')}</div>
                       <div className="text-lg">{Number.isFinite(statsFelt.maxTemp) ? `${statsFelt.maxTemp.toFixed(1)} °C` : "—"}</div>
-                      {statsFelt.maxTime && (<div className="text-xs text-gray-500">{formatDisplay(statsFelt.maxTime)}</div>)}
+                      {statsFelt.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.maxTime, locale)}</div>)}
                     </div>
                     <div className="bg-cyan-50 p-2 rounded">
-                      <div className="font-medium text-cyan-700">Gefühlte (min)</div>
+                      <div className="font-medium text-cyan-700">{t('dashboard.feelsLikeMin')}</div>
                       <div className="text-lg">{Number.isFinite(statsFelt.minTemp) ? `${statsFelt.minTemp.toFixed(1)} °C` : "—"}</div>
-                      {statsFelt.minTime && (<div className="text-xs text-gray-500">{formatDisplay(statsFelt.minTime)}</div>)}
+                      {statsFelt.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.minTime, locale)}</div>)}
                     </div>
                   </div>
                 )}
@@ -1205,7 +1239,7 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
         if (!series.points.some((p) => Number.isFinite(p.y))) return null;
         return (
           <div key={col} className="rounded border border-gray-200 p-3">
-            <LineChart series={[series]} yLabel={col} xLabel="Zeit" xTickFormatter={fmt} hoverTimeFormatter={hoverFmt} showLegend={false} yUnit={unitForHeader(col)} />
+            <LineChart series={[series]} yLabel={col} xLabel={t('dashboard.time')} xTickFormatter={fmt} hoverTimeFormatter={hoverFmt} showLegend={false} yUnit={unitForHeader(col)} />
           </div>
         );
       })}
@@ -1213,11 +1247,11 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
       {/* Regen */}
       {rainColumns.length > 0 && (
         <div className="mb-4">
-          <h3 className="text-lg font-medium mb-2">Regen (mm)</h3>
+          <h3 className="text-lg font-medium mb-2">{`${t('gauges.precipitation')} (mm)`}</h3>
           <LineChart 
             series={rainSeries} 
-            yLabel="Regen (mm)" 
-            xLabel="Zeit" 
+            yLabel={`${t('gauges.precipitation')} (mm)`} 
+            xLabel={t('dashboard.time')} 
             xTickFormatter={fmt} 
             hoverTimeFormatter={hoverFmt} 
             showLegend={true} 
@@ -1230,12 +1264,12 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
       {rainPoints.length > 0 && (
         <div className="rounded border border-gray-200 p-3">
           <div className="mb-2 text-sm text-gray-700 dark:text-gray-300">
-            <span className="font-medium">Summe im Zeitraum:</span> {totalRain.toFixed(1)} mm
+            <span className="font-medium">{t('dashboard.sumInPeriod')}</span> {totalRain.toFixed(1)} mm
           </div>
           <LineChart
-            series={[{ id: "Regen pro Tag (mm)", color: COLORS[1], points: rainPoints }]}
-            yLabel="Regen pro Tag (mm)"
-            xLabel="Zeit"
+            series={[{ id: t('dashboard.rainPerDay'), color: COLORS[1], points: rainPoints }]}
+            yLabel={t('dashboard.rainPerDay')}
+            xLabel={t('dashboard.time')}
             xTickFormatter={fmt}
             hoverTimeFormatter={hoverFmt}
             showLegend={false}
@@ -1259,15 +1293,15 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
               <div className="mt-2 text-sm border-t border-gray-100 pt-2">
                 <div className="grid grid-cols-3 gap-2">
                   <div className="bg-blue-50 p-2 rounded">
-                    <div className="font-medium text-blue-700">Tage &gt; 30mm</div>
-                    <div className="text-lg">{rainStats.daysOver30mm} <span className="text-xs text-gray-500">von {rainStats.totalPeriodDays}</span></div>
+                    <div className="font-medium text-blue-700">{t('dashboard.daysOver30mm')}</div>
+                    <div className="text-lg">{rainStats.daysOver30mm} <span className="text-xs text-gray-500">{t('dashboard.of')} {rainStats.totalPeriodDays}</span></div>
                   </div>
                   <div className="bg-gray-50 p-2 rounded">
-                    <div className="font-medium text-gray-700">Regentage</div>
-                    <div className="text-lg">{rainStats.totalDays} <span className="text-xs text-gray-500">von {rainStats.totalPeriodDays}</span></div>
+                    <div className="font-medium text-gray-700">{t('dashboard.rainDays')}</div>
+                    <div className="text-lg">{rainStats.totalDays} <span className="text-xs text-gray-500">{t('dashboard.of')} {rainStats.totalPeriodDays}</span></div>
                   </div>
                   <div className="bg-emerald-50 p-2 rounded">
-                    <div className="font-medium text-emerald-700">Gesamt</div>
+                    <div className="font-medium text-emerald-700">{t('dashboard.total')}</div>
                     <div className="text-lg">{totalRain.toFixed(1)} <span className="text-xs text-gray-500">mm</span></div>
                   </div>
                 </div>
@@ -1281,9 +1315,9 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
       {hourlyRainPoints.length > 0 && (
         <div className="rounded border border-gray-200 p-3">
           <LineChart
-            series={[{ id: "Regen pro Stunde (mm)", color: COLORS[3], points: hourlyRainPoints }]}
-            yLabel="Regen pro Stunde (mm)"
-            xLabel="Zeit"
+            series={[{ id: t('dashboard.rainPerHour'), color: COLORS[3], points: hourlyRainPoints }]}
+            yLabel={t('dashboard.rainPerHour')}
+            xLabel={t('dashboard.time')}
             xTickFormatter={fmt}
             hoverTimeFormatter={hoverFmt}
             showLegend={false}
@@ -1310,7 +1344,7 @@ function findTemperatureColumns(header: string[]): string[] {
     }
   }
   
-  console.log("Erkannte Temperaturmetriken:", tempColumns);
+  console.debug("Detected temperature metrics:", tempColumns);
   return tempColumns;
 }
 
@@ -1318,7 +1352,7 @@ function findTemperatureColumns(header: string[]): string[] {
 function findRainColumns(header: string[]): string[] {
   const rainColumns: string[] = [];
   
-  console.log("Verfügbare Header für Regenerkennung:", header);
+  console.debug("Available headers for rain detection:", header);
   
   // Suche nach Regen/Woche
   const regenWoche = header.find(h => {
@@ -1327,7 +1361,7 @@ function findRainColumns(header: string[]): string[] {
            (s.includes("week") || s.includes("woche"));
   });
   if (regenWoche) {
-    console.log("Regen/Woche gefunden:", regenWoche);
+    console.debug("Rain/week found:", regenWoche);
     rainColumns.push(regenWoche);
   }
   
@@ -1338,7 +1372,7 @@ function findRainColumns(header: string[]): string[] {
            (s.includes("month") || s.includes("monat"));
   });
   if (regenMonat) {
-    console.log("Regen/Monat gefunden:", regenMonat);
+    console.debug("Rain/month found:", regenMonat);
     rainColumns.push(regenMonat);
   }
   
@@ -1349,13 +1383,13 @@ function findRainColumns(header: string[]): string[] {
            (s.includes("year") || s.includes("jahr"));
   });
   if (regenJahr) {
-    console.log("Regen/Jahr gefunden:", regenJahr);
+    console.debug("Rain/year found:", regenJahr);
     rainColumns.push(regenJahr);
   }
   
   // Wichtig: Regen/Stunde NICHT in die Regenmetriken aufnehmen, da diese als Balkendiagramm dargestellt wird
   
-  console.log("Erkannte Regenmetriken:", rainColumns);
+  console.debug("Detected rain metrics:", rainColumns);
   return rainColumns;
 }
 

@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 
+import { useTranslation } from "react-i18next";
+
 type RTData = any;
 
 function LabelValue({ label, value }: { label: string; value: React.ReactNode }) {
@@ -83,41 +85,35 @@ function fmtVU(vu: { value: string | number | null; unit?: string }, fallbackUni
   return `${vu.value}${unit ? ` ${unit}` : ""}`;
 }
 
-function fmtBattery(v: any) {
+function fmtBattery(v: any, t: (key: string) => string) {
   const vu = valueAndUnit(v);
   if (vu.value == null || vu.value === "") return "—";
   const n = Number(vu.value);
   if (Number.isNaN(n)) return String(vu.value);
-  return n === 0 ? "OK" : "Niedrig";
+  return n === 0 ? t('statuses.ok') : t('statuses.low');
 }
 
-function deLabel(key: string): string {
+function i18nLabel(key: string, t: (key: string) => string): string {
   const k = key.toLowerCase();
   const map: Record<string, string> = {
-    temperature: "Temperatur",
-    humidity: "Feuchte",
-    feels_like: "Gefühlt",
-    app_temp: "App-Temp",
-    dew_point: "Taupunkt",
-    wind_speed: "Wind",
-    wind_gust: "Böe",
-    wind_direction: "Richtung",
-    "10_minute_average_wind_direction": "Richtung (10 min)",
-    rain_rate: "Regenrate",
-    hourly: "Stündlich",
-    daily: "Täglich",
-    weekly: "Wöchentlich",
-    monthly: "Monatlich",
-    yearly: "Jährlich",
-    relative: "relativ",
-    absolute: "absolut",
-    solar: "Solar",
-    uvi: "UV-Index"
+    temperature: t('fields.temperature'),
+    humidity: t('fields.humidity'),
+    feels_like: t('fields.feelsLike'),
+    app_temp: t('fields.appTemp'),
+    dew_point: t('fields.dewPoint'),
+    wind_speed: t('gauges.wind'),
+    wind_gust: t('gauges.gust'),
+    wind_direction: t('fields.direction'),
+    "10_minute_average_wind_direction": t('fields.direction10min'),
+    rain_rate: t('fields.rainRate'),
+    solar: t('gauges.solar'),
+    uvi: t('gauges.uvIndex'),
   };
   return map[k] || key.replace(/_/g, " ");
 }
 
 export default function Realtime() {
+  const { t, i18n } = useTranslation();
   const [data, setData] = useState<RTData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -132,7 +128,7 @@ export default function Realtime() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const rec = await res.json();
       if (!rec || rec.ok === false) {
-        const msg = rec?.error || "keine Daten";
+        const msg = rec?.error || t('statuses.noData');
         setError(msg);
         return;
       }
@@ -166,15 +162,22 @@ export default function Realtime() {
 
   const timeText = useMemo(() => {
     if (!lastUpdated) return "—";
-    const d = lastUpdated;
-    const dd = String(d.getDate()).padStart(2, "0");
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yyyy = d.getFullYear();
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mi = String(d.getMinutes()).padStart(2, "0");
-    const ss = String(d.getSeconds()).padStart(2, "0");
-    return `${dd}.${mm}.${yyyy} ${hh}:${mi}:${ss}`;
-  }, [lastUpdated]);
+    try {
+      return new Intl.DateTimeFormat(i18n.language || 'de', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      }).format(lastUpdated);
+    } catch {
+      const d = lastUpdated;
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const yyyy = d.getFullYear();
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mi = String(d.getMinutes()).padStart(2, "0");
+      const ss = String(d.getSeconds()).padStart(2, "0");
+      return `${dd}.${mm}.${yyyy} ${hh}:${mi}:${ss}`;
+    }
+  }, [lastUpdated, i18n.language]);
 
   const d = data as any;
   const payload = d; // cached payload already unwrapped
@@ -223,8 +226,9 @@ export default function Realtime() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-start">
-        <div className="text-sm text-gray-600 dark:text-gray-400">Letzte Aktualisierung: {timeText}</div>
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-gray-600 dark:text-gray-400">{t('statuses.lastUpdate')} {timeText}</div>
+        {loading && <div className="text-xs text-amber-600">{t('statuses.loading')}</div>}
       </div>
 
       {error && (
@@ -233,47 +237,47 @@ export default function Realtime() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="rounded border border-gray-200 p-3">
-          <div className="font-semibold mb-2 text-emerald-700">Innen</div>
-          <LabelValue label="Temperatur" value={fmtVU(indoorT, "°C")} />
-          <LabelValue label="Feuchte" value={fmtVU(indoorH, "%")} />
-          <LabelValue label="Luftdruck (rel.)" value={fmtVU(pressureRel, "hPa")} />
-          <LabelValue label="Luftdruck (abs.)" value={fmtVU(pressureAbs, "hPa")} />
+          <div className="font-semibold mb-2 text-emerald-700">{t('realtime.indoor')}</div>
+          <LabelValue label={t('fields.temperature')} value={fmtVU(indoorT, "°C")} />
+          <LabelValue label={t('fields.humidity')} value={fmtVU(indoorH, "%")} />
+          <LabelValue label={t('gauges.pressureRel')} value={fmtVU(pressureRel, "hPa")} />
+          <LabelValue label={t('gauges.pressureAbs')} value={fmtVU(pressureAbs, "hPa")} />
         </div>
         <div className="rounded border border-gray-200 p-3">
-          <div className="font-semibold mb-2 text-sky-700">Außen</div>
-          <LabelValue label="Temperatur" value={fmtVU(outdoorT, "°C")} />
-          <LabelValue label="Feuchte" value={fmtVU(outdoorH, "%")} />
-          <LabelValue label="Gefühlt" value={fmtVU(feelsLike, "°C")} />
-          <LabelValue label="App-Temp" value={fmtVU(appTemp, "°C")} />
-          <LabelValue label="Taupunkt" value={fmtVU(dewPoint, "°C")} />
-          <LabelValue label="Wind" value={fmtVU(wind)} />
-          <LabelValue label="Böe" value={fmtVU(gust)} />
-          <LabelValue label="Richtung" value={fmtVU(windDir, "º")} />
-          <LabelValue label="Richtung (10 min)" value={fmtVU(windDir10, "º")} />
-          <LabelValue label="Regenrate" value={fmtVU(rainRate)} />
+          <div className="font-semibold mb-2 text-sky-700">{t('realtime.outdoor')}</div>
+          <LabelValue label={t('fields.temperature')} value={fmtVU(outdoorT, "°C")} />
+          <LabelValue label={t('fields.humidity')} value={fmtVU(outdoorH, "%")} />
+          <LabelValue label={t('fields.feelsLike')} value={fmtVU(feelsLike, "°C")} />
+          <LabelValue label={t('fields.appTemp')} value={fmtVU(appTemp, "°C")} />
+          <LabelValue label={t('fields.dewPoint')} value={fmtVU(dewPoint, "°C")} />
+          <LabelValue label={t('gauges.wind')} value={fmtVU(wind)} />
+          <LabelValue label={t('gauges.gust')} value={fmtVU(gust)} />
+          <LabelValue label={t('fields.direction')} value={fmtVU(windDir, "º")} />
+          <LabelValue label={t('fields.direction10min')} value={fmtVU(windDir10, "º")} />
+          <LabelValue label={t('fields.rainRate')} value={fmtVU(rainRate)} />
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="rounded border border-gray-200 p-3">
-          <div className="font-semibold mb-2 text-amber-700">Solar / UV</div>
-          <LabelValue label="Solar" value={fmtVU(solar, "W/m²")} />
-          <LabelValue label="UV Index" value={fmtVU(uvi)} />
+          <div className="font-semibold mb-2 text-amber-700">{t('realtime.solarUv')}</div>
+          <LabelValue label={t('gauges.solar')} value={fmtVU(solar, "W/m²")} />
+          <LabelValue label={t('gauges.uvIndex')} value={fmtVU(uvi)} />
         </div>
         <div className="rounded border border-gray-200 p-3">
-          <div className="font-semibold mb-2 text-blue-700">Niederschlag</div>
-          <LabelValue label="Rate" value={fmtVU(rainRate)} />
-          <LabelValue label="Stündlich" value={fmtVU(rainHourly, "mm")} />
-          <LabelValue label="Täglich" value={fmtVU(rainDaily, "mm")} />
-          <LabelValue label="Wöchentlich" value={fmtVU(rainWeekly, "mm")} />
-          <LabelValue label="Monatlich" value={fmtVU(rainMonthly, "mm")} />
-          <LabelValue label="Jährlich" value={fmtVU(rainYearly, "mm")} />
+          <div className="font-semibold mb-2 text-blue-700">{t('gauges.precipitation')}</div>
+          <LabelValue label={t('gauges.rate')} value={fmtVU(rainRate)} />
+          <LabelValue label={t('gauges.hourly')} value={fmtVU(rainHourly, "mm")} />
+          <LabelValue label={t('gauges.daily')} value={fmtVU(rainDaily, "mm")} />
+          <LabelValue label={t('gauges.weekly')} value={fmtVU(rainWeekly, "mm")} />
+          <LabelValue label={t('gauges.monthly')} value={fmtVU(rainMonthly, "mm")} />
+          <LabelValue label={t('gauges.yearly')} value={fmtVU(rainYearly, "mm")} />
         </div>
       </div>
 
       {channelKeys.length > 0 && (
         <div className="rounded border border-gray-200 p-3">
-          <div className="font-semibold mb-2 text-purple-700">Kanalsensoren</div>
+          <div className="font-semibold mb-2 text-purple-700">{t('gauges.channelSensors')}</div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {channelKeys.map((ck) => {
               const ch = payload[ck] || {};
@@ -303,20 +307,20 @@ export default function Realtime() {
               return (
                 <div key={ck} className="rounded border border-gray-100 p-3">
                   <div className="font-medium mb-1">{channelDisplayName(ck)}</div>
-                  {entries.length === 0 && <div className="text-xs text-gray-500">Keine Daten</div>}
+                  {entries.length === 0 && <div className="text-xs text-gray-500">{t('statuses.noData')}</div>}
                   {entries.map(([name, val]) => {
                     const vu = valueAndUnit(val);
-                    return <LabelValue key={name} label={deLabel(name)} value={fmtVU(vu)} />;
+                    return <LabelValue key={name} label={i18nLabel(name, t)} value={fmtVU(vu)} />;
                   })}
                   
                   {/* Zeige berechnete Werte an, wenn vorhanden */}
                   {temp !== null && humidity !== null && (
                     <>
                       {dewPoint !== null && (
-                        <LabelValue label="Taupunkt" value={`${dewPoint.toFixed(1)} °C`} />
+                        <LabelValue label={t('fields.dewPoint')} value={`${dewPoint.toFixed(1)} °C`} />
                       )}
                       {heatIndex !== null && (
-                        <LabelValue label="Gefühlte Temperatur" value={`${heatIndex.toFixed(1)} °C`} />
+                        <LabelValue label={t('fields.heatIndex')} value={`${heatIndex.toFixed(1)} °C`} />
                       )}
                     </>
                   )}
@@ -329,15 +333,15 @@ export default function Realtime() {
 
       {payload?.battery && typeof payload.battery === "object" && (
         <div className="rounded border border-gray-200 p-3">
-          <div className="font-semibold mb-2 text-stone-700">Batterie</div>
+          <div className="font-semibold mb-2 text-stone-700">{t('realtime.battery')}</div>
           {Object.entries(payload.battery as Record<string, any>).map(([name, val]) => (
-            <LabelValue key={name} label={name} value={fmtBattery(val)} />
+            <LabelValue key={name} label={name} value={fmtBattery(val, t)} />
           ))}
         </div>
       )}
 
       <details className="rounded border border-gray-200 p-3">
-        <summary className="cursor-pointer text-sm text-gray-700">Rohdaten</summary>
+        <summary className="cursor-pointer text-sm text-gray-700">{t('gauges.rawData')}</summary>
         <pre className="mt-2 text-xs overflow-auto max-h-80 bg-gray-50 dark:bg-neutral-900 p-2 rounded">{JSON.stringify(data, null, 2)}</pre>
       </details>
     </div>

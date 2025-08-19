@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState, useId } from "react";
+import { useTranslation } from "react-i18next";
 
 // Lightweight helpers – duplicated to keep this component self-contained
 function tryRead(obj: any, path: string): any {
@@ -460,6 +461,7 @@ function Raindrop({ rate, unit = "mm/hr", size = 84 }: { rate: number | null; un
 
 function CompassWind(props: { dir: number | null; speed: number | null; gust?: number | null; unit?: string }) {
   const { dir, speed, gust, unit = "" } = props;
+  const { t } = useTranslation();
   const size = 200;
   const r = 78;
   const cx = size / 2;
@@ -510,15 +512,16 @@ function CompassWind(props: { dir: number | null; speed: number | null; gust?: n
         </text>
         {/* centered gust text */}
         <text x="50%" y={cy + 18} textAnchor="middle" fontSize={12} fill="#6b7280" style={{ fontVariantNumeric: 'tabular-nums' }}>
-          Böe: {gust == null ? "—" : gust.toFixed(1)}{unit ? ` ${unit}` : ""}
+          {t('gauges.gust')}: {gust == null ? "—" : gust.toFixed(1)}{unit ? ` ${unit}` : ""}
         </text>
       </svg>
-      <div className="mt-1 text-sm text-gray-700 dark:text-gray-300">Wind</div>
+      <div className="mt-1 text-sm text-gray-700 dark:text-gray-300">{t('gauges.wind')}</div>
     </div>
   );
 }
 
 export default function Gauges() {
+  const { t, i18n } = useTranslation();
   const [data, setData] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -533,7 +536,7 @@ export default function Gauges() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const rec = await res.json();
       if (!rec || rec.ok === false) {
-        const msg = rec?.error || "keine Daten";
+        const msg = rec?.error || t('statuses.noData');
         setError(msg);
         return;
       }
@@ -652,21 +655,28 @@ export default function Gauges() {
 
   const timeText = useMemo(() => {
     if (!lastUpdated) return "—";
-    const d = lastUpdated;
-    const dd = String(d.getDate()).padStart(2, "0");
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yyyy = d.getFullYear();
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mi = String(d.getMinutes()).padStart(2, "0");
-    const ss = String(d.getSeconds()).padStart(2, "0");
-    return `${dd}.${mm}.${yyyy} ${hh}:${mi}:${ss}`;
-  }, [lastUpdated]);
+    try {
+      return new Intl.DateTimeFormat(i18n.language || 'de', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      }).format(lastUpdated);
+    } catch {
+      const d = lastUpdated;
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const yyyy = d.getFullYear();
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mi = String(d.getMinutes()).padStart(2, "0");
+      const ss = String(d.getSeconds()).padStart(2, "0");
+      return `${dd}.${mm}.${yyyy} ${hh}:${mi}:${ss}`;
+    }
+  }, [lastUpdated, i18n.language]);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="text-sm text-gray-600 dark:text-gray-400">Letzte Aktualisierung: {timeText}</div>
-        {loading && <div className="text-xs text-amber-600">Laden…</div>}
+        <div className="text-sm text-gray-600 dark:text-gray-400">{t('statuses.lastUpdate')} {timeText}</div>
+        {loading && <div className="text-xs text-amber-600">{t('statuses.loading')}</div>}
         {error && <div className="text-xs text-red-600">{error}</div>}
       </div>
 
@@ -676,7 +686,7 @@ export default function Gauges() {
           <div className="flex items-center gap-3">
             <TempGradientBar min={-20} max={45} step={5} height={200} />
             <DonutGauge
-              label="🌡️ Außen-Temperatur"
+              label={t('gauges.outdoorTemp')}
               value={outdoorT}
               min={-20}
               max={45}
@@ -694,7 +704,7 @@ export default function Gauges() {
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
           <div className="flex items-center gap-3">
             <DonutGauge
-              label="💧 Außen-Feuchte"
+              label={t('gauges.outdoorHumidity')}
               value={outdoorH}
               min={0}
               max={100}
@@ -717,52 +727,52 @@ export default function Gauges() {
       {/* Second row: Pressure, Rain, Solar/UV */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
-          <DonutGauge label="⏺️ Luftdruck (rel.)" value={numVal(pressureRel.value)} min={950} max={1050} unit="hPa" color="#8b5cf6" showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
+          <DonutGauge label={t('gauges.pressureRel')} value={numVal(pressureRel.value)} min={950} max={1050} unit="hPa" color="#8b5cf6" showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
         </div>
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex flex-col gap-2">
-          <div className="text-sm text-sky-700 text-center w-full">Niederschlag</div>
+          <div className="text-sm text-sky-700 text-center w-full">{t('gauges.precipitation')}</div>
           <div className="grid grid-cols-2 gap-3 items-center">
             <div className="flex items-center justify-center">
               <Raindrop rate={numVal(rainRate.value)} unit={rainRate.unit || "mm/hr"} size={84} />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <KPI label="Rate" value={fmtVU(rainRate)} />
-              <KPI label="Stündlich" value={fmtVU(rainHourly, "mm")} />
-              <KPI label="Täglich" value={fmtVU(rainDaily, "mm")} />
-              <KPI label="Wöchentlich" value={fmtVU(rainWeekly, "mm")} />
-              <KPI label="Monatlich" value={fmtVU(rainMonthly, "mm")} />
-              <KPI label="Jährlich" value={fmtVU(rainYearly, "mm")} />
+              <KPI label={t('gauges.rate')} value={fmtVU(rainRate)} />
+              <KPI label={t('gauges.hourly')} value={fmtVU(rainHourly, "mm")} />
+              <KPI label={t('gauges.daily')} value={fmtVU(rainDaily, "mm")} />
+              <KPI label={t('gauges.weekly')} value={fmtVU(rainWeekly, "mm")} />
+              <KPI label={t('gauges.monthly')} value={fmtVU(rainMonthly, "mm")} />
+              <KPI label={t('gauges.yearly')} value={fmtVU(rainYearly, "mm")} />
             </div>
           </div>
         </div>
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 grid grid-cols-2 gap-3 items-center">
-          <DonutGauge label="☀️ Solar" value={numVal(solar.value)} min={0} max={1200} unit="W/m²" color="#f59e0b" size={180} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
-          <DonutGauge label="🌈 UV-Index" value={numVal(uvi.value)} min={0} max={12} unit="" color="#22c55e" size={180} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
+          <DonutGauge label={t('gauges.solar')} value={numVal(solar.value)} min={0} max={1200} unit="W/m²" color="#f59e0b" size={180} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
+          <DonutGauge label={t('gauges.uvIndex')} value={numVal(uvi.value)} min={0} max={12} unit="" color="#22c55e" size={180} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
         </div>
       </div>
 
       {/* Third row: Indoor */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
-          <DonutGauge label="🏠 Innen-Temperatur" value={indoorT} min={10} max={35} unit="°C" color={tempColor(indoorT)} valuePrecision={1} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
+          <DonutGauge label={t('gauges.indoorTemp')} value={indoorT} min={10} max={35} unit="°C" color={tempColor(indoorT)} valuePrecision={1} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
         </div>
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
-          <DonutGauge label="🏠 Innen-Feuchte" value={indoorH} min={0} max={100} unit="%" color={humColor(indoorH)} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
+          <DonutGauge label={t('gauges.indoorHumidity')} value={indoorH} min={0} max={100} unit="%" color={humColor(indoorH)} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
         </div>
       </div>
 
       {/* Channel mini-gauges grid */}
       {channelKeys.length > 0 && (
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3">
-          <div className="text-sm font-semibold text-black dark:text-black mb-3">Kanalsensoren</div>
+          <div className="text-sm font-semibold text-black dark:text-black mb-3">{t('gauges.channelSensors')}</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-3 gap-6">
             {channelKeys.slice(0, 8).map((ck) => {
               const ch = (payload as any)[ck] || {};
-              const t = numVal(ch.temperature);
+              const tempVal = numVal(ch.temperature);
               const h = numVal(ch.humidity);
-              const dp = t != null && h != null ? calculateDewPoint(t, h) : numVal(ch.dew_point);
-              const hi = t != null && h != null ? calculateHeatIndex(t, h) : numVal(ch.feels_like);
-              const colT = tempColor(t);
+              const dp = tempVal != null && h != null ? calculateDewPoint(tempVal, h) : numVal(ch.dew_point);
+              const hi = tempVal != null && h != null ? calculateHeatIndex(tempVal, h) : numVal(ch.feels_like);
+              const colT = tempColor(tempVal);
               return (
                 <div key={ck} className="rounded border border-gray-100 dark:border-neutral-800 p-4" style={{ borderTop: `3px solid ${colT}` }}>
                   <div className="text-sm mb-2 text-black dark:text-black">
@@ -770,8 +780,8 @@ export default function Gauges() {
                     <span className="align-middle">{channelName(ck)}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 items-center">
-                    <DonutGauge label="Temp" value={t} min={-20} max={45} unit="°C" color={colT} valuePrecision={1} size={180} ticks={0} showTicks={false} showMinorTicks={false} showTickLabels={false} fullColorRing={true} ringOpacity={0.6} captionColor="#000" valueColor="#000" unitColor="#000" />
-                    <DonutGauge label="Feuchte" value={h} min={0} max={100} unit="%" color={humColor(h)} size={180} ticks={0} showTicks={false} showMinorTicks={false} showTickLabels={false} fullColorRing={true} ringOpacity={0.6} captionColor="#000" valueColor="#000" unitColor="#000" />
+                    <DonutGauge label={t('gauges.tempShort')} value={tempVal} min={-20} max={45} unit="°C" color={colT} valuePrecision={1} size={180} ticks={0} showTicks={false} showMinorTicks={false} showTickLabels={false} fullColorRing={true} ringOpacity={0.6} captionColor="#000" valueColor="#000" unitColor="#000" />
+                    <DonutGauge label={t('gauges.humidityShort')} value={h} min={0} max={100} unit="%" color={humColor(h)} size={180} ticks={0} showTicks={false} showMinorTicks={false} showTickLabels={false} fullColorRing={true} ringOpacity={0.6} captionColor="#000" valueColor="#000" unitColor="#000" />
                   </div>
                 </div>
               );
@@ -782,7 +792,7 @@ export default function Gauges() {
 
       {/* Raw data toggle for debugging */}
       <details className="rounded border border-gray-200 dark:border-neutral-800 p-3">
-        <summary className="cursor-pointer text-sm text-gray-700">Rohdaten</summary>
+        <summary className="cursor-pointer text-sm text-gray-700">{t('gauges.rawData')}</summary>
         <pre className="mt-2 text-xs overflow-auto max-h-80 bg-gray-50 dark:bg-neutral-900 p-2 rounded">{JSON.stringify(data, null, 2)}</pre>
       </details>
     </div>
