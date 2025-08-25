@@ -59,6 +59,17 @@
     "rainRate": "Regenrate",
     "heatIndex": "Gefühlte Temperatur"
   },
+  "astro": {
+    "title": "Sonne & Mond",
+    "sunrise": "Sonnenaufgang",
+    "sunset": "Sonnenuntergang",
+    "moonrise": "Mondaufgang",
+    "moonset": "Monduntergang",
+    "moonPhase": "Mondphase",
+    "timezone": "Zeitzone",
+    "daylightProgress": "Tageslicht-Verlauf",
+    "moonIllumination": "Mondbeleuchtung"
+  },
   "dashboard": {
     "title": "Wetterstation Dashboard",
     "useGlobalRange": "Ausgewählten Zeitraum verwenden",

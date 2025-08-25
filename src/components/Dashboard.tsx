@@ -215,7 +215,7 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
         <div key={`${chKey}-temperatures`} className="rounded border border-gray-100 p-3">
           <LineChart 
             series={tempSeries} 
-            yLabel={chKey === "outside" ? `${t('fields.outdoorTemperature')} (°C)` : `${t('fields.indoorTemperature')} (°C)`} 
+            yLabel={`${t('fields.temperature')} (°C)`} 
             xLabel={t('dashboard.time')} 
             xTickFormatter={fmt} 
             hoverTimeFormatter={hoverFmt} 
@@ -1334,6 +1334,18 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
                   id: metricDisplayLabel("Taupunkt", t),
                   color: COLORS[1],
                   points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[dewInsideCol]) })),
+                };
+                if (s.points.some(p => Number.isFinite(p.y))) seriesList.push(s);
+              }
+              // Gefühlte Temperatur Innen (bzw. Wärmeindex Innen), falls vorhanden
+              const feltInsideCol = (data.header || []).find(h => h.startsWith("Gefühlte Temperatur Innen"))
+                || (data.header || []).find(h => h.startsWith("Wärmeindex Innen"))
+                || (data.header || []).find(h => h.toLowerCase().includes("innen") && (h.startsWith("Gefühlte Temperatur") || h.startsWith("Wärmeindex")));
+              if (feltInsideCol) {
+                const s: LineSeries = {
+                  id: metricDisplayLabel("Gefühlte Temperatur", t),
+                  color: COLORS[3],
+                  points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[feltInsideCol]) })),
                 };
                 if (s.points.some(p => Number.isFinite(p.y))) seriesList.push(s);
               }

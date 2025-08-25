@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { computeAstro, formatTime } from "@/lib/astro";
 
 import { useTranslation } from "react-i18next";
 
@@ -119,6 +120,8 @@ export default function Realtime() {
   const [loading, setLoading] = useState<boolean>(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [channels, setChannels] = useState<Record<string, { name?: string }>>({});
+  const [deviceInfo, setDeviceInfo] = useState<{ timezone: string | null; latitude: number | null; longitude: number | null } | null>(null);
+  const [astro, setAstro] = useState<ReturnType<typeof computeAstro> | null>(null);
 
   const fetchNow = async () => {
     try {
@@ -159,6 +162,24 @@ export default function Realtime() {
       } catch {}
     })();
   }, []);
+
+  // Load device info (timezone, lat, lon) and compute astronomy
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/device/info", { cache: "no-store" });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json && json.ok) {
+          const info = { timezone: json.timezone || null, latitude: json.latitude ?? null, longitude: json.longitude ?? null };
+          setDeviceInfo(info);
+          if (info.latitude != null && info.longitude != null) {
+            setAstro(computeAstro(info.latitude, info.longitude, new Date(), i18n.language));
+          }
+        }
+      } catch {}
+    })();
+  }, [i18n.language]);
 
   const timeText = useMemo(() => {
     if (!lastUpdated) return "—";
@@ -255,6 +276,21 @@ export default function Realtime() {
           <LabelValue label={t('fields.direction')} value={fmtVU(windDir, "º")} />
           <LabelValue label={t('fields.direction10min')} value={fmtVU(windDir10, "º")} />
           <LabelValue label={t('fields.rainRate')} value={fmtVU(rainRate)} />
+        </div>
+      </div>
+
+      {/* Sun & Moon block */}
+      <div className="rounded border border-gray-200 p-3">
+        <div className="font-semibold mb-2 text-amber-700">{t('astro.title')}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <LabelValue label={t('astro.sunrise')} value={formatTime(astro?.sunrise ?? null, deviceInfo?.timezone ?? undefined, i18n.language)} />
+          <LabelValue label={t('astro.sunset')} value={formatTime(astro?.sunset ?? null, deviceInfo?.timezone ?? undefined, i18n.language)} />
+          <LabelValue label={t('astro.moonrise')} value={formatTime(astro?.moonrise ?? null, deviceInfo?.timezone ?? undefined, i18n.language)} />
+          <LabelValue label={t('astro.moonset')} value={formatTime(astro?.moonset ?? null, deviceInfo?.timezone ?? undefined, i18n.language)} />
+          <LabelValue label={t('astro.moonPhase')} value={astro ? `${astro.phaseName} (${Math.round((astro.illumination ?? 0) * 100)}%)` : "—"} />
+          {deviceInfo?.timezone && (
+            <LabelValue label={t('astro.timezone')} value={deviceInfo.timezone} />
+          )}
         </div>
       </div>
 

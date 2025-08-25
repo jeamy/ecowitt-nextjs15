@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState, useId } from "react";
 import { useTranslation } from "react-i18next";
+import { computeAstro, formatTime } from "@/lib/astro";
 
 // Lightweight helpers – duplicated to keep this component self-contained
 function tryRead(obj: any, path: string): any {
@@ -527,6 +528,8 @@ export default function Gauges() {
   const [loading, setLoading] = useState<boolean>(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [channelsCfg, setChannelsCfg] = useState<Record<string, { name?: string }>>({});
+  const [deviceInfo, setDeviceInfo] = useState<{ timezone: string | null; latitude: number | null; longitude: number | null } | null>(null);
+  const [astro, setAstro] = useState<ReturnType<typeof computeAstro> | null>(null);
 
   const fetchNow = async () => {
     try {
@@ -568,6 +571,24 @@ export default function Gauges() {
     })();
   }, []);
 
+  // Load device info and compute astronomy
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/device/info", { cache: "no-store" });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json && json.ok) {
+          const info = { timezone: json.timezone || null, latitude: json.latitude ?? null, longitude: json.longitude ?? null };
+          setDeviceInfo(info);
+          if (info.latitude != null && info.longitude != null) {
+            setAstro(computeAstro(info.latitude, info.longitude, new Date(), i18n.language));
+          }
+        }
+      } catch {}
+    })();
+  }, [i18n.language]);
+
   const payload = data as any;
 
   // Indoor / Outdoor basics
@@ -598,6 +619,18 @@ export default function Gauges() {
   const rainYearly = valueAndUnit(tryRead(payload, "rainfall.yearly"));
   const solar = valueAndUnit(tryRead(payload, "solar_and_uvi.solar"));
   const uvi = valueAndUnit(tryRead(payload, "solar_and_uvi.uvi"));
+
+  // Astronomy derived visuals
+  const tz = deviceInfo?.timezone ?? undefined;
+  const sunrise = astro?.sunrise ?? null;
+  const sunset = astro?.sunset ?? null;
+  const now = new Date();
+  let daylightPct: number | null = null;
+  if (sunrise && sunset && sunset > sunrise) {
+    const p = (now.getTime() - sunrise.getTime()) / (sunset.getTime() - sunrise.getTime());
+    daylightPct = Math.max(0, Math.min(1, p)) * 100;
+  }
+  const moonIllumPct = astro?.illumination != null ? astro.illumination * 100 : null;
 
   // Channel sensors detection
   const channelKeys = useMemo(() => {
@@ -748,6 +781,28 @@ export default function Gauges() {
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 grid grid-cols-2 gap-3 items-center">
           <DonutGauge label={t('gauges.solar')} value={numVal(solar.value)} min={0} max={1200} unit="W/m²" color="#f59e0b" size={180} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
           <DonutGauge label={t('gauges.uvIndex')} value={numVal(uvi.value)} min={0} max={12} unit="" color="#22c55e" size={180} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
+        </div>
+      </div>
+
+      {/* Sun & Moon gauges */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex flex-col items-center justify-center">
+          <DonutGauge label={t('astro.daylightProgress')} value={daylightPct != null ? Math.round(daylightPct) : null} min={0} max={100} unit="%" color="#f59e0b" size={200} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
+          <div className="mt-2 text-sm text-gray-600 dark:text-gray-300 text-center">
+            {t('astro.sunrise')}: {formatTime(sunrise, tz, i18n.language)} — {t('astro.sunset')}: {formatTime(sunset, tz, i18n.language)}
+          </div>
+          {deviceInfo?.timezone && (
+            <div className="text-xs text-gray-500 mt-1">{t('astro.timezone')}: {deviceInfo.timezone}</div>
+          )}
+        </div>
+        <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex flex-col items-center justify-center">
+          <DonutGauge label={t('astro.moonIllumination')} value={moonIllumPct != null ? Math.round(moonIllumPct) : null} min={0} max={100} unit="%" color="#60a5fa" size={200} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
+          <div className="mt-2 text-sm text-gray-600 dark:text-gray-300 text-center">
+            {t('astro.moonPhase')}: {astro?.phaseName || "—"}
+          </div>
+          <div className="text-sm text-gray-600 dark:text-gray-300 text-center">
+            {t('astro.moonrise')}: {formatTime(astro?.moonrise ?? null, tz, i18n.language)} — {t('astro.moonset')}: {formatTime(astro?.moonset ?? null, tz, i18n.language)}
+          </div>
         </div>
       </div>
 

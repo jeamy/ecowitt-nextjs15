@@ -59,6 +59,17 @@
     "rainRate": "Rain Rate",
     "heatIndex": "Heat Index"
   },
+  "astro": {
+    "title": "Sun & Moon",
+    "sunrise": "Sunrise",
+    "sunset": "Sunset",
+    "moonrise": "Moonrise",
+    "moonset": "Moonset",
+    "moonPhase": "Moon phase",
+    "timezone": "Timezone",
+    "daylightProgress": "Daylight Progress",
+    "moonIllumination": "Moon Illumination"
+  },
   "dashboard": {
     "title": "Weather Station Dashboard",
     "useGlobalRange": "Use selected time range",
