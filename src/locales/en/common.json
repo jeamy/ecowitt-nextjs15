@@ -67,6 +67,8 @@
     "moonset": "Moonset",
     "moonPhase": "Moon phase",
     "timezone": "Timezone",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
     "daylightProgress": "Daylight Progress",
     "moonIllumination": "Moon Illumination"
   },

@@ -625,12 +625,25 @@ export default function Gauges() {
   const sunrise = astro?.sunrise ?? null;
   const sunset = astro?.sunset ?? null;
   const now = new Date();
-  let daylightPct: number | null = null;
-  if (sunrise && sunset && sunset > sunrise) {
-    const p = (now.getTime() - sunrise.getTime()) / (sunset.getTime() - sunrise.getTime());
-    daylightPct = Math.max(0, Math.min(1, p)) * 100;
-  }
+  const sunUp = !!(sunrise && sunset && now >= sunrise && now < sunset);
   const moonIllumPct = astro?.illumination != null ? astro.illumination * 100 : null;
+
+  const moonEmoji = (phase: number | undefined): string => {
+    if (phase == null) return "🌙";
+    // Map 0..1 to 8-phase emoji set
+    const idx = Math.round(((phase % 1 + 1) % 1) * 7);
+    const emojis = [
+      "🌑", // New
+      "🌒", // Waxing Crescent
+      "🌓", // First Quarter
+      "🌔", // Waxing Gibbous
+      "🌕", // Full
+      "🌖", // Waning Gibbous
+      "🌗", // Last Quarter
+      "🌘"  // Waning Crescent
+    ];
+    return emojis[idx] ?? "🌙";
+  };
 
   // Channel sensors detection
   const channelKeys = useMemo(() => {
@@ -784,24 +797,37 @@ export default function Gauges() {
         </div>
       </div>
 
-      {/* Sun & Moon gauges */}
+      {/* Sun & Moon (icons, no rings) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Sun */}
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex flex-col items-center justify-center">
-          <DonutGauge label={t('astro.daylightProgress')} value={daylightPct != null ? Math.round(daylightPct) : null} min={0} max={100} unit="%" color="#f59e0b" size={200} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
+          <div className="flex items-center justify-center" aria-label={sunUp ? t('astro.sunrise') : t('astro.sunset')}>
+            <div className={`w-24 h-24 rounded-full ${sunUp ? 'bg-yellow-400' : 'bg-gray-400'} shadow-inner`} />
+          </div>
           <div className="mt-2 text-sm text-gray-600 dark:text-gray-300 text-center">
             {t('astro.sunrise')}: {formatTime(sunrise, tz, i18n.language)} — {t('astro.sunset')}: {formatTime(sunset, tz, i18n.language)}
           </div>
-          {deviceInfo?.timezone && (
-            <div className="text-xs text-gray-500 mt-1">{t('astro.timezone')}: {deviceInfo.timezone}</div>
-          )}
+          <div className="text-xs text-gray-500 mt-1 space-y-0.5 text-center">
+            {deviceInfo?.timezone && (<div>{t('astro.timezone')}: {deviceInfo.timezone}</div>)}
+            {deviceInfo?.latitude != null && (<div>{t('astro.latitude')}: {deviceInfo.latitude.toFixed(4)}°</div>)}
+            {deviceInfo?.longitude != null && (<div>{t('astro.longitude')}: {deviceInfo.longitude.toFixed(4)}°</div>)}
+          </div>
         </div>
+        {/* Moon */}
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex flex-col items-center justify-center">
-          <DonutGauge label={t('astro.moonIllumination')} value={moonIllumPct != null ? Math.round(moonIllumPct) : null} min={0} max={100} unit="%" color="#60a5fa" size={200} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
+          <div className="text-6xl select-none" aria-label={t('astro.moonPhase')}>
+            {moonEmoji(astro?.phase)}
+          </div>
           <div className="mt-2 text-sm text-gray-600 dark:text-gray-300 text-center">
-            {t('astro.moonPhase')}: {astro?.phaseName || "—"}
+            {t('astro.moonPhase')}: {astro?.phaseName || "—"} {moonIllumPct != null ? `(${Math.round(moonIllumPct)}%)` : ''}
           </div>
           <div className="text-sm text-gray-600 dark:text-gray-300 text-center">
             {t('astro.moonrise')}: {formatTime(astro?.moonrise ?? null, tz, i18n.language)} — {t('astro.moonset')}: {formatTime(astro?.moonset ?? null, tz, i18n.language)}
+          </div>
+          <div className="text-xs text-gray-500 mt-1 space-y-0.5 text-center">
+            {deviceInfo?.timezone && (<div>{t('astro.timezone')}: {deviceInfo.timezone}</div>)}
+            {deviceInfo?.latitude != null && (<div>{t('astro.latitude')}: {deviceInfo.latitude.toFixed(4)}°</div>)}
+            {deviceInfo?.longitude != null && (<div>{t('astro.longitude')}: {deviceInfo.longitude.toFixed(4)}°</div>)}
           </div>
         </div>
       </div>

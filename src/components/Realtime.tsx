@@ -291,6 +291,12 @@ export default function Realtime() {
           {deviceInfo?.timezone && (
             <LabelValue label={t('astro.timezone')} value={deviceInfo.timezone} />
           )}
+          {deviceInfo?.latitude != null && (
+            <LabelValue label={t('astro.latitude')} value={`${deviceInfo.latitude.toFixed(4)}°`} />
+          )}
+          {deviceInfo?.longitude != null && (
+            <LabelValue label={t('astro.longitude')} value={`${deviceInfo.longitude.toFixed(4)}°`} />
+          )}
         </div>
       </div>
 

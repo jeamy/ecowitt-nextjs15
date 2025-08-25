@@ -67,6 +67,8 @@
     "moonset": "Monduntergang",
     "moonPhase": "Mondphase",
     "timezone": "Zeitzone",
+    "latitude": "Breite",
+    "longitude": "Länge",
     "daylightProgress": "Tageslicht-Verlauf",
     "moonIllumination": "Mondbeleuchtung"
   },
