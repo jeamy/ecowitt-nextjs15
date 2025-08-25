@@ -76,7 +76,9 @@
     "nauticalDawn": "Nautical dawn",
     "nauticalDusk": "Nautical dusk",
     "astronomicalDawn": "Astronomical dawn",
-    "astronomicalDusk": "Astronomical dusk"
+    "astronomicalDusk": "Astronomical dusk",
+    "sun": "Sun",
+    "moon": "Moon"
   },
   "dashboard": {
     "title": "Weather Station Dashboard",

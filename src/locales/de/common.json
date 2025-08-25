@@ -76,7 +76,9 @@
     "nauticalDawn": "Nautische Dämmerung",
     "nauticalDusk": "Nautische Abenddämmerung",
     "astronomicalDawn": "Astronomische Dämmerung",
-    "astronomicalDusk": "Astronomische Abenddämmerung"
+    "astronomicalDusk": "Astronomische Abenddämmerung",
+    "sun": "Sonne",
+    "moon": "Mond"
   },
   "dashboard": {
     "title": "Wetterstation Dashboard",

@@ -311,36 +311,38 @@ export default function Realtime() {
         </div>
       </div>
 
-      {/* Sun & Moon (icons, no rings) – moved below Solar/UV + Precipitation */}
+      {/* Sun & Moon (text only) – moved below Solar/UV + Precipitation */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* Sun (text only) */}
-        <div className="rounded border border-gray-200 p-3 flex flex-col items-center justify-center">
-          <div className="mt-2 text-sm text-gray-600 dark:text-gray-300 text-center">
-            {t('astro.sunrise')}: {formatTime(sunrise, tz, i18n.language)} — {t('astro.sunset')}: {formatTime(sunset, tz, i18n.language)}
+        <div className="rounded border border-gray-200 p-3">
+          <div className="font-semibold mb-2 text-amber-700">{t('astro.sun')}</div>
+          <div className="text-sm text-gray-600 dark:text-gray-300 text-center">
+            {t('astro.sunrise')} <span className="font-bold">{formatTime(sunrise, tz, i18n.language)}</span> — <span className="font-bold">{formatTime(sunset, tz, i18n.language)}</span> {t('astro.sunset')}
           </div>
           <div className="mt-1 text-xs text-gray-600 dark:text-gray-300 text-center space-y-0.5">
-            <div>{t('astro.civilDawn')}: {formatTime(astro?.civilDawn ?? null, tz, i18n.language)} — {t('astro.civilDusk')}: {formatTime(astro?.civilDusk ?? null, tz, i18n.language)}</div>
-            <div>{t('astro.nauticalDawn')}: {formatTime(astro?.nauticalDawn ?? null, tz, i18n.language)} — {t('astro.nauticalDusk')}: {formatTime(astro?.nauticalDusk ?? null, tz, i18n.language)}</div>
-            <div>{t('astro.astronomicalDawn')}: {formatTime(astro?.astronomicalDawn ?? null, tz, i18n.language)} — {t('astro.astronomicalDusk')}: {formatTime(astro?.astronomicalDusk ?? null, tz, i18n.language)}</div>
+            <div>{t('astro.civilDawn')} <span className="font-bold">{formatTime(astro?.civilDawn ?? null, tz, i18n.language)}</span> — <span className="font-bold">{formatTime(astro?.civilDusk ?? null, tz, i18n.language)}</span> {t('astro.civilDusk')}</div>
+            <div>{t('astro.nauticalDawn')} <span className="font-bold">{formatTime(astro?.nauticalDawn ?? null, tz, i18n.language)}</span> — <span className="font-bold">{formatTime(astro?.nauticalDusk ?? null, tz, i18n.language)}</span> {t('astro.nauticalDusk')}</div>
+            <div>{t('astro.astronomicalDawn')} <span className="font-bold">{formatTime(astro?.astronomicalDawn ?? null, tz, i18n.language)}</span> — <span className="font-bold">{formatTime(astro?.astronomicalDusk ?? null, tz, i18n.language)}</span> {t('astro.astronomicalDusk')}</div>
           </div>
-          <div className="text-xs text-gray-500 mt-1 space-y-0.5 text-center">
-            {deviceInfo?.timezone && (<div>{t('astro.timezone')}: {deviceInfo.timezone}</div>)}
-            {deviceInfo?.latitude != null && (<div>{t('astro.latitude')}: {deviceInfo.latitude.toFixed(4)}°</div>)}
-            {deviceInfo?.longitude != null && (<div>{t('astro.longitude')}: {deviceInfo.longitude.toFixed(4)}°</div>)}
+          <div className="text-xs text-gray-500 mt-1 text-center space-y-0.5">
+            {deviceInfo?.timezone && (<div>{t('astro.timezone')}: <span className="font-bold">{deviceInfo.timezone}</span></div>)}
+            {deviceInfo?.latitude != null && (<div>{t('astro.latitude')}: <span className="font-bold">{deviceInfo.latitude.toFixed(4)}°</span></div>)}
+            {deviceInfo?.longitude != null && (<div>{t('astro.longitude')}: <span className="font-bold">{deviceInfo.longitude.toFixed(4)}°</span></div>)}
           </div>
         </div>
         {/* Moon (text only) */}
-        <div className="rounded border border-gray-200 p-3 flex flex-col items-center justify-center">
-          <div className="mt-2 text-sm text-gray-600 dark:text-gray-300 text-center">
-            {t('astro.moonPhase')}: {astro?.phaseName || "—"} {moonIllumPct != null ? `(${Math.round(moonIllumPct)}%)` : ''}
+        <div className="rounded border border-gray-200 p-3">
+          <div className="font-semibold mb-2 text-stone-700">{t('astro.moon')}</div>
+          <div className="text-sm text-gray-600 dark:text-gray-300 text-center">
+            {t('astro.moonPhase')}: <span className="font-bold">{astro?.phaseName || "—"}{moonIllumPct != null ? ` (${Math.round(moonIllumPct)}%)` : ''}</span>
           </div>
           <div className="text-sm text-gray-600 dark:text-gray-300 text-center">
-            {t('astro.moonrise')}: {formatTime(astro?.moonrise ?? null, tz, i18n.language)} — {t('astro.moonset')}: {formatTime(astro?.moonset ?? null, tz, i18n.language)}
+            {t('astro.moonrise')} <span className="font-bold">{formatTime(astro?.moonrise ?? null, tz, i18n.language)}</span> — <span className="font-bold">{formatTime(astro?.moonset ?? null, tz, i18n.language)}</span> {t('astro.moonset')}
           </div>
-          <div className="text-xs text-gray-500 mt-1 space-y-0.5 text-center">
-            {deviceInfo?.timezone && (<div>{t('astro.timezone')}: {deviceInfo.timezone}</div>)}
-            {deviceInfo?.latitude != null && (<div>{t('astro.latitude')}: {deviceInfo.latitude.toFixed(4)}°</div>)}
-            {deviceInfo?.longitude != null && (<div>{t('astro.longitude')}: {deviceInfo.longitude.toFixed(4)}°</div>)}
+          <div className="text-xs text-gray-500 mt-1 text-center space-y-0.5">
+            {deviceInfo?.timezone && (<div>{t('astro.timezone')}: <span className="font-bold">{deviceInfo.timezone}</span></div>)}
+            {deviceInfo?.latitude != null && (<div>{t('astro.latitude')}: <span className="font-bold">{deviceInfo.latitude.toFixed(4)}°</span></div>)}
+            {deviceInfo?.longitude != null && (<div>{t('astro.longitude')}: <span className="font-bold">{deviceInfo.longitude.toFixed(4)}°</span></div>)}
           </div>
         </div>
       </div>

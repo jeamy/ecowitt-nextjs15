@@ -797,6 +797,18 @@ export default function Gauges() {
         </div>
       </div>
 
+      {/* Sun & Moon moved below Indoor */}
+
+      {/* Third row: Indoor */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
+          <DonutGauge label={t('gauges.indoorTemp')} value={indoorT} min={10} max={35} unit="°C" color={tempColor(indoorT)} valuePrecision={1} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
+        </div>
+        <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
+          <DonutGauge label={t('gauges.indoorHumidity')} value={indoorH} min={0} max={100} unit="%" color={humColor(indoorH)} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
+        </div>
+      </div>
+
       {/* Sun & Moon (icons, no rings) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Sun */}
@@ -816,12 +828,12 @@ export default function Gauges() {
             </svg>
           </div>
           <div className="mt-2 text-sm text-gray-600 dark:text-gray-300 text-center">
-            {t('astro.sunrise')}: {formatTime(sunrise, tz, i18n.language)} — {t('astro.sunset')}: {formatTime(sunset, tz, i18n.language)}
+            {t('astro.sunrise')} {formatTime(sunrise, tz, i18n.language)} — {formatTime(sunset, tz, i18n.language)} {t('astro.sunset')}
           </div>
           <div className="mt-1 text-xs text-gray-600 dark:text-gray-300 text-center space-y-0.5">
-            <div>{t('astro.civilDawn')}: {formatTime(astro?.civilDawn ?? null, tz, i18n.language)} — {t('astro.civilDusk')}: {formatTime(astro?.civilDusk ?? null, tz, i18n.language)}</div>
-            <div>{t('astro.nauticalDawn')}: {formatTime(astro?.nauticalDawn ?? null, tz, i18n.language)} — {t('astro.nauticalDusk')}: {formatTime(astro?.nauticalDusk ?? null, tz, i18n.language)}</div>
-            <div>{t('astro.astronomicalDawn')}: {formatTime(astro?.astronomicalDawn ?? null, tz, i18n.language)} — {t('astro.astronomicalDusk')}: {formatTime(astro?.astronomicalDusk ?? null, tz, i18n.language)}</div>
+            <div>{t('astro.civilDawn')} {formatTime(astro?.civilDawn ?? null, tz, i18n.language)} — {formatTime(astro?.civilDusk ?? null, tz, i18n.language)} {t('astro.civilDusk')}</div>
+            <div>{t('astro.nauticalDawn')} {formatTime(astro?.nauticalDawn ?? null, tz, i18n.language)} — {formatTime(astro?.nauticalDusk ?? null, tz, i18n.language)} {t('astro.nauticalDusk')}</div>
+            <div>{t('astro.astronomicalDawn')} {formatTime(astro?.astronomicalDawn ?? null, tz, i18n.language)} — {formatTime(astro?.astronomicalDusk ?? null, tz, i18n.language)} {t('astro.astronomicalDusk')}</div>
           </div>
           <div className="text-xs text-gray-500 mt-1 space-y-0.5 text-center">
             {deviceInfo?.timezone && (<div>{t('astro.timezone')}: {deviceInfo.timezone}</div>)}
@@ -838,7 +850,7 @@ export default function Gauges() {
             {t('astro.moonPhase')}: {astro?.phaseName || "—"} {moonIllumPct != null ? `(${Math.round(moonIllumPct)}%)` : ''}
           </div>
           <div className="text-sm text-gray-600 dark:text-gray-300 text-center">
-            {t('astro.moonrise')}: {formatTime(astro?.moonrise ?? null, tz, i18n.language)} — {t('astro.moonset')}: {formatTime(astro?.moonset ?? null, tz, i18n.language)}
+            {t('astro.moonrise')} {formatTime(astro?.moonrise ?? null, tz, i18n.language)} — {formatTime(astro?.moonset ?? null, tz, i18n.language)} {t('astro.moonset')}
           </div>
           <div className="text-xs text-gray-500 mt-1 space-y-0.5 text-center">
             {deviceInfo?.timezone && (<div>{t('astro.timezone')}: {deviceInfo.timezone}</div>)}
@@ -847,17 +859,6 @@ export default function Gauges() {
           </div>
         </div>
       </div>
-
-      {/* Third row: Indoor */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
-          <DonutGauge label={t('gauges.indoorTemp')} value={indoorT} min={10} max={35} unit="°C" color={tempColor(indoorT)} valuePrecision={1} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
-        </div>
-        <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
-          <DonutGauge label={t('gauges.indoorHumidity')} value={indoorH} min={0} max={100} unit="%" color={humColor(indoorH)} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
-        </div>
-      </div>
-
       {/* Channel mini-gauges grid */}
       {channelKeys.length > 0 && (
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3">
