@@ -48,6 +48,8 @@
   },
   "fields": {
     "temperature": "Temperature",
+    "outdoorTemperature": "Outdoor temperature",
+    "indoorTemperature": "Indoor temperature",
     "humidity": "Humidity",
     "feelsLike": "Feels Like",
     "appTemp": "App Temp",

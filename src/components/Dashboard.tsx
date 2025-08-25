@@ -74,6 +74,17 @@ function renderChannelCardCharts(
           let statsTimes = times;
           let tempColResolved = tempCol;
           let feltColResolved = feltCol;
+          // Durchschnitt aus Chart-Daten (nicht Minutendaten)
+          const avgOfCol = (rs: typeof rows, col?: string | null) => {
+            if (!col) return NaN;
+            let sum = 0, count = 0;
+            for (const r of rs) {
+              const v = numOrNaN(r[col]);
+              if (Number.isFinite(v)) { sum += v; count++; }
+            }
+            return count ? (sum / count) : NaN;
+          };
+          const avgTemp = tempCol ? avgOfCol(rows, tempCol) : NaN;
           // Minutenbasis verwenden, wenn vorhanden
           if (minuteDataAll && minuteDataAll.rows && minuteDataAll.rows.length > 0) {
             const mHeader = minuteDataAll.header || [];
@@ -90,7 +101,7 @@ function renderChannelCardCharts(
           return (
             <div className="mt-2 text-sm border-t border-gray-100 pt-2">
               {statsTemp && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
                   <div className="bg-amber-50 p-2 rounded">
                     <div className="font-medium text-amber-700">{t('dashboard.daysOver30C')}</div>
                     <div className="text-lg">{statsTemp.daysOver30} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsTemp.totalPeriodDays}</span></div>
@@ -108,6 +119,10 @@ function renderChannelCardCharts(
                     <div className="font-medium text-indigo-700">{t('dashboard.lowestTemperature')}</div>
                     <div className="text-lg">{Number.isFinite(statsTemp.minTemp) ? `${statsTemp.minTemp.toFixed(1)} °C` : "—"}</div>
                     {statsTemp.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsTemp.minTime, locale)}</div>)}
+                  </div>
+                  <div className="bg-teal-50 p-2 rounded">
+                    <div className="font-medium text-teal-700">{t('dashboard.average')}</div>
+                    <div className="text-lg">{Number.isFinite(avgTemp) ? `${avgTemp.toFixed(1)} °C` : "—"}</div>
                   </div>
                 </div>
               )}
@@ -200,7 +215,7 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
         <div key={`${chKey}-temperatures`} className="rounded border border-gray-100 p-3">
           <LineChart 
             series={tempSeries} 
-            yLabel={`${t('fields.temperature')} (°C)`} 
+            yLabel={chKey === "outside" ? `${t('fields.outdoorTemperature')} (°C)` : `${t('fields.indoorTemperature')} (°C)`} 
             xLabel={t('dashboard.time')} 
             xTickFormatter={fmt} 
             hoverTimeFormatter={hoverFmt} 
@@ -214,6 +229,17 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
             let statsTimes = times;
             let tempColResolved = tempCol;
             let feltColResolved = feltCol;
+            // Durchschnitt aus Chart-Daten (nicht Minutendaten)
+            const avgOfCol = (rs: typeof rows, col?: string | null) => {
+              if (!col) return NaN;
+              let sum = 0, count = 0;
+              for (const r of rs) {
+                const v = numOrNaN(r[col]);
+                if (Number.isFinite(v)) { sum += v; count++; }
+              }
+              return count ? (sum / count) : NaN;
+            };
+            const avgTemp = tempCol ? avgOfCol(rows, tempCol) : NaN;
             if (minuteDataAll && minuteDataAll.rows && minuteDataAll.rows.length > 0) {
               const mHeader = minuteDataAll.header || [];
               tempColResolved = mHeader.find(h => h === tempCol) || tempCol;
@@ -226,7 +252,7 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
             return (
               <div className="mt-2 text-sm border-t border-gray-100 pt-2">
                 {statsTemp && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
                     <div className="bg-amber-50 p-2 rounded">
                       <div className="font-medium text-amber-700">{t('dashboard.daysOver30C')}</div>
                       <div className="text-lg">{statsTemp.daysOver30} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsTemp.totalPeriodDays}</span></div>
@@ -244,6 +270,10 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
                       <div className="font-medium text-indigo-700">{t('dashboard.lowestTemperature')}</div>
                       <div className="text-lg">{Number.isFinite(statsTemp.minTemp) ? `${statsTemp.minTemp.toFixed(1)} °C` : "—"}</div>
                       {statsTemp.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsTemp.minTime, locale)}</div>)}
+                    </div>
+                    <div className="bg-teal-50 p-2 rounded">
+                      <div className="font-medium text-teal-700">{t('dashboard.average')}</div>
+                      <div className="text-lg">{Number.isFinite(avgTemp) ? `${avgTemp.toFixed(1)} °C` : "—"}</div>
                     </div>
                   </div>
                 )}
@@ -1136,86 +1166,220 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
   
   return (
     <>
-      {/* Temperaturdiagramm */}
-      {tempSeries.length > 0 && (
-        <div className="rounded border border-gray-200 p-3">
-          <LineChart 
-            series={tempSeries} 
-            yLabel={`${t('fields.temperature')} (°C)`} 
-            xLabel={t('dashboard.time')} 
-            xTickFormatter={fmt} 
-            hoverTimeFormatter={hoverFmt} 
-            showLegend={true} 
-            yUnit="°C" 
-          />
-          {/* Temperaturstatistik
-              Nur echte Temperatur ("Temperatur Aussen") für Tage >30 / <0, sowie globale Min/Max.
-              Zusätzlich separate Min/Max für "Gefühlte Temperatur".
-            */}
-          {(() => {
-            // Verwende Minutendaten für die Statistikberechnung, falls verfügbar
-            let statsRows = rows;
-            let statsTimes = times;
-            // Aus den Headern nur die echte Temperatur nehmen
-            let realTempCols: string[] = (data.header || []).filter(h => h.startsWith("Temperatur Aussen"));
-            let feltCols: string[] = (data.header || []).filter(h => h.startsWith("Gefühlte Temperatur"));
-            const baseHeader = (data.header || []);
-
-            if (minuteData && minuteData.rows && minuteData.rows.length > 0) {
-              // Minutendaten verwenden
-              statsRows = minuteData.rows;
-              statsTimes = statsRows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
-              const mHeader = minuteData.header || [];
-              realTempCols = realTempCols.map(col => mHeader.find(h => h === col) || col).filter(Boolean);
-              feltCols = feltCols.map(col => mHeader.find(h => h === col) || col).filter(Boolean);
-            }
-
-            const statsTemp = realTempCols.length ? calculateTemperatureStats(statsRows, statsTimes, realTempCols) : null;
-            const statsFelt = feltCols.length ? calculateTemperatureStats(statsRows, statsTimes, feltCols) : null;
-            if (!statsTemp && !statsFelt) return null;
-            return (
-              <div className="mt-2 text-sm border-t border-gray-100 pt-2">
-                {statsTemp && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
-                    <div className="bg-amber-50 p-2 rounded">
-                      <div className="font-medium text-amber-700">{t('dashboard.daysOver30C')}</div>
-                      <div className="text-lg">{statsTemp.daysOver30} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsTemp.totalPeriodDays}</span></div>
-                    </div>
-                    <div className="bg-blue-50 p-2 rounded">
-                      <div className="font-medium text-blue-700">{t('dashboard.daysUnder0C')}</div>
-                      <div className="text-lg">{statsTemp.daysUnder0} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsTemp.totalPeriodDays}</span></div>
-                    </div>
-                    <div className="bg-rose-50 p-2 rounded">
-                      <div className="font-medium text-rose-700">{t('dashboard.highestTemperature')}</div>
-                      <div className="text-lg">{Number.isFinite(statsTemp.maxTemp) ? `${statsTemp.maxTemp.toFixed(1)} °C` : "—"}</div>
-                      {statsTemp.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsTemp.maxTime, locale)}</div>)}
-                    </div>
-                    <div className="bg-indigo-50 p-2 rounded">
-                      <div className="font-medium text-indigo-700">{t('dashboard.lowestTemperature')}</div>
-                      <div className="text-lg">{Number.isFinite(statsTemp.minTemp) ? `${statsTemp.minTemp.toFixed(1)} °C` : "—"}</div>
-                      {statsTemp.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsTemp.minTime, locale)}</div>)}
-                    </div>
+      {/* Außentemperatur */}
+      {(() => {
+        const outsideCol = (data.header || []).find(h => h.startsWith("Temperatur Aussen"));
+        if (!outsideCol) return null;
+        const series: LineSeries = {
+          id: outsideCol,
+          color: COLORS[0],
+          points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[outsideCol]) })),
+        };
+        if (!series.points.some((p) => Number.isFinite(p.y))) return null;
+        // Stats & avg
+        let statsRows = rows;
+        let statsTimes = times;
+        let resolvedCol = outsideCol;
+        const avgOfCol = (rs: typeof rows, col?: string | null) => {
+          if (!col) return NaN;
+          let sum = 0, count = 0;
+          for (const r of rs) {
+            const v = numOrNaN(r[col]);
+            if (Number.isFinite(v)) { sum += v; count++; }
+          }
+          return count ? (sum / count) : NaN;
+        };
+        const avgTempOutside = avgOfCol(rows, outsideCol);
+        if (minuteData && minuteData.rows && minuteData.rows.length > 0) {
+          const mHeader = minuteData.header || [];
+          resolvedCol = mHeader.find(h => h === outsideCol) || outsideCol;
+          statsRows = minuteData.rows;
+          statsTimes = statsRows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
+        }
+        const statsOutside = calculateTemperatureStats(statsRows, statsTimes, [resolvedCol]);
+        // Feels like (only with outside)
+        let statsFelt: ReturnType<typeof calculateTemperatureStats> | null = null;
+        const feltBase = (data.header || []).find(h => h.startsWith("Gefühlte Temperatur"));
+        if (feltBase) {
+          let feltCol = feltBase;
+          if (minuteData && minuteData.rows && minuteData.rows.length > 0) {
+            const mHeader = minuteData.header || [];
+            feltCol = mHeader.find(h => h === feltBase) || feltBase;
+          }
+          statsFelt = calculateTemperatureStats(statsRows, statsTimes, [feltCol]);
+        }
+        return (
+          <div className="rounded border border-gray-200 p-3">
+            {(() => {
+              const seriesList: LineSeries[] = [series];
+              // Taupunkt Außen
+              const dewOutsideCol = (data.header || []).find(h => h.startsWith("Taupunkt Aussen")) 
+                || (data.header || []).find(h => h.startsWith("Taupunkt") && !h.toLowerCase().includes("innen"));
+              if (dewOutsideCol) {
+                const s: LineSeries = {
+                  id: metricDisplayLabel("Taupunkt", t),
+                  color: COLORS[1],
+                  points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[dewOutsideCol]) })),
+                };
+                if (s.points.some(p => Number.isFinite(p.y))) seriesList.push(s);
+              }
+              // Gefühlte Temperatur (nur außen)
+              const feltBase2 = (data.header || []).find(h => h.startsWith("Gefühlte Temperatur"));
+              if (feltBase2) {
+                const s: LineSeries = {
+                  id: metricDisplayLabel("Gefühlte Temperatur", t),
+                  color: COLORS[2],
+                  points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[feltBase2]) })),
+                };
+                if (s.points.some(p => Number.isFinite(p.y))) seriesList.push(s);
+              }
+              return (
+                <LineChart 
+                  series={seriesList} 
+                  yLabel={`${t('fields.outdoorTemperature')} (°C)`}
+                  xLabel={t('dashboard.time')} 
+                  xTickFormatter={fmt} 
+                  hoverTimeFormatter={hoverFmt} 
+                  showLegend={true} 
+                  yUnit="°C" 
+                />
+              );
+            })()}
+            <div className="mt-2 text-sm border-t border-gray-100 pt-2">
+              {statsOutside && (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
+                  <div className="bg-amber-50 p-2 rounded">
+                    <div className="font-medium text-amber-700">{t('dashboard.daysOver30C')}</div>
+                    <div className="text-lg">{statsOutside.daysOver30} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsOutside.totalPeriodDays}</span></div>
                   </div>
-                )}
-                {statsFelt && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-orange-50 p-2 rounded">
-                      <div className="font-medium text-orange-700">{t('dashboard.feelsLikeMax')}</div>
-                      <div className="text-lg">{Number.isFinite(statsFelt.maxTemp) ? `${statsFelt.maxTemp.toFixed(1)} °C` : "—"}</div>
-                      {statsFelt.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.maxTime, locale)}</div>)}
-                    </div>
-                    <div className="bg-cyan-50 p-2 rounded">
-                      <div className="font-medium text-cyan-700">{t('dashboard.feelsLikeMin')}</div>
-                      <div className="text-lg">{Number.isFinite(statsFelt.minTemp) ? `${statsFelt.minTemp.toFixed(1)} °C` : "—"}</div>
-                      {statsFelt.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.minTime, locale)}</div>)}
-                    </div>
+                  <div className="bg-blue-50 p-2 rounded">
+                    <div className="font-medium text-blue-700">{t('dashboard.daysUnder0C')}</div>
+                    <div className="text-lg">{statsOutside.daysUnder0} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsOutside.totalPeriodDays}</span></div>
                   </div>
-                )}
-              </div>
-            );
-          })()}
-        </div>
-      )}
+                  <div className="bg-rose-50 p-2 rounded">
+                    <div className="font-medium text-rose-700">{t('dashboard.highestTemperature')}</div>
+                    <div className="text-lg">{Number.isFinite(statsOutside.maxTemp) ? `${statsOutside.maxTemp.toFixed(1)} °C` : "—"}</div>
+                    {statsOutside.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsOutside.maxTime, locale)}</div>)}
+                  </div>
+                  <div className="bg-indigo-50 p-2 rounded">
+                    <div className="font-medium text-indigo-700">{t('dashboard.lowestTemperature')}</div>
+                    <div className="text-lg">{Number.isFinite(statsOutside.minTemp) ? `${statsOutside.minTemp.toFixed(1)} °C` : "—"}</div>
+                    {statsOutside.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsOutside.minTime, locale)}</div>)}
+                  </div>
+                  <div className="bg-teal-50 p-2 rounded">
+                    <div className="font-medium text-teal-700">{t('dashboard.average')}</div>
+                    <div className="text-lg">{Number.isFinite(avgTempOutside) ? `${avgTempOutside.toFixed(1)} °C` : "—"}</div>
+                  </div>
+                </div>
+              )}
+              {statsFelt && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-orange-50 p-2 rounded">
+                    <div className="font-medium text-orange-700">{t('dashboard.feelsLikeMax')}</div>
+                    <div className="text-lg">{Number.isFinite(statsFelt.maxTemp) ? `${statsFelt.maxTemp.toFixed(1)} °C` : "—"}</div>
+                    {statsFelt.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.maxTime, locale)}</div>)}
+                  </div>
+                  <div className="bg-cyan-50 p-2 rounded">
+                    <div className="font-medium text-cyan-700">{t('dashboard.feelsLikeMin')}</div>
+                    <div className="text-lg">{Number.isFinite(statsFelt.minTemp) ? `${statsFelt.minTemp.toFixed(1)} °C` : "—"}</div>
+                    {statsFelt.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.minTime, locale)}</div>)}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Innentemperatur */}
+      {(() => {
+        const insideCol = (data.header || []).find(h => h.startsWith("Temperatur Innen"));
+        if (!insideCol) return null;
+        const series: LineSeries = {
+          id: insideCol,
+          color: COLORS[2],
+          points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[insideCol]) })),
+        };
+        if (!series.points.some((p) => Number.isFinite(p.y))) return null;
+        // Stats & avg
+        let statsRows = rows;
+        let statsTimes = times;
+        let resolvedCol = insideCol;
+        const avgOfCol = (rs: typeof rows, col?: string | null) => {
+          if (!col) return NaN;
+          let sum = 0, count = 0;
+          for (const r of rs) {
+            const v = numOrNaN(r[col]);
+            if (Number.isFinite(v)) { sum += v; count++; }
+          }
+          return count ? (sum / count) : NaN;
+        };
+        const avgTempInside = avgOfCol(rows, insideCol);
+        if (minuteData && minuteData.rows && minuteData.rows.length > 0) {
+          const mHeader = minuteData.header || [];
+          resolvedCol = mHeader.find(h => h === insideCol) || insideCol;
+          statsRows = minuteData.rows;
+          statsTimes = statsRows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
+        }
+        const statsInside = calculateTemperatureStats(statsRows, statsTimes, [resolvedCol]);
+        return (
+          <div className="rounded border border-gray-200 p-3">
+            {(() => {
+              const seriesList: LineSeries[] = [series];
+              // Taupunkt Innen
+              const dewInsideCol = (data.header || []).find(h => h.startsWith("Taupunkt Innen")) 
+                || (data.header || []).find(h => h.startsWith("Taupunkt") && h.toLowerCase().includes("innen"));
+              if (dewInsideCol) {
+                const s: LineSeries = {
+                  id: metricDisplayLabel("Taupunkt", t),
+                  color: COLORS[1],
+                  points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[dewInsideCol]) })),
+                };
+                if (s.points.some(p => Number.isFinite(p.y))) seriesList.push(s);
+              }
+              return (
+                <LineChart 
+                  series={seriesList} 
+                  yLabel={`${t('fields.indoorTemperature')} (°C)`}
+                  xLabel={t('dashboard.time')} 
+                  xTickFormatter={fmt} 
+                  hoverTimeFormatter={hoverFmt} 
+                  showLegend={true} 
+                  yUnit="°C" 
+                />
+              );
+            })()}
+            <div className="mt-2 text-sm border-t border-gray-100 pt-2">
+              {statsInside && (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
+                  <div className="bg-amber-50 p-2 rounded">
+                    <div className="font-medium text-amber-700">{t('dashboard.daysOver30C')}</div>
+                    <div className="text-lg">{statsInside.daysOver30} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsInside.totalPeriodDays}</span></div>
+                  </div>
+                  <div className="bg-blue-50 p-2 rounded">
+                    <div className="font-medium text-blue-700">{t('dashboard.daysUnder0C')}</div>
+                    <div className="text-lg">{statsInside.daysUnder0} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsInside.totalPeriodDays}</span></div>
+                  </div>
+                  <div className="bg-rose-50 p-2 rounded">
+                    <div className="font-medium text-rose-700">{t('dashboard.highestTemperature')}</div>
+                    <div className="text-lg">{Number.isFinite(statsInside.maxTemp) ? `${statsInside.maxTemp.toFixed(1)} °C` : "—"}</div>
+                    {statsInside.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsInside.maxTime, locale)}</div>)}
+                  </div>
+                  <div className="bg-indigo-50 p-2 rounded">
+                    <div className="font-medium text-indigo-700">{t('dashboard.lowestTemperature')}</div>
+                    <div className="text-lg">{Number.isFinite(statsInside.minTemp) ? `${statsInside.minTemp.toFixed(1)} °C` : "—"}</div>
+                    {statsInside.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsInside.minTime, locale)}</div>)}
+                  </div>
+                  <div className="bg-teal-50 p-2 rounded">
+                    <div className="font-medium text-teal-700">{t('dashboard.average')}</div>
+                    <div className="text-lg">{Number.isFinite(avgTempInside) ? `${avgTempInside.toFixed(1)} °C` : "—"}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
       
       {/* Andere Metriken */}
       {nonRainColumns.map((col, i) => {
@@ -1363,6 +1527,7 @@ function findTemperatureColumns(header: string[]): string[] {
   // Suche nach den Temperatur-Strings (nur Anfang prüfen)
   for (const h of header) {
     if (h.startsWith("Temperatur Aussen") ||
+        h.startsWith("Temperatur Innen") ||
         h.startsWith("Taupunkt") ||
         h.startsWith("Gefühlte Temperatur")) {
       tempColumns.push(h);

@@ -48,6 +48,8 @@
   },
   "fields": {
     "temperature": "Temperatur",
+    "outdoorTemperature": "Außentemperatur",
+    "indoorTemperature": "Innentemperatur",
     "humidity": "Feuchte",
     "feelsLike": "Gefühlte Temperatur",
     "appTemp": "App-Temp",
