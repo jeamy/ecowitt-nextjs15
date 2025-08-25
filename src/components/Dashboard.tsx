@@ -74,17 +74,6 @@ function renderChannelCardCharts(
           let statsTimes = times;
           let tempColResolved = tempCol;
           let feltColResolved = feltCol;
-          // Durchschnitt aus Chart-Daten (nicht Minutendaten)
-          const avgOfCol = (rs: typeof rows, col?: string | null) => {
-            if (!col) return NaN;
-            let sum = 0, count = 0;
-            for (const r of rs) {
-              const v = numOrNaN(r[col]);
-              if (Number.isFinite(v)) { sum += v; count++; }
-            }
-            return count ? (sum / count) : NaN;
-          };
-          const avgTemp = tempCol ? avgOfCol(rows, tempCol) : NaN;
           // Minutenbasis verwenden, wenn vorhanden
           if (minuteDataAll && minuteDataAll.rows && minuteDataAll.rows.length > 0) {
             const mHeader = minuteDataAll.header || [];
@@ -101,7 +90,7 @@ function renderChannelCardCharts(
           return (
             <div className="mt-2 text-sm border-t border-gray-100 pt-2">
               {statsTemp && (
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
                   <div className="bg-amber-50 p-2 rounded">
                     <div className="font-medium text-amber-700">{t('dashboard.daysOver30C')}</div>
                     <div className="text-lg">{statsTemp.daysOver30} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsTemp.totalPeriodDays}</span></div>
@@ -119,10 +108,6 @@ function renderChannelCardCharts(
                     <div className="font-medium text-indigo-700">{t('dashboard.lowestTemperature')}</div>
                     <div className="text-lg">{Number.isFinite(statsTemp.minTemp) ? `${statsTemp.minTemp.toFixed(1)} °C` : "—"}</div>
                     {statsTemp.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsTemp.minTime, locale)}</div>)}
-                  </div>
-                  <div className="bg-teal-50 p-2 rounded">
-                    <div className="font-medium text-teal-700">{t('dashboard.average')}</div>
-                    <div className="text-lg">{Number.isFinite(avgTemp) ? `${avgTemp.toFixed(1)} °C` : "—"}</div>
                   </div>
                 </div>
               )}
@@ -229,17 +214,6 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
             let statsTimes = times;
             let tempColResolved = tempCol;
             let feltColResolved = feltCol;
-            // Durchschnitt aus Chart-Daten (nicht Minutendaten)
-            const avgOfCol = (rs: typeof rows, col?: string | null) => {
-              if (!col) return NaN;
-              let sum = 0, count = 0;
-              for (const r of rs) {
-                const v = numOrNaN(r[col]);
-                if (Number.isFinite(v)) { sum += v; count++; }
-              }
-              return count ? (sum / count) : NaN;
-            };
-            const avgTemp = tempCol ? avgOfCol(rows, tempCol) : NaN;
             if (minuteDataAll && minuteDataAll.rows && minuteDataAll.rows.length > 0) {
               const mHeader = minuteDataAll.header || [];
               tempColResolved = mHeader.find(h => h === tempCol) || tempCol;
@@ -252,7 +226,7 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
             return (
               <div className="mt-2 text-sm border-t border-gray-100 pt-2">
                 {statsTemp && (
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
                     <div className="bg-amber-50 p-2 rounded">
                       <div className="font-medium text-amber-700">{t('dashboard.daysOver30C')}</div>
                       <div className="text-lg">{statsTemp.daysOver30} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsTemp.totalPeriodDays}</span></div>
@@ -270,10 +244,6 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
                       <div className="font-medium text-indigo-700">{t('dashboard.lowestTemperature')}</div>
                       <div className="text-lg">{Number.isFinite(statsTemp.minTemp) ? `${statsTemp.minTemp.toFixed(1)} °C` : "—"}</div>
                       {statsTemp.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsTemp.minTime, locale)}</div>)}
-                    </div>
-                    <div className="bg-teal-50 p-2 rounded">
-                      <div className="font-medium text-teal-700">{t('dashboard.average')}</div>
-                      <div className="text-lg">{Number.isFinite(avgTemp) ? `${avgTemp.toFixed(1)} °C` : "—"}</div>
                     </div>
                   </div>
                 )}
@@ -1189,20 +1159,7 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
             // Aus den Headern nur die echte Temperatur nehmen
             let realTempCols: string[] = (data.header || []).filter(h => h.startsWith("Temperatur Aussen"));
             let feltCols: string[] = (data.header || []).filter(h => h.startsWith("Gefühlte Temperatur"));
-            // Durchschnitt aus den Daten des Charts (nicht aus Minute-Daten)
-            const avgOfCol = (rs: typeof rows, col?: string | null) => {
-              if (!col) return NaN;
-              let sum = 0;
-              let count = 0;
-              for (const r of rs) {
-                const v = numOrNaN(r[col]);
-                if (Number.isFinite(v)) { sum += v; count++; }
-              }
-              return count ? (sum / count) : NaN;
-            };
             const baseHeader = (data.header || []);
-            const realTempColsBase: string[] = baseHeader.filter(h => h.startsWith("Temperatur Aussen"));
-            const avgTemp = realTempColsBase.length ? avgOfCol(rows, realTempColsBase[0]) : NaN;
 
             if (minuteData && minuteData.rows && minuteData.rows.length > 0) {
               // Minutendaten verwenden
