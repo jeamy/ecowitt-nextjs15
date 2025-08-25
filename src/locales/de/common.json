@@ -70,7 +70,13 @@
     "latitude": "Breite",
     "longitude": "Länge",
     "daylightProgress": "Tageslicht-Verlauf",
-    "moonIllumination": "Mondbeleuchtung"
+    "moonIllumination": "Mondbeleuchtung",
+    "civilDawn": "Bürgerliche Dämmerung",
+    "civilDusk": "Bürgerliche Abenddämmerung",
+    "nauticalDawn": "Nautische Dämmerung",
+    "nauticalDusk": "Nautische Abenddämmerung",
+    "astronomicalDawn": "Astronomische Dämmerung",
+    "astronomicalDusk": "Astronomische Abenddämmerung"
   },
   "dashboard": {
     "title": "Wetterstation Dashboard",

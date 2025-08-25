@@ -237,6 +237,19 @@ export default function Realtime() {
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   }, [payload]);
 
+  // Astronomy derived visuals for Realtime (auto-updates with RT refresh interval)
+  const tz = deviceInfo?.timezone ?? undefined;
+  const sunrise = astro?.sunrise ?? null;
+  const sunset = astro?.sunset ?? null;
+  const sunUp = !!(sunrise && sunset && new Date() >= sunrise && new Date() < sunset);
+  const moonIllumPct = astro?.illumination != null ? astro.illumination * 100 : null;
+  const moonEmoji = (phase: number | undefined): string => {
+    if (phase == null) return "🌙";
+    const idx = Math.round((((phase % 1) + 1) % 1) * 7);
+    const emojis = ["🌑","🌒","🌓","🌔","🌕","🌖","🌗","🌘"];
+    return emojis[idx] ?? "🌙";
+  };
+
   function channelDisplayName(key: string) {
     const m = key.match(/(?:^ch|_ch)(\d+)$/i);
     const id = m ? `ch${m[1]}`.toLowerCase() : key.toLowerCase();
@@ -279,26 +292,7 @@ export default function Realtime() {
         </div>
       </div>
 
-      {/* Sun & Moon block */}
-      <div className="rounded border border-gray-200 p-3">
-        <div className="font-semibold mb-2 text-amber-700">{t('astro.title')}</div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <LabelValue label={t('astro.sunrise')} value={formatTime(astro?.sunrise ?? null, deviceInfo?.timezone ?? undefined, i18n.language)} />
-          <LabelValue label={t('astro.sunset')} value={formatTime(astro?.sunset ?? null, deviceInfo?.timezone ?? undefined, i18n.language)} />
-          <LabelValue label={t('astro.moonrise')} value={formatTime(astro?.moonrise ?? null, deviceInfo?.timezone ?? undefined, i18n.language)} />
-          <LabelValue label={t('astro.moonset')} value={formatTime(astro?.moonset ?? null, deviceInfo?.timezone ?? undefined, i18n.language)} />
-          <LabelValue label={t('astro.moonPhase')} value={astro ? `${astro.phaseName} (${Math.round((astro.illumination ?? 0) * 100)}%)` : "—"} />
-          {deviceInfo?.timezone && (
-            <LabelValue label={t('astro.timezone')} value={deviceInfo.timezone} />
-          )}
-          {deviceInfo?.latitude != null && (
-            <LabelValue label={t('astro.latitude')} value={`${deviceInfo.latitude.toFixed(4)}°`} />
-          )}
-          {deviceInfo?.longitude != null && (
-            <LabelValue label={t('astro.longitude')} value={`${deviceInfo.longitude.toFixed(4)}°`} />
-          )}
-        </div>
-      </div>
+      {/* Solar/UV and Precipitation stay here above Sun & Moon */}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="rounded border border-gray-200 p-3">
@@ -314,6 +308,40 @@ export default function Realtime() {
           <LabelValue label={t('gauges.weekly')} value={fmtVU(rainWeekly, "mm")} />
           <LabelValue label={t('gauges.monthly')} value={fmtVU(rainMonthly, "mm")} />
           <LabelValue label={t('gauges.yearly')} value={fmtVU(rainYearly, "mm")} />
+        </div>
+      </div>
+
+      {/* Sun & Moon (icons, no rings) – moved below Solar/UV + Precipitation */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* Sun (text only) */}
+        <div className="rounded border border-gray-200 p-3 flex flex-col items-center justify-center">
+          <div className="mt-2 text-sm text-gray-600 dark:text-gray-300 text-center">
+            {t('astro.sunrise')}: {formatTime(sunrise, tz, i18n.language)} — {t('astro.sunset')}: {formatTime(sunset, tz, i18n.language)}
+          </div>
+          <div className="mt-1 text-xs text-gray-600 dark:text-gray-300 text-center space-y-0.5">
+            <div>{t('astro.civilDawn')}: {formatTime(astro?.civilDawn ?? null, tz, i18n.language)} — {t('astro.civilDusk')}: {formatTime(astro?.civilDusk ?? null, tz, i18n.language)}</div>
+            <div>{t('astro.nauticalDawn')}: {formatTime(astro?.nauticalDawn ?? null, tz, i18n.language)} — {t('astro.nauticalDusk')}: {formatTime(astro?.nauticalDusk ?? null, tz, i18n.language)}</div>
+            <div>{t('astro.astronomicalDawn')}: {formatTime(astro?.astronomicalDawn ?? null, tz, i18n.language)} — {t('astro.astronomicalDusk')}: {formatTime(astro?.astronomicalDusk ?? null, tz, i18n.language)}</div>
+          </div>
+          <div className="text-xs text-gray-500 mt-1 space-y-0.5 text-center">
+            {deviceInfo?.timezone && (<div>{t('astro.timezone')}: {deviceInfo.timezone}</div>)}
+            {deviceInfo?.latitude != null && (<div>{t('astro.latitude')}: {deviceInfo.latitude.toFixed(4)}°</div>)}
+            {deviceInfo?.longitude != null && (<div>{t('astro.longitude')}: {deviceInfo.longitude.toFixed(4)}°</div>)}
+          </div>
+        </div>
+        {/* Moon (text only) */}
+        <div className="rounded border border-gray-200 p-3 flex flex-col items-center justify-center">
+          <div className="mt-2 text-sm text-gray-600 dark:text-gray-300 text-center">
+            {t('astro.moonPhase')}: {astro?.phaseName || "—"} {moonIllumPct != null ? `(${Math.round(moonIllumPct)}%)` : ''}
+          </div>
+          <div className="text-sm text-gray-600 dark:text-gray-300 text-center">
+            {t('astro.moonrise')}: {formatTime(astro?.moonrise ?? null, tz, i18n.language)} — {t('astro.moonset')}: {formatTime(astro?.moonset ?? null, tz, i18n.language)}
+          </div>
+          <div className="text-xs text-gray-500 mt-1 space-y-0.5 text-center">
+            {deviceInfo?.timezone && (<div>{t('astro.timezone')}: {deviceInfo.timezone}</div>)}
+            {deviceInfo?.latitude != null && (<div>{t('astro.latitude')}: {deviceInfo.latitude.toFixed(4)}°</div>)}
+            {deviceInfo?.longitude != null && (<div>{t('astro.longitude')}: {deviceInfo.longitude.toFixed(4)}°</div>)}
+          </div>
         </div>
       </div>
 

@@ -70,7 +70,13 @@
     "latitude": "Latitude",
     "longitude": "Longitude",
     "daylightProgress": "Daylight Progress",
-    "moonIllumination": "Moon Illumination"
+    "moonIllumination": "Moon Illumination",
+    "civilDawn": "Civil dawn",
+    "civilDusk": "Civil dusk",
+    "nauticalDawn": "Nautical dawn",
+    "nauticalDusk": "Nautical dusk",
+    "astronomicalDawn": "Astronomical dawn",
+    "astronomicalDusk": "Astronomical dusk"
   },
   "dashboard": {
     "title": "Weather Station Dashboard",

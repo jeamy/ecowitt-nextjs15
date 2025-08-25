@@ -802,10 +802,26 @@ export default function Gauges() {
         {/* Sun */}
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex flex-col items-center justify-center">
           <div className="flex items-center justify-center" aria-label={sunUp ? t('astro.sunrise') : t('astro.sunset')}>
-            <div className={`w-24 h-24 rounded-full ${sunUp ? 'bg-yellow-400' : 'bg-gray-400'} shadow-inner`} />
+            {/* Sun SVG with rays */}
+            <svg width="112" height="112" viewBox="0 0 112 112" role="img" aria-hidden="true">
+              <circle cx="56" cy="56" r="20" fill={sunUp ? '#f59e0b' : '#9ca3af'} />
+              {Array.from({ length: 12 }).map((_, i) => {
+                const angle = (i * Math.PI * 2) / 12;
+                const x1 = 56 + Math.cos(angle) * 30;
+                const y1 = 56 + Math.sin(angle) * 30;
+                const x2 = 56 + Math.cos(angle) * 44;
+                const y2 = 56 + Math.sin(angle) * 44;
+                return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={sunUp ? '#f59e0b' : '#9ca3af'} strokeWidth="4" strokeLinecap="round" />;
+              })}
+            </svg>
           </div>
           <div className="mt-2 text-sm text-gray-600 dark:text-gray-300 text-center">
             {t('astro.sunrise')}: {formatTime(sunrise, tz, i18n.language)} — {t('astro.sunset')}: {formatTime(sunset, tz, i18n.language)}
+          </div>
+          <div className="mt-1 text-xs text-gray-600 dark:text-gray-300 text-center space-y-0.5">
+            <div>{t('astro.civilDawn')}: {formatTime(astro?.civilDawn ?? null, tz, i18n.language)} — {t('astro.civilDusk')}: {formatTime(astro?.civilDusk ?? null, tz, i18n.language)}</div>
+            <div>{t('astro.nauticalDawn')}: {formatTime(astro?.nauticalDawn ?? null, tz, i18n.language)} — {t('astro.nauticalDusk')}: {formatTime(astro?.nauticalDusk ?? null, tz, i18n.language)}</div>
+            <div>{t('astro.astronomicalDawn')}: {formatTime(astro?.astronomicalDawn ?? null, tz, i18n.language)} — {t('astro.astronomicalDusk')}: {formatTime(astro?.astronomicalDusk ?? null, tz, i18n.language)}</div>
           </div>
           <div className="text-xs text-gray-500 mt-1 space-y-0.5 text-center">
             {deviceInfo?.timezone && (<div>{t('astro.timezone')}: {deviceInfo.timezone}</div>)}
