@@ -548,6 +548,32 @@ function calculateRainStats(rows: Array<Record<string, number | string | null>>,
   
   return { daysOver30mm, totalDays: rainDays, totalPeriodDays };
 }
+// Min/Max-Statistik für eine numerische Spalte (z.B. Wind/Böe)
+function calculateMinMaxForColumn(
+  rows: Array<Record<string, number | string | null>>,
+  times: Date[],
+  column: string
+) {
+  let globalMax = -Infinity;
+  let globalMin = Infinity;
+  let maxTime: Date | null = null;
+  let minTime: Date | null = null;
+  for (let i = 0; i < rows.length; i++) {
+    const d = times[i];
+    if (!d) continue;
+    const v = numOrNaN(rows[i][column]);
+    if (!Number.isFinite(v)) continue;
+    if (v > globalMax) { globalMax = v; maxTime = new Date(d); }
+    if (v < globalMin) { globalMin = v; minTime = new Date(d); }
+  }
+  return {
+    max: Number.isFinite(globalMax) ? globalMax : NaN,
+    min: Number.isFinite(globalMin) ? globalMin : NaN,
+    maxTime,
+    minTime,
+  };
+}
+
 function makeTimeTickFormatter(t0: number, spanMin: number = 0, locale: string) {
   return (v: number) => {
     const d = new Date(t0 + Math.round(v) * 60000);
@@ -1008,6 +1034,11 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
   const rainColumns = findRainColumns(header);
   console.debug("[Main] Detected rain columns:", rainColumns);
   
+  // Windmetriken identifizieren (Geschwindigkeit & Böe)
+  const { windCol, gustCol } = findWindColumns(header);
+  // Solar/UVI identifizieren
+  const { solarCol, uvCol } = findSolarUvColumns(header);
+  
   const nonTempRainColumns = cols.filter(col => !tempColumns.includes(col) && !rainColumns.includes(col));
   
   // Temperaturdiagramm erstellen
@@ -1237,9 +1268,66 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
           points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) })),
         };
         if (!series.points.some((p) => Number.isFinite(p.y))) return null;
+        
+        // Wind-/Böe- sowie Solar-/UVI-Statistiken (Minutenbasis, falls verfügbar)
+        const isWind = (windCol != null) && (col === windCol);
+        const isGust = (gustCol != null) && (col === gustCol);
+        const isSolar = (solarCol != null) && (col === solarCol);
+        const isUv = (uvCol != null) && (col === uvCol);
+        let stats: { max: number; min: number; maxTime: Date | null; minTime: Date | null } | null = null;
+        let avgVal = NaN;
+        if (isWind || isGust || isSolar || isUv) {
+          let statsRows = rows;
+          let statsTimes = times;
+          let resolvedCol = col;
+          if (minuteData && minuteData.rows && minuteData.rows.length > 0) {
+            const mHeader = minuteData.header || [];
+            resolvedCol = mHeader.find(h => h === col) || col;
+            statsRows = minuteData.rows;
+            statsTimes = statsRows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
+          }
+          stats = calculateMinMaxForColumn(statsRows, statsTimes, resolvedCol);
+          // Durchschnitt aus (Minute-)Daten innerhalb des sichtbaren Zeitfensters ermitteln
+          const winStart = times[0]?.getTime();
+          const winEnd = times[times.length - 1]?.getTime();
+          let sum = 0;
+          let count = 0;
+          for (let k = 0; k < statsRows.length; k++) {
+            const dt = statsTimes[k];
+            if (!dt) continue;
+            const ms = dt.getTime();
+            if (winStart != null && winEnd != null && ms >= winStart && ms <= winEnd) {
+              const v = numOrNaN(statsRows[k][resolvedCol]);
+              if (Number.isFinite(v)) { sum += v; count++; }
+            }
+          }
+          avgVal = count ? (sum / count) : NaN;
+        }
+        const unit = unitForHeader(col) || "";
+
         return (
           <div key={col} className="rounded border border-gray-200 p-3">
             <LineChart series={[series]} yLabel={col} xLabel={t('dashboard.time')} xTickFormatter={fmt} hoverTimeFormatter={hoverFmt} showLegend={false} yUnit={unitForHeader(col)} />
+            {(isWind || isGust || isSolar || isUv) && stats && (
+              <div className="mt-2 text-sm border-t border-gray-100 pt-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-rose-50 p-2 rounded">
+                    <div className="font-medium text-rose-700">{
+                      isWind ? t('dashboard.highestWind') :
+                      isGust ? t('dashboard.highestGust') :
+                      isSolar ? t('dashboard.highestSolar') :
+                      t('dashboard.highestUvi')
+                    }</div>
+                    <div className="text-lg">{Number.isFinite(stats.max) ? `${stats.max.toFixed(1)} ${unit}` : "—"}</div>
+                    {stats.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(stats.maxTime, locale)}</div>)}
+                  </div>
+                  <div className="bg-gray-50 p-2 rounded">
+                    <div className="font-medium text-gray-700">{t('dashboard.average')}</div>
+                    <div className="text-lg">{Number.isFinite(avgVal) ? `${avgVal.toFixed(1)} ${unit}` : "—"}</div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       })}
@@ -1391,6 +1479,48 @@ function findRainColumns(header: string[]): string[] {
   
   console.debug("Detected rain metrics:", rainColumns);
   return rainColumns;
+}
+
+// Hilfsfunktion zum Identifizieren von Wind/Böe-Spalten in den Hauptsensoren
+function findWindColumns(header: string[]): { windCol: string | null; gustCol: string | null } {
+  let windCol: string | null = null;
+  let gustCol: string | null = null;
+  for (const h of header) {
+    const s = h.toLowerCase();
+    // Gust / Böe
+    if ((s.includes("gust") || s.includes("böe") || s.includes("b\u00f6e")) && !gustCol) {
+      gustCol = h;
+      continue;
+    }
+    // Windgeschwindigkeit (keine Richtung)
+    if (s.includes("wind") && !s.includes("direction") && !s.includes("richtung") && !s.includes("gust") && !s.includes("böe") && !s.includes("b\u00f6e") && !windCol) {
+      windCol = h;
+      continue;
+    }
+    if ((s.includes("wind speed") || s.includes("windspeed")) && !windCol) {
+      windCol = h;
+      continue;
+    }
+  }
+  return { windCol, gustCol };
+}
+
+// Hilfsfunktion: Solarstrahlung und UV-Index identifizieren
+function findSolarUvColumns(header: string[]): { solarCol: string | null; uvCol: string | null } {
+  let solarCol: string | null = null;
+  let uvCol: string | null = null;
+  for (const h of header) {
+    const s = h.toLowerCase();
+    if (!uvCol && (s.includes("uv index") || s === "uv" || s.includes("uv"))) {
+      uvCol = h;
+      continue;
+    }
+    if (!solarCol && (s.includes("solar") || s.includes("radiation") || s.includes("strahlung") || s.includes("sonne"))) {
+      solarCol = h;
+      continue;
+    }
+  }
+  return { solarCol, uvCol };
 }
 
 function toDate(s: string): Date | null {
@@ -1553,7 +1683,7 @@ function unitForHeader(header: string): string {
   if (s.includes("wind direction") || s.includes("windrichtung") || s.includes("direction")) return "°";
   if (s.includes("wind") || s.includes("gust") || s.includes("böe") || s.includes("b\u00f6e")) return "km/h";
   // Solar/Light
-  if (s.includes("uv")) return "index";
+  if (s.includes("uv")) return "";
   if (s.includes("solar") || s.includes("radiation")) return "W/m²";
   if (s.includes("lux")) return "lux";
   // Air quality

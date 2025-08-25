@@ -90,6 +90,14 @@
     "feelsLikeMax": "Highest feels like",
     "feelsLikeMin": "Lowest feels like",
     "daysOver30mm": "Days ≥ 30 mm",
-    "rainDays": "Rain days"
+    "rainDays": "Rain days",
+    "highestWind": "Highest wind speed",
+    "lowestWind": "Lowest wind speed",
+    "highestGust": "Highest gust",
+    "lowestGust": "Lowest gust",
+    "highestSolar": "Highest solar radiation",
+    "lowestSolar": "Lowest solar radiation",
+    "highestUvi": "Highest UV index",
+    "lowestUvi": "Lowest UV index"
   }
 }

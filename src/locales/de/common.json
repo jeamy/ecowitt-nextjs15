@@ -90,6 +90,14 @@
     "feelsLikeMax": "Höchste gefühlte Temperatur",
     "feelsLikeMin": "Niedrigste gefühlte Temperatur",
     "daysOver30mm": "Tage ≥ 30 mm",
-    "rainDays": "Regentage"
+    "rainDays": "Regentage",
+    "highestWind": "Höchste Windgeschwindigkeit",
+    "lowestWind": "Niedrigste Windgeschwindigkeit",
+    "highestGust": "Stärkste Böe",
+    "lowestGust": "Schwächste Böe",
+    "highestSolar": "Höchste Solarstrahlung",
+    "lowestSolar": "Niedrigste Solarstrahlung",
+    "highestUvi": "Höchster UV-Index",
+    "lowestUvi": "Niedrigster UV-Index"
   }
 }
