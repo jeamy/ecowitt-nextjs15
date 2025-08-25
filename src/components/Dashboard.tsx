@@ -1275,7 +1275,6 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
         const isSolar = (solarCol != null) && (col === solarCol);
         const isUv = (uvCol != null) && (col === uvCol);
         let stats: { max: number; min: number; maxTime: Date | null; minTime: Date | null } | null = null;
-        let avgVal = NaN;
         if (isWind || isGust || isSolar || isUv) {
           let statsRows = rows;
           let statsTimes = times;
@@ -1287,21 +1286,6 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
             statsTimes = statsRows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
           }
           stats = calculateMinMaxForColumn(statsRows, statsTimes, resolvedCol);
-          // Durchschnitt aus (Minute-)Daten innerhalb des sichtbaren Zeitfensters ermitteln
-          const winStart = times[0]?.getTime();
-          const winEnd = times[times.length - 1]?.getTime();
-          let sum = 0;
-          let count = 0;
-          for (let k = 0; k < statsRows.length; k++) {
-            const dt = statsTimes[k];
-            if (!dt) continue;
-            const ms = dt.getTime();
-            if (winStart != null && winEnd != null && ms >= winStart && ms <= winEnd) {
-              const v = numOrNaN(statsRows[k][resolvedCol]);
-              if (Number.isFinite(v)) { sum += v; count++; }
-            }
-          }
-          avgVal = count ? (sum / count) : NaN;
         }
         const unit = unitForHeader(col) || "";
 
@@ -1310,7 +1294,7 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
             <LineChart series={[series]} yLabel={col} xLabel={t('dashboard.time')} xTickFormatter={fmt} hoverTimeFormatter={hoverFmt} showLegend={false} yUnit={unitForHeader(col)} />
             {(isWind || isGust || isSolar || isUv) && stats && (
               <div className="mt-2 text-sm border-t border-gray-100 pt-2">
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2">
                   <div className="bg-rose-50 p-2 rounded">
                     <div className="font-medium text-rose-700">{
                       isWind ? t('dashboard.highestWind') :
@@ -1320,10 +1304,6 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
                     }</div>
                     <div className="text-lg">{Number.isFinite(stats.max) ? `${stats.max.toFixed(1)} ${unit}` : "—"}</div>
                     {stats.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(stats.maxTime, locale)}</div>)}
-                  </div>
-                  <div className="bg-gray-50 p-2 rounded">
-                    <div className="font-medium text-gray-700">{t('dashboard.average')}</div>
-                    <div className="text-lg">{Number.isFinite(avgVal) ? `${avgVal.toFixed(1)} ${unit}` : "—"}</div>
                   </div>
                 </div>
               </div>
