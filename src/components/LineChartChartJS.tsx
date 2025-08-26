@@ -121,10 +121,26 @@ export default function LineChart({
   const allPoints = useMemo(() => series.flatMap((s) => s.points), [series]);
   const xs = useMemo(() => allPoints.map((p) => p.x), [allPoints]);
   const ys = useMemo(() => allPoints.map((p) => p.y).filter((n) => Number.isFinite(n)), [allPoints]);
-  const minX = useMemo(() => (xs.length ? Math.min(...xs) : 0), [xs]);
-  const maxX = useMemo(() => (xs.length ? Math.max(...xs) : 1), [xs]);
-  const minY = useMemo(() => (ys.length ? Math.min(...ys) : 0), [ys]);
-  const maxY = useMemo(() => (ys.length ? Math.max(...ys) : 1), [ys]);
+  // Use a safer approach to find min/max values to avoid stack overflow with large arrays
+  const minX = useMemo(() => {
+    if (!xs.length) return 0;
+    return xs.reduce((min, val) => Math.min(min, val), Infinity);
+  }, [xs]);
+  
+  const maxX = useMemo(() => {
+    if (!xs.length) return 1;
+    return xs.reduce((max, val) => Math.max(max, val), -Infinity);
+  }, [xs]);
+  
+  const minY = useMemo(() => {
+    if (!ys.length) return 0;
+    return ys.reduce((min, val) => Math.min(min, val), Infinity);
+  }, [ys]);
+  
+  const maxY = useMemo(() => {
+    if (!ys.length) return 1;
+    return ys.reduce((max, val) => Math.max(max, val), -Infinity);
+  }, [ys]);
 
   // Detect temperature series (ignore dew point and felt temperature)
   const isFeel = (id: string) => id.toLowerCase().includes("gefühlte temperatur");

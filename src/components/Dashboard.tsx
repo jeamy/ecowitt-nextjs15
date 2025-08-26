@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import LineChart, { type LineSeries } from "@/components/LineChartChartJS";
+import { CheckIcon } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 
 type MonthsResp = { months: string[] };
@@ -347,8 +348,10 @@ function GlobalRangeControls(props: {
   pctEnd: number;   // 0..1000
   setPctStart: (n: number) => void;
   setPctEnd: (n: number) => void;
+  setDateRangeChanged?: (changed: boolean) => void;
+  setConfirmButtonActive?: (active: boolean) => void;
 }) {
-  const { min, max, pctStart, pctEnd, setPctStart, setPctEnd } = props;
+  const { min, max, pctStart, pctEnd, setPctStart, setPctEnd, setDateRangeChanged, setConfirmButtonActive } = props;
   const { t, i18n } = useTranslation();
   if (!min || !max) return null;
   const span = max.getTime() - min.getTime();
@@ -376,6 +379,8 @@ function GlobalRangeControls(props: {
               if (isNaN(d.getTime())) return;
               const p = Math.round(((d.getTime() - min.getTime()) / span) * 1000);
               setPctStart(Math.min(Math.max(p, 0), Math.max(0, pctEnd - 1)));
+              if (setDateRangeChanged) setDateRangeChanged(true);
+              if (setConfirmButtonActive) setConfirmButtonActive(true);
             }}
           />
           <div className="text-xs text-gray-500">{startDisp}</div>
@@ -391,6 +396,8 @@ function GlobalRangeControls(props: {
               if (isNaN(d.getTime())) return;
               const p = Math.round(((d.getTime() - min.getTime()) / span) * 1000);
               setPctEnd(Math.max(Math.min(p, 1000), Math.min(1000, pctStart + 1)));
+              if (setDateRangeChanged) setDateRangeChanged(true);
+              if (setConfirmButtonActive) setConfirmButtonActive(true);
             }}
           />
           <div className="text-xs text-gray-500">{endDisp}</div>
@@ -402,14 +409,22 @@ function GlobalRangeControls(props: {
           min={0}
           max={999}
           value={Math.min(pctStart, pctEnd - 1)}
-          onChange={(e) => setPctStart(Math.min(Number(e.target.value), pctEnd - 1))}
+          onChange={(e) => {
+            setPctStart(Math.min(Number(e.target.value), pctEnd - 1));
+            if (setDateRangeChanged) setDateRangeChanged(true);
+            if (setConfirmButtonActive) setConfirmButtonActive(true);
+          }}
         />
         <input
           type="range"
           min={1}
           max={1000}
           value={Math.max(pctEnd, pctStart + 1)}
-          onChange={(e) => setPctEnd(Math.max(Number(e.target.value), pctStart + 1))}
+          onChange={(e) => {
+            setPctEnd(Math.max(Number(e.target.value), pctStart + 1));
+            if (setDateRangeChanged) setDateRangeChanged(true);
+            if (setConfirmButtonActive) setConfirmButtonActive(true);
+          }}
         />
         <div className="text-xs text-gray-500">{startDisp} — {endDisp}</div>
       </div>
@@ -677,6 +692,8 @@ export default function Dashboard() {
   const [extentMax, setExtentMax] = useState<Date | null>(null);
   const [pctStart, setPctStart] = useState<number>(0);    // 0..1000
   const [pctEnd, setPctEnd] = useState<number>(1000);     // 0..1000
+  const [dateRangeChanged, setDateRangeChanged] = useState<boolean>(false);
+  const [confirmButtonActive, setConfirmButtonActive] = useState<boolean>(false);
 
   const monthsByYear = useMemo(() => {
     const map: Record<string, string[]> = {};
@@ -795,7 +812,8 @@ export default function Dashboard() {
     return undefined;
   }, [useGlobalRange, extentMin, extentMax, pctEnd]);
 
-  useEffect(() => {
+  // Function to fetch data when the confirmation button is clicked
+  const fetchData = () => {
     // Preconditions: Only proceed when required params are ready
     if (useGlobalRange) {
       if (!startParam || !endParam) return; // wait for extent mapping
@@ -882,7 +900,48 @@ export default function Dashboard() {
         }
       })
       .finally(() => setLoading(false));
+  };
+
+  // Function to handle date range confirmation
+  const handleConfirmDateRange = () => {
+    if (confirmButtonActive && useGlobalRange) {
+      setDateRangeChanged(false);
+      setConfirmButtonActive(false);
+      fetchData();
+    }
+  };
+
+  // Effect to check if parameters have changed and update the confirm button state
+  useEffect(() => {
+    // Check if we have valid parameters to enable the button
+    const hasValidParams = useGlobalRange ? 
+      (!!startParam && !!endParam) : 
+      (!!year && !!mon);
+    
+    if (hasValidParams) {
+      if (useGlobalRange) {
+        // In global range mode, just update button state
+        setDateRangeChanged(true);
+        setConfirmButtonActive(true);
+      } else {
+        // In month/year mode, fetch data automatically
+        fetchData();
+      }
+    }
   }, [useGlobalRange, year, mon, resolution, startParam, endParam]);
+
+  // Effect for initial data loading on component mount
+  useEffect(() => {
+    // Only load data initially if we have valid parameters
+    const hasValidParams = useGlobalRange ? 
+      (!!startParam && !!endParam) : 
+      (!!year && !!mon);
+    
+    if (hasValidParams && !dataMain && !dataAll) {
+      // Initial data load
+      fetchData();
+    }
+  }, [year, mon, startParam, endParam, useGlobalRange, dataMain, dataAll]);
 
   return (
     <div className="w-full max-w-screen-lg mx-auto flex flex-col gap-4">
@@ -890,14 +949,31 @@ export default function Dashboard() {
       {/* Steuerung: Zeitraum, Jahr/Monat (optional), Auflösung, Ansicht, Kanal/Metrik */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <div className="flex items-center gap-2">
-          <input id="global-range" type="checkbox" checked={useGlobalRange} onChange={(e) => setUseGlobalRange(e.target.checked)} />
+          <input 
+            id="global-range" 
+            type="checkbox" 
+            checked={useGlobalRange} 
+            onChange={(e) => {
+              setUseGlobalRange(e.target.checked);
+              setDateRangeChanged(true);
+              setConfirmButtonActive(true);
+            }} 
+          />
           <label htmlFor="global-range" className="text-sm">{t('dashboard.useGlobalRange')}</label>
         </div>
         {!useGlobalRange && (
           <>
             <div className="flex flex-col gap-1">
               <label className="text-sm">{t('dashboard.year')}</label>
-              <select className="border rounded p-2" value={year} onChange={(e) => setYear(e.target.value)}>
+              <select 
+                className="border rounded p-2" 
+                value={year} 
+                onChange={(e) => {
+                  setYear(e.target.value);
+                  setDateRangeChanged(true);
+                  setConfirmButtonActive(true);
+                }}
+              >
                 {years.map((y) => (
                   <option key={y} value={y}>{y}</option>
                 ))}
@@ -905,7 +981,15 @@ export default function Dashboard() {
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-sm">{t('dashboard.month')}</label>
-              <select className="border rounded p-2" value={mon} onChange={(e) => setMon(e.target.value)}>
+              <select 
+                className="border rounded p-2" 
+                value={mon} 
+                onChange={(e) => {
+                  setMon(e.target.value);
+                  setDateRangeChanged(true);
+                  setConfirmButtonActive(true);
+                }}
+              >
                 {(monthsByYear[year] || []).map((m) => (
                   <option key={m} value={m}>{getMonthName(Number(m), i18n.language || 'de') || m}</option>
                 ))}
@@ -914,20 +998,47 @@ export default function Dashboard() {
           </>
         )}
         {useGlobalRange && (
-          <div className="sm:col-span-2 lg:col-span-3">
-            <GlobalRangeControls
-              min={extentMin}
-              max={extentMax}
-              pctStart={pctStart}
-              pctEnd={pctEnd}
-              setPctStart={setPctStart}
-              setPctEnd={setPctEnd}
-            />
+          <div className="sm:col-span-2 lg:col-span-3 flex items-end gap-2">
+            <div className="flex-grow">
+              <GlobalRangeControls
+                min={extentMin}
+                max={extentMax}
+                pctStart={pctStart}
+                pctEnd={pctEnd}
+                setPctStart={setPctStart}
+                setPctEnd={setPctEnd}
+                setDateRangeChanged={setDateRangeChanged}
+                setConfirmButtonActive={setConfirmButtonActive}
+              />
+            </div>
+            <button 
+              onClick={handleConfirmDateRange}
+              disabled={!confirmButtonActive}
+              className={`p-2 rounded-full ${confirmButtonActive ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 cursor-not-allowed'} transition-colors`}
+              title={t('statuses.ok')}
+              aria-label={t('statuses.ok')}
+            >
+              <CheckIcon className="h-5 w-5 text-white" />
+            </button>
           </div>
         )}
         <div className="flex flex-col gap-1">
           <label className="text-sm">{t('dashboard.resolution')}</label>
-          <select className="border rounded p-2" value={resolution} onChange={(e) => setResolution(e.target.value as Resolution)}>
+          <select 
+            className="border rounded p-2" 
+            value={resolution} 
+            onChange={(e) => {
+              setResolution(e.target.value as Resolution);
+              if (useGlobalRange) {
+                // In global range mode, just update button state
+                setDateRangeChanged(true);
+                setConfirmButtonActive(true);
+              } else {
+                // In month/year mode, fetch data automatically
+                fetchData();
+              }
+            }}
+          >
             <option value="minute">{t('dashboard.minutes')}</option>
             <option value="hour">{t('dashboard.hours')}</option>
             <option value="day">{t('dashboard.days')}</option>
@@ -935,7 +1046,21 @@ export default function Dashboard() {
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-sm">{t('dashboard.view')}</label>
-          <select className="border rounded p-2" value={mode} onChange={(e) => setMode(e.target.value as any)}>
+          <select 
+            className="border rounded p-2" 
+            value={mode} 
+            onChange={(e) => {
+              setMode(e.target.value as any);
+              if (useGlobalRange) {
+                // In global range mode, just update button state
+                setDateRangeChanged(true);
+                setConfirmButtonActive(true);
+              } else {
+                // In month/year mode, fetch data automatically
+                fetchData();
+              }
+            }}
+          >
             <option value="main">{t('dashboard.mainSensors')}</option>
             <option value="channel">{t('dashboard.channelSensorsOption')}</option>
           </select>
@@ -946,7 +1071,17 @@ export default function Dashboard() {
             <select
               className="border rounded p-2"
               value={selectedChannel}
-              onChange={(e) => setSelectedChannel(e.target.value)}
+              onChange={(e) => {
+                setSelectedChannel(e.target.value);
+                if (useGlobalRange) {
+                  // In global range mode, just update button state
+                  setDateRangeChanged(true);
+                  setConfirmButtonActive(true);
+                } else {
+                  // In month/year mode, fetch data automatically
+                  fetchData();
+                }
+              }}
             >
               <option value="all">{t('dashboard.allChannels')}</option>
               {getChannelKeys(channelsCfg).map((k) => (
