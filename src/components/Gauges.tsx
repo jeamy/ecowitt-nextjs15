@@ -493,19 +493,16 @@ function CompassWind(props: { dir: number | null; speed: number | null; gust?: n
         ].map(({ x, y, t }, i) => (
           <text key={i} x={x} y={y + 4} textAnchor="middle" fontSize={12} fill="#6b7280">{t}</text>
         ))}
-        {/* arrow - refined head, tip extends above ring (12px overhang) */}
+        {/* arrow - only showing arrowhead, flatter design */}
         <g transform={`rotate(${arrowAngle} ${cx} ${cy})`}>
           {(() => {
-            const headW = 18; // head width
-            const apexY = cy - outerR - 8; // extend beyond ring by 12px (double)
-            const baseY = cy - outerR + 24; // base of head just inside ring
+            const headW = 24; // wider head width
+            const apexY = cy - outerR - 4; // less extension beyond ring
+            const baseY = cy - outerR + 16; // shorter height
             return (
               <polygon points={`${cx - headW / 2},${baseY} ${cx + headW / 2},${baseY} ${cx},${apexY}`} fill="#0ea5e9" />
             );
           })()}
-          {/* shaft, rounded caps */}
-          <line x1={cx} y1={cy} x2={cx} y2={cy + r - 12} stroke="#0ea5e9" strokeWidth={8} strokeLinecap="round" />
-          <line x1={cx} y1={cy} x2={cx} y2={cy - outerR + 12} stroke="#0ea5e9" strokeWidth={8} strokeLinecap="round" />
         </g>
         {/* centered speed text */}
         <text x="50%" y={cy} textAnchor="middle" fontSize={24} fontWeight={400} fill="#111827" style={{ fontVariantNumeric: 'tabular-nums' }}>
