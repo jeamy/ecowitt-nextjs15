@@ -740,7 +740,7 @@ export default function Dashboard() {
       .then((r) => r.json())
       .then((cfg) => setChannelsCfg(cfg))
       .catch(() => {});
-  }, []);
+  }, [year, mon]);
   // Datenfetch wird weiter unten ausgelöst, nachdem Start/End berechnet sind.
   // Helpers to build x scaling per dataset
   const xBaseAll = useMemo(() => {
@@ -929,7 +929,7 @@ export default function Dashboard() {
         fetchData();
       }
     }
-  }, [useGlobalRange, year, mon, resolution, startParam, endParam]);
+  }, [useGlobalRange, year, mon, resolution, startParam, endParam, fetchData]);
 
   // Effect for initial data loading on component mount
   useEffect(() => {
@@ -942,7 +942,7 @@ export default function Dashboard() {
       // Initial data load
       fetchData();
     }
-  }, [year, mon, startParam, endParam, useGlobalRange, dataMain, dataAll]);
+  }, [year, mon, startParam, endParam, useGlobalRange, dataMain, dataAll, fetchData]);
 
   return (
     <div className="w-full max-w-screen-lg mx-auto flex flex-col gap-4">

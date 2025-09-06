@@ -154,7 +154,7 @@ export default function LineChart({
       for (const p of s.points) if (Number.isFinite(p.y)) out.push(p.y as number);
     }
     return out;
-  }, [series]);
+  }, [series, isTemp]);
 
   const hasTemperature = tempValues.length > 0;
   const avgTemp = hasTemperature ? tempValues.reduce((a, b) => a + b, 0) / tempValues.length : null;
@@ -246,7 +246,7 @@ export default function LineChart({
     }
 
     return [...base, ...extras];
-  }, [series, bars, barWidthPx, hasTemperature, avgTemp, minX, maxX, minY, maxY, xs.length]);
+  }, [series, bars, barWidthPx, hasTemperature, avgTemp, minX, maxX, xs.length]);
 
   // Custom plugin to render average temperature label on the right edge above the line
   const avgLabelPlugin = useMemo(() => {
@@ -418,7 +418,7 @@ export default function LineChart({
       chartRef.current?.destroy();
       chartRef.current = null;
     };
-  }, [datasets, options, bars]);
+  }, [datasets, options, bars, avgLabelPlugin]);
 
   return (
     <div

@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { computeAstro, formatTime } from "@/lib/astro";
 import { API_ENDPOINTS } from "@/constants";
+import { useRealtime } from "@/contexts/RealtimeContext";
 
 import { useTranslation } from "react-i18next";
 
@@ -251,42 +252,12 @@ function i18nLabel(key: string, t: (key: string) => string): string {
 
 export default function Realtime() {
   const { t, i18n } = useTranslation();
-  const [data, setData] = useState<RTData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const { data, error, loading, lastUpdated } = useRealtime();
   const [channels, setChannels] = useState<Record<string, { name?: string }>>({});
   const [deviceInfo, setDeviceInfo] = useState<{ timezone: string | null; latitude: number | null; longitude: number | null } | null>(null);
   const [astro, setAstro] = useState<ReturnType<typeof computeAstro> | null>(null);
   const [tempMinMax, setTempMinMax] = useState<any>(null);
 
-  const fetchNow = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await fetch(API_ENDPOINTS.RT_LAST, { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const rec = await res.json();
-      if (!rec || rec.ok === false) {
-        const msg = rec?.error || t('statuses.noData');
-        setError(msg);
-        return;
-      }
-      setData(rec.data ?? null);
-      setLastUpdated(rec.updatedAt ? new Date(rec.updatedAt) : new Date());
-    } catch (e: any) {
-      setError(e?.message || String(e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchNow();
-    const refreshMs = Number(process.env.NEXT_PUBLIC_RT_REFRESH_MS || 300000); // default 5 min
-    const id = setInterval(fetchNow, isFinite(refreshMs) && refreshMs > 0 ? refreshMs : 300000);
-    return () => clearInterval(id);
-  }, []);
 
   // Load channel display names
   useEffect(() => {
