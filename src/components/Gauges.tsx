@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useId } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { API_ENDPOINTS } from "@/constants";
 import { computeAstro, formatTime } from "@/lib/astro";
 
 // Lightweight helpers – duplicated to keep this component self-contained
@@ -594,7 +595,7 @@ export default function Gauges() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch("/api/rt/last", { cache: "no-store" });
+      const res = await fetch(API_ENDPOINTS.RT_LAST, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const rec = await res.json();
       if (!rec || rec.ok === false) {
@@ -622,7 +623,7 @@ export default function Gauges() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/config/channels", { cache: "no-store" });
+        const res = await fetch(API_ENDPOINTS.CONFIG_CHANNELS, { cache: "no-store" });
         if (!res.ok) return;
         const json = await res.json();
         setChannelsCfg(json || {});
@@ -634,7 +635,7 @@ export default function Gauges() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/device/info", { cache: "no-store" });
+        const res = await fetch(API_ENDPOINTS.DEVICE_INFO, { cache: "no-store" });
         if (!res.ok) return;
         const json = await res.json();
         if (json && json.ok) {
@@ -653,9 +654,9 @@ export default function Gauges() {
     const fetchTempMinMax = async () => {
       try {
         // Force update all temperatures first
-        await fetch("/api/temp-minmax/update", { method: "POST", cache: "no-store" });
+        await fetch(API_ENDPOINTS.TEMP_MINMAX_UPDATE, { method: "POST", cache: "no-store" });
         // Then get the updated data
-        const res = await fetch("/api/temp-minmax", { cache: "no-store" });
+        const res = await fetch(API_ENDPOINTS.TEMP_MINMAX, { cache: "no-store" });
         if (!res.ok) return;
         const json = await res.json();
         if (json && json.ok) {

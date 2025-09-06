@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { API_ENDPOINTS } from "@/constants";
 import LineChart, { type LineSeries } from "@/components/LineChartChartJS";
 import { CheckIcon } from "@heroicons/react/24/outline";
-import { useTranslation } from "react-i18next";
 
 type MonthsResp = { months: string[] };
 
@@ -711,7 +712,7 @@ export default function Dashboard() {
   const years = useMemo(() => Object.keys(monthsByYear).sort((a, b) => b.localeCompare(a)), [monthsByYear]);
 
   useEffect(() => {
-    fetch("/api/data/months")
+    fetch(API_ENDPOINTS.DATA_MONTHS)
       .then((r) => r.json())
       .then((j: MonthsResp) => {
         setMonths(j.months);
@@ -735,7 +736,7 @@ export default function Dashboard() {
         }
       })
       .catch(() => {});
-    fetch("/api/config/channels")
+    fetch(API_ENDPOINTS.CONFIG_CHANNELS)
       .then((r) => r.json())
       .then((cfg) => setChannelsCfg(cfg))
       .catch(() => {});
@@ -756,7 +757,7 @@ export default function Dashboard() {
   // Extent laden (globaler Min/Max-Zeitpunkt)
   useEffect(() => {
     if (!useGlobalRange) return;
-    fetch("/api/data/extent")
+    fetch(API_ENDPOINTS.DATA_EXTENT)
       .then((r) => r.json())
       .then((j) => {
         if (j?.min && j?.max) {
@@ -824,10 +825,10 @@ export default function Dashboard() {
     setLoading(true);
     setErrAll(null);
     setErrMain(null);
-    const uAll = new URL("/api/data/allsensors", window.location.origin);
-    const uMain = new URL("/api/data/main", window.location.origin);
-    const uMinuteMain = new URL("/api/data/main", window.location.origin);
-    const uMinuteAll = new URL("/api/data/allsensors", window.location.origin);
+    const uAll = new URL(API_ENDPOINTS.DATA_ALLSENSORS, window.location.origin);
+    const uMain = new URL(API_ENDPOINTS.DATA_MAIN, window.location.origin);
+    const uMinuteMain = new URL(API_ENDPOINTS.DATA_MAIN, window.location.origin);
+    const uMinuteAll = new URL(API_ENDPOINTS.DATA_ALLSENSORS, window.location.origin);
     
     if (useGlobalRange) {
       uAll.searchParams.set("resolution", resolution);

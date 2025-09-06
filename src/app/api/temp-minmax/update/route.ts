@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { updateTempMinMax, getTodayTempMinMax } from '@/lib/temp-minmax';
+import { API_ENDPOINTS } from '@/constants';
 
 export async function POST() {
   try {
-    // Get current realtime data
-    const res = await fetch('http://localhost:3000/api/rt/last', { cache: 'no-store' });
+    // Get current realtime data using internal API call
+    const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL || 'http://localhost:3000';
+    const res = await fetch(`${baseUrl}${API_ENDPOINTS.RT_LAST}`, { cache: 'no-store' });
     if (!res.ok) {
       return NextResponse.json({ ok: false, error: 'Failed to fetch realtime data' }, { status: 500 });
     }
