@@ -814,7 +814,7 @@ export default function Dashboard() {
   }, [useGlobalRange, extentMin, extentMax, pctEnd]);
 
   // Function to fetch data when the confirmation button is clicked
-  const fetchData = () => {
+  const fetchData = useCallback(() => {
     // Preconditions: Only proceed when required params are ready
     if (useGlobalRange) {
       if (!startParam || !endParam) return; // wait for extent mapping
@@ -901,7 +901,7 @@ export default function Dashboard() {
         }
       })
       .finally(() => setLoading(false));
-  };
+  }, [useGlobalRange, startParam, endParam, year, mon, resolution, mode, selectedChannel]);
 
   // Function to handle date range confirmation
   const handleConfirmDateRange = () => {
