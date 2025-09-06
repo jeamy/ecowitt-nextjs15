@@ -129,9 +129,6 @@ export function updateTempMinMax(sensorData: Record<string, any>): void {
     }
   });
   
-  console.log(`[temp-minmax] Processing ${Object.keys(tempSensors).length} temperature sensors:`, Object.keys(tempSensors));
-  console.log(`[temp-minmax] Processing ${Object.keys(humiditySensors).length} humidity sensors:`, Object.keys(humiditySensors));
-  
   // Update min/max for each temperature sensor
   Object.entries(tempSensors).forEach(([sensorKey, temp]) => {
     if (!isFinite(temp)) return;
