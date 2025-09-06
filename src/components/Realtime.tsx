@@ -16,6 +16,93 @@ function LabelValue({ label, value }: { label: string; value: React.ReactNode })
   );
 }
 
+function TemperatureLabelValue({ 
+  label, 
+  currentTemp, 
+  minMax, 
+  field, 
+  unit = "°C", 
+  t 
+}: { 
+  label: string; 
+  currentTemp: { value: string | number | null; unit?: string }; 
+  minMax: any; 
+  field: string; 
+  unit?: string;
+  t: (key: string) => string;
+}) {
+  const sensorData = minMax?.sensors?.[field];
+  
+  const formatMinMax = (value: number, time: string, label: string, isMax: boolean) => {
+    const timeStr = time ? new Date(time).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+    const colorClass = isMax ? 'text-red-600' : 'text-blue-600';
+    return (
+      <div className={`flex justify-between text-sm ${colorClass}`}>
+        <span>{label} {timeStr} Uhr</span>
+        <span>{value.toFixed(1)}{unit}</span>
+      </div>
+    );
+  };
+
+  return (
+    <div className="py-1">
+      <div className="flex items-start justify-between">
+        <div className="flex flex-col w-full">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-600 dark:text-gray-300 text-sm">{label}</span>
+            <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{(Number(currentTemp.value) || 0).toFixed(1)}{unit}</span>
+          </div>
+          {minMax && sensorData && (
+            <div className="mt-1 space-y-0.5">
+              {sensorData?.min != null && formatMinMax(sensorData.min, sensorData.minTime, 'Min', false)}
+              {sensorData?.max != null && formatMinMax(sensorData.max, sensorData.maxTime, 'Max', true)}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MinMaxDisplay({ 
+  current, 
+  minMax, 
+  field, 
+  unit = "°C", 
+  t 
+}: { 
+  current: { value: string | number | null; unit?: string }; 
+  minMax: any; 
+  field: string; 
+  unit?: string;
+  t: (key: string) => string;
+}) {
+  if (!minMax || current.value == null) return <span className="font-medium text-gray-900 dark:text-gray-100">{fmtVU(current, unit)}</span>;
+  
+  // The API returns data in format: { sensors: { sensorKey: { min, max, minTime, maxTime } } }
+  const sensorData = minMax.sensors?.[field];
+  const today = new Date().toLocaleDateString('de-DE');
+  
+  const formatMinMax = (value: number, time: string, label: string, isMax: boolean) => {
+    const timeStr = time ? new Date(time).toLocaleTimeString('de-DE') : '';
+    const colorClass = isMax ? 'text-red-600' : 'text-blue-600';
+    return (
+      <div className={`text-sm ${colorClass}`}>
+        {label} {timeStr}: {value.toFixed(1)} {unit}
+      </div>
+    );
+  };
+  
+  return (
+    <div>
+      <div className="font-medium text-gray-900 dark:text-gray-100 mb-1">{fmtVU(current, unit)}</div>
+      <div className="text-sm text-gray-500 mb-1">{today}</div>
+      {sensorData?.min != null && formatMinMax(sensorData.min, sensorData.minTime, 'Min', false)}
+      {sensorData?.max != null && formatMinMax(sensorData.max, sensorData.maxTime, 'Max', true)}
+    </div>
+  );
+}
+
 function tryRead(obj: any, path: string): any {
   return path.split(".").reduce((acc, key) => (acc && key in acc ? acc[key] : undefined), obj);
 }
@@ -122,6 +209,7 @@ export default function Realtime() {
   const [channels, setChannels] = useState<Record<string, { name?: string }>>({});
   const [deviceInfo, setDeviceInfo] = useState<{ timezone: string | null; latitude: number | null; longitude: number | null } | null>(null);
   const [astro, setAstro] = useState<ReturnType<typeof computeAstro> | null>(null);
+  const [tempMinMax, setTempMinMax] = useState<any>(null);
 
   const fetchNow = async () => {
     try {
@@ -180,6 +268,28 @@ export default function Realtime() {
       } catch {}
     })();
   }, [i18n.language]);
+
+  // Load today's temperature min/max data
+  useEffect(() => {
+    const fetchTempMinMax = async () => {
+      try {
+        // Force update all temperatures first
+        await fetch("/api/temp-minmax/update", { method: "POST", cache: "no-store" });
+        // Then get the updated data
+        const res = await fetch("/api/temp-minmax", { cache: "no-store" });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json && json.ok) {
+          setTempMinMax(json.data);
+        }
+      } catch {}
+    };
+    
+    fetchTempMinMax();
+    // Refresh min/max data every 5 minutes
+    const id = setInterval(fetchTempMinMax, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const timeText = useMemo(() => {
     if (!lastUpdated) return "—";
@@ -272,14 +382,26 @@ export default function Realtime() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="rounded border border-gray-200 p-3">
           <div className="font-semibold mb-2 text-emerald-700">{t('realtime.indoor')}</div>
-          <LabelValue label={t('fields.temperature')} value={fmtVU(indoorT, "°C")} />
+          <TemperatureLabelValue 
+            label={t('fields.temperature')} 
+            currentTemp={indoorT}
+            minMax={tempMinMax}
+            field="indoor"
+            t={t}
+          />
           <LabelValue label={t('fields.humidity')} value={fmtVU(indoorH, "%")} />
           <LabelValue label={t('gauges.pressureRel')} value={fmtVU(pressureRel, "hPa")} />
           <LabelValue label={t('gauges.pressureAbs')} value={fmtVU(pressureAbs, "hPa")} />
         </div>
         <div className="rounded border border-gray-200 p-3">
           <div className="font-semibold mb-2 text-sky-700">{t('realtime.outdoor')}</div>
-          <LabelValue label={t('fields.temperature')} value={fmtVU(outdoorT, "°C")} />
+          <TemperatureLabelValue 
+            label={t('fields.temperature')} 
+            currentTemp={outdoorT}
+            minMax={tempMinMax}
+            field="outdoor"
+            t={t}
+          />
           <LabelValue label={t('fields.humidity')} value={fmtVU(outdoorH, "%")} />
           <LabelValue label={t('fields.feelsLike')} value={fmtVU(feelsLike, "°C")} />
           <LabelValue label={t('fields.appTemp')} value={fmtVU(appTemp, "°C")} />
@@ -382,6 +504,19 @@ export default function Realtime() {
                   {entries.length === 0 && <div className="text-xs text-gray-500">{t('statuses.noData')}</div>}
                   {entries.map(([name, val]) => {
                     const vu = valueAndUnit(val);
+                    // Show min/max for temperature fields
+                    if (name === 'temperature') {
+                      return (
+                        <TemperatureLabelValue 
+                          key={name} 
+                          label={i18nLabel(name, t)} 
+                          currentTemp={vu}
+                          minMax={tempMinMax}
+                          field={ck}
+                          t={t}
+                        />
+                      );
+                    }
                     return <LabelValue key={name} label={i18nLabel(name, t)} value={fmtVU(vu)} />;
                   })}
                   

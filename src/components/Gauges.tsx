@@ -642,6 +642,9 @@ export default function Gauges() {
   useEffect(() => {
     const fetchTempMinMax = async () => {
       try {
+        // Force update all temperatures first
+        await fetch("/api/temp-minmax/update", { method: "POST", cache: "no-store" });
+        // Then get the updated data
         const res = await fetch("/api/temp-minmax", { cache: "no-store" });
         if (!res.ok) return;
         const json = await res.json();

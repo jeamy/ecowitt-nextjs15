@@ -68,13 +68,17 @@ export function updateTempMinMax(sensorData: Record<string, any>): void {
   // Indoor temperature
   if (sensorData.indoor?.temperature != null) {
     const temp = sensorData.indoor.temperature.value || sensorData.indoor.temperature;
-    tempSensors['indoor'] = parseFloat(temp);
+    if (temp != null && !isNaN(parseFloat(temp))) {
+      tempSensors['indoor'] = parseFloat(temp);
+    }
   }
   
   // Outdoor temperature
   if (sensorData.outdoor?.temperature != null) {
     const temp = sensorData.outdoor.temperature.value || sensorData.outdoor.temperature;
-    tempSensors['outdoor'] = parseFloat(temp);
+    if (temp != null && !isNaN(parseFloat(temp))) {
+      tempSensors['outdoor'] = parseFloat(temp);
+    }
   }
   
   // Channel temperatures - check all possible channel formats
@@ -83,10 +87,14 @@ export function updateTempMinMax(sensorData: Record<string, any>): void {
       const tempObj = sensorData[key]?.temperature;
       if (tempObj != null) {
         const temp = tempObj.value || tempObj;
-        tempSensors[key] = parseFloat(temp);
+        if (temp != null && !isNaN(parseFloat(temp))) {
+          tempSensors[key] = parseFloat(temp);
+        }
       }
     }
   });
+  
+  console.log(`[temp-minmax] Processing ${Object.keys(tempSensors).length} temperature sensors:`, Object.keys(tempSensors));
   
   // Update min/max for each sensor
   Object.entries(tempSensors).forEach(([sensorKey, temp]) => {
