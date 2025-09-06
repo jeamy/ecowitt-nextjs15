@@ -2,6 +2,7 @@ import "server-only";
 import EcoCon from "eco";
 import { promises as fs } from "fs";
 import path from "path";
+import { updateTempMinMax } from "./temp-minmax";
 
 function buildParams(all: boolean) {
   const eco = EcoCon.getInstance().getConfig();
@@ -251,6 +252,8 @@ export async function fetchAndArchive(all: boolean = true) {
   const payload = (data && (data.data || (data as any).payload || data)) as any;
   if (payload && typeof payload === "object") {
     await writeLiveToDNT(payload);
+    // Update temperature min/max tracking
+    updateTempMinMax(payload);
     // Log success with ISO timestamp
     try {
       console.log(`[rt] update ok: ${new Date().toISOString()}`);

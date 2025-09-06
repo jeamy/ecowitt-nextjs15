@@ -38,7 +38,10 @@
     "channelSensors": "Channel Sensors",
     "tempShort": "Temp",
     "humidityShort": "Humidity",
-    "rawData": "Raw Data"
+    "rawData": "Raw Data",
+    "maxTemp": "Max",
+    "minTemp": "Min",
+    "todayMinMax": "Today Min/Max"
   },
   "realtime": {
     "indoor": "Indoor",

@@ -1,0 +1,59 @@
+{
+  "date": "2025-09-06",
+  "sensors": {
+    "indoor": {
+      "min": 23.1,
+      "max": 23.1,
+      "minTime": "2025-09-06T13:13:25.880Z",
+      "maxTime": "2025-09-06T13:13:25.880Z"
+    },
+    "outdoor": {
+      "min": 22.7,
+      "max": 22.7,
+      "minTime": "2025-09-06T13:13:25.880Z",
+      "maxTime": "2025-09-06T13:13:25.880Z"
+    },
+    "temp_and_humidity_ch1": {
+      "min": 20.1,
+      "max": 20.1,
+      "minTime": "2025-09-06T13:13:25.880Z",
+      "maxTime": "2025-09-06T13:13:25.880Z"
+    },
+    "temp_and_humidity_ch2": {
+      "min": 22,
+      "max": 22,
+      "minTime": "2025-09-06T13:13:25.880Z",
+      "maxTime": "2025-09-06T13:13:25.880Z"
+    },
+    "temp_and_humidity_ch3": {
+      "min": 21.9,
+      "max": 21.9,
+      "minTime": "2025-09-06T13:13:25.880Z",
+      "maxTime": "2025-09-06T13:13:25.880Z"
+    },
+    "temp_and_humidity_ch5": {
+      "min": 23.6,
+      "max": 23.6,
+      "minTime": "2025-09-06T13:13:25.880Z",
+      "maxTime": "2025-09-06T13:13:25.880Z"
+    },
+    "temp_and_humidity_ch6": {
+      "min": 21.7,
+      "max": 21.7,
+      "minTime": "2025-09-06T13:13:25.880Z",
+      "maxTime": "2025-09-06T13:13:25.880Z"
+    },
+    "temp_and_humidity_ch7": {
+      "min": 23.1,
+      "max": 23.1,
+      "minTime": "2025-09-06T13:13:25.880Z",
+      "maxTime": "2025-09-06T13:13:25.880Z"
+    },
+    "temp_and_humidity_ch8": {
+      "min": 22.5,
+      "max": 22.5,
+      "minTime": "2025-09-06T13:13:25.880Z",
+      "maxTime": "2025-09-06T13:13:25.880Z"
+    }
+  }
+}

@@ -221,6 +221,49 @@ function calculateHeatIndex(temperature: number, humidity: number): number {
   return Number.isFinite(hi) ? Math.round(hi * 10) / 10 : temperature;
 }
 
+// Min/Max display component for temperature gauges
+function MinMaxDisplay(props: {
+  sensorKey: string;
+  tempMinMax: any;
+  unit?: string;
+}) {
+  const { sensorKey, tempMinMax, unit = "°C" } = props;
+  const { t, i18n } = useTranslation();
+  
+  if (!tempMinMax?.sensors?.[sensorKey]) {
+    return null;
+  }
+  
+  const sensor = tempMinMax.sensors[sensorKey];
+  const formatTime = (isoString: string) => {
+    try {
+      const date = new Date(isoString);
+      return new Intl.DateTimeFormat(i18n.language || 'de', {
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(date);
+    } catch {
+      return "--:--";
+    }
+  };
+  
+  return (
+    <div className="absolute inset-0 flex flex-col justify-between pointer-events-none text-xs">
+      {/* Max temp at top */}
+      <div className="text-center text-red-600 font-medium bg-white/80 rounded px-1 mx-2 mt-2">
+        <div className="text-[14px]">↑ {sensor.max.toFixed(1)}{unit}</div>
+        <div className="text-[14px] text-gray-500">{formatTime(sensor.maxTime)}</div>
+      </div>
+      
+      {/* Min temp at bottom */}
+      <div className="text-center text-blue-600 font-medium bg-white/80 rounded px-1 mx-2 mb-2">
+        <div className="text-[14px] text-gray-500">{formatTime(sensor.minTime)}</div>
+        <div className="text-[14px]">↓ {sensor.min.toFixed(1)}{unit}</div>
+      </div>
+    </div>
+  );
+}
+
 // Enhanced donut gauge with tick labels, segments and extra rings
 function DonutGauge(props: {
   label: string;
@@ -244,6 +287,8 @@ function DonutGauge(props: {
   ringOpacity?: number;
   segments?: Array<{ from: number; to: number; color: string }>; // background bands
   extras?: Array<{ value: number | null; color: string; opacity?: number }>; // additional rings
+  sensorKey?: string; // for min/max display
+  tempMinMax?: any; // min/max data
 }) {
   const {
     label,
@@ -363,42 +408,48 @@ function DonutGauge(props: {
   });
 
   return (
-    <div className="flex flex-col items-center justify-center">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ overflow: "visible" }}>
-        {/* background or full-color ring */}
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke={fullColorRing ? color : "#e5e7eb"} strokeOpacity={fullColorRing ? ringOpacity : 1} strokeWidth={stroke} />
-        {/* segments */}
-        {!fullColorRing && segEls}
-        {/* extra rings (e.g., dew point, feels like) */}
-        {!fullColorRing && extraEls}
-        {/* value ring (hidden for fullColorRing) */}
-        {!fullColorRing && (
-          <circle
-            cx={cx}
-            cy={cy}
-            r={r}
-            fill="none"
-            stroke={color}
-            strokeOpacity={ringOpacity}
-            strokeWidth={stroke}
-            strokeLinecap="round"
-            strokeDasharray={`${dash} ${rest}`}
-            transform={`rotate(-90 ${cx} ${cy})`}
-          />
+    <div className="flex flex-col items-center justify-center relative">
+      <div className="relative">
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ overflow: "visible" }}>
+          {/* background or full-color ring */}
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke={fullColorRing ? color : "#e5e7eb"} strokeOpacity={fullColorRing ? ringOpacity : 1} strokeWidth={stroke} />
+          {/* segments */}
+          {!fullColorRing && segEls}
+          {/* extra rings (e.g., dew point, feels like) */}
+          {!fullColorRing && extraEls}
+          {/* value ring (hidden for fullColorRing) */}
+          {!fullColorRing && (
+            <circle
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill="none"
+              stroke={color}
+              strokeOpacity={ringOpacity}
+              strokeWidth={stroke}
+              strokeLinecap="round"
+              strokeDasharray={`${dash} ${rest}`}
+              transform={`rotate(-90 ${cx} ${cy})`}
+            />
+          )}
+          {/* ticks & labels */}
+          {showTicks && tickEls}
+          {showValueText && (
+            <text x={cx} y={cy - 4} textAnchor="middle" fontSize={fontMain} fontWeight={500} fill={valueColor ?? "#1f2937"}>
+              {value == null || !isFinite(value) ? "—" : (props.valuePrecision != null ? value.toFixed(props.valuePrecision) : Math.round(value))}
+            </text>
+          )}
+          {showUnitText && (
+            <text x={cx} y={cy + 18} textAnchor="middle" fontSize={fontUnit} fill={unitColor ?? labelColor}>
+              {unit || ""}
+            </text>
+          )}
+        </svg>
+        {/* Min/Max overlay for temperature sensors */}
+        {props.sensorKey && props.tempMinMax && (
+          <MinMaxDisplay sensorKey={props.sensorKey} tempMinMax={props.tempMinMax} unit={unit} />
         )}
-        {/* ticks & labels */}
-        {showTicks && tickEls}
-        {showValueText && (
-          <text x={cx} y={cy - 4} textAnchor="middle" fontSize={fontMain} fontWeight={500} fill={valueColor ?? "#1f2937"}>
-            {value == null || !isFinite(value) ? "—" : (props.valuePrecision != null ? value.toFixed(props.valuePrecision) : Math.round(value))}
-          </text>
-        )}
-        {showUnitText && (
-          <text x={cx} y={cy + 18} textAnchor="middle" fontSize={fontUnit} fill={unitColor ?? labelColor}>
-            {unit || ""}
-          </text>
-        )}
-      </svg>
+      </div>
       <div className="mt-1 text-sm text-gray-600 dark:text-gray-300" style={{ color: captionColor }}>{label}</div>
     </div>
   );
@@ -527,6 +578,7 @@ export default function Gauges() {
   const [channelsCfg, setChannelsCfg] = useState<Record<string, { name?: string }>>({});
   const [deviceInfo, setDeviceInfo] = useState<{ timezone: string | null; latitude: number | null; longitude: number | null } | null>(null);
   const [astro, setAstro] = useState<ReturnType<typeof computeAstro> | null>(null);
+  const [tempMinMax, setTempMinMax] = useState<any | null>(null);
 
   const fetchNow = async () => {
     try {
@@ -585,6 +637,25 @@ export default function Gauges() {
       } catch {}
     })();
   }, [i18n.language]);
+
+  // Load today's temperature min/max data
+  useEffect(() => {
+    const fetchTempMinMax = async () => {
+      try {
+        const res = await fetch("/api/temp-minmax", { cache: "no-store" });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json && json.ok) {
+          setTempMinMax(json.data);
+        }
+      } catch {}
+    };
+    
+    fetchTempMinMax();
+    // Refresh min/max data every 5 minutes
+    const id = setInterval(fetchTempMinMax, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const payload = data as any;
 
@@ -741,6 +812,8 @@ export default function Gauges() {
               showMinorTicks={false}
               fullColorRing={true}
               ringOpacity={0.6}
+              sensorKey="outdoor"
+              tempMinMax={tempMinMax}
             />
           </div>
         </div>
@@ -799,7 +872,7 @@ export default function Gauges() {
       {/* Third row: Indoor */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
-          <DonutGauge label={t('gauges.indoorTemp')} value={indoorT} min={10} max={35} unit="°C" color={tempColor(indoorT)} valuePrecision={1} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
+          <DonutGauge label={t('gauges.indoorTemp')} value={indoorT} min={10} max={35} unit="°C" color={tempColor(indoorT)} valuePrecision={1} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} sensorKey="indoor" tempMinMax={tempMinMax} />
         </div>
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
           <DonutGauge label={t('gauges.indoorHumidity')} value={indoorH} min={0} max={100} unit="%" color={humColor(indoorH)} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
@@ -875,7 +948,7 @@ export default function Gauges() {
                     <span className="align-middle">{channelName(ck)}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 items-center">
-                    <DonutGauge label={t('gauges.tempShort')} value={tempVal} min={-20} max={45} unit="°C" color={colT} valuePrecision={1} size={180} ticks={0} showTicks={false} showMinorTicks={false} showTickLabels={false} fullColorRing={true} ringOpacity={0.6} captionColor="#000" valueColor="#000" unitColor="#000" />
+                    <DonutGauge label={t('gauges.tempShort')} value={tempVal} min={-20} max={45} unit="°C" color={colT} valuePrecision={1} size={180} ticks={0} showTicks={false} showMinorTicks={false} showTickLabels={false} fullColorRing={true} ringOpacity={0.6} captionColor="#000" valueColor="#000" unitColor="#000" sensorKey={ck} tempMinMax={tempMinMax} />
                     <DonutGauge label={t('gauges.humidityShort')} value={h} min={0} max={100} unit="%" color={humColor(h)} size={180} ticks={0} showTicks={false} showMinorTicks={false} showTickLabels={false} fullColorRing={true} ringOpacity={0.6} captionColor="#000" valueColor="#000" unitColor="#000" />
                   </div>
                 </div>
