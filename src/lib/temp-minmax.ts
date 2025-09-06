@@ -11,6 +11,14 @@ interface TempMinMax {
       maxTime: string; // ISO timestamp
     };
   };
+  humidity: {
+    [sensorKey: string]: {
+      min: number;
+      max: number;
+      minTime: string; // ISO timestamp
+      maxTime: string; // ISO timestamp
+    };
+  };
 }
 
 const DATA_FILE = path.join(process.cwd(), 'temp-minmax-data.json');
@@ -58,30 +66,49 @@ export function updateTempMinMax(sensorData: Record<string, any>): void {
   if (!todayEntry || todayEntry.date !== today) {
     todayEntry = {
       date: today,
-      sensors: {}
+      sensors: {},
+      humidity: {}
     };
   }
   
-  // Extract temperature values from sensor data
-  const tempSensors: Record<string, number> = {};
+  // Ensure humidity object exists even for existing entries
+  if (!todayEntry.humidity) {
+    todayEntry.humidity = {};
+  }
   
-  // Indoor temperature
+  // Extract temperature and humidity values from sensor data
+  const tempSensors: Record<string, number> = {};
+  const humiditySensors: Record<string, number> = {};
+  
+  // Indoor temperature and humidity
   if (sensorData.indoor?.temperature != null) {
     const temp = sensorData.indoor.temperature.value || sensorData.indoor.temperature;
     if (temp != null && !isNaN(parseFloat(temp))) {
       tempSensors['indoor'] = parseFloat(temp);
     }
   }
+  if (sensorData.indoor?.humidity != null) {
+    const humidity = sensorData.indoor.humidity.value || sensorData.indoor.humidity;
+    if (humidity != null && !isNaN(parseFloat(humidity))) {
+      humiditySensors['indoor'] = parseFloat(humidity);
+    }
+  }
   
-  // Outdoor temperature
+  // Outdoor temperature and humidity
   if (sensorData.outdoor?.temperature != null) {
     const temp = sensorData.outdoor.temperature.value || sensorData.outdoor.temperature;
     if (temp != null && !isNaN(parseFloat(temp))) {
       tempSensors['outdoor'] = parseFloat(temp);
     }
   }
+  if (sensorData.outdoor?.humidity != null) {
+    const humidity = sensorData.outdoor.humidity.value || sensorData.outdoor.humidity;
+    if (humidity != null && !isNaN(parseFloat(humidity))) {
+      humiditySensors['outdoor'] = parseFloat(humidity);
+    }
+  }
   
-  // Channel temperatures - check all possible channel formats
+  // Channel temperatures and humidity - check all possible channel formats
   Object.keys(sensorData).forEach(key => {
     if (/^(ch\d+|temp_and_humidity_ch\d+)$/i.test(key)) {
       const tempObj = sensorData[key]?.temperature;
@@ -91,24 +118,33 @@ export function updateTempMinMax(sensorData: Record<string, any>): void {
           tempSensors[key] = parseFloat(temp);
         }
       }
+      
+      const humidityObj = sensorData[key]?.humidity;
+      if (humidityObj != null) {
+        const humidity = humidityObj.value || humidityObj;
+        if (humidity != null && !isNaN(parseFloat(humidity))) {
+          humiditySensors[key] = parseFloat(humidity);
+        }
+      }
     }
   });
   
   console.log(`[temp-minmax] Processing ${Object.keys(tempSensors).length} temperature sensors:`, Object.keys(tempSensors));
+  console.log(`[temp-minmax] Processing ${Object.keys(humiditySensors).length} humidity sensors:`, Object.keys(humiditySensors));
   
-  // Update min/max for each sensor
+  // Update min/max for each temperature sensor
   Object.entries(tempSensors).forEach(([sensorKey, temp]) => {
     if (!isFinite(temp)) return;
     
-    if (!todayEntry.sensors[sensorKey]) {
-      todayEntry.sensors[sensorKey] = {
+    if (!todayEntry!.sensors[sensorKey]) {
+      todayEntry!.sensors[sensorKey] = {
         min: temp,
         max: temp,
         minTime: now,
         maxTime: now
       };
     } else {
-      const sensor = todayEntry.sensors[sensorKey];
+      const sensor = todayEntry!.sensors[sensorKey];
       if (temp < sensor.min) {
         sensor.min = temp;
         sensor.minTime = now;
@@ -120,8 +156,32 @@ export function updateTempMinMax(sensorData: Record<string, any>): void {
     }
   });
   
+  // Update min/max for each humidity sensor
+  Object.entries(humiditySensors).forEach(([sensorKey, humidity]) => {
+    if (!isFinite(humidity)) return;
+    
+    if (!todayEntry!.humidity[sensorKey]) {
+      todayEntry!.humidity[sensorKey] = {
+        min: humidity,
+        max: humidity,
+        minTime: now,
+        maxTime: now
+      };
+    } else {
+      const sensor = todayEntry!.humidity[sensorKey];
+      if (humidity < sensor.min) {
+        sensor.min = humidity;
+        sensor.minTime = now;
+      }
+      if (humidity > sensor.max) {
+        sensor.max = humidity;
+        sensor.maxTime = now;
+      }
+    }
+  });
+  
   // Save only today's data
-  saveData(todayEntry);
+  saveData(todayEntry!);
 }
 
 // Get today's min/max temperatures

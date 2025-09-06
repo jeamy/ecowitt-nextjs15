@@ -64,6 +64,54 @@ function TemperatureLabelValue({
   );
 }
 
+function HumidityLabelValue({ 
+  label, 
+  currentHumidity, 
+  minMax, 
+  field, 
+  unit = "%", 
+  t 
+}: { 
+  label: string; 
+  currentHumidity: { value: string | number | null; unit?: string }; 
+  minMax: any; 
+  field: string; 
+  unit?: string;
+  t: (key: string) => string;
+}) {
+  const sensorData = minMax?.humidity?.[field];
+  
+  const formatMinMax = (value: number, time: string, label: string, isMax: boolean) => {
+    const timeStr = time ? new Date(time).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+    const colorClass = isMax ? 'text-red-600' : 'text-blue-600';
+    return (
+      <div className={`flex justify-between text-sm ${colorClass}`}>
+        <span>{label} {timeStr} Uhr</span>
+        <span>{value.toFixed(1)}{unit}</span>
+      </div>
+    );
+  };
+
+  return (
+    <div className="py-1">
+      <div className="flex items-start justify-between">
+        <div className="flex flex-col w-full">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-600 dark:text-gray-300 text-sm">{label}</span>
+            <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{(Number(currentHumidity.value) || 0).toFixed(1)}{unit}</span>
+          </div>
+          {minMax && sensorData && (
+            <div className="mt-1 space-y-0.5">
+              {sensorData?.min != null && formatMinMax(sensorData.min, sensorData.minTime, 'Min', false)}
+              {sensorData?.max != null && formatMinMax(sensorData.max, sensorData.maxTime, 'Max', true)}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MinMaxDisplay({ 
   current, 
   minMax, 
@@ -389,7 +437,13 @@ export default function Realtime() {
             field="indoor"
             t={t}
           />
-          <LabelValue label={t('fields.humidity')} value={fmtVU(indoorH, "%")} />
+          <HumidityLabelValue 
+            label={t('fields.humidity')} 
+            currentHumidity={indoorH}
+            minMax={tempMinMax}
+            field="indoor"
+            t={t}
+          />
           <LabelValue label={t('gauges.pressureRel')} value={fmtVU(pressureRel, "hPa")} />
           <LabelValue label={t('gauges.pressureAbs')} value={fmtVU(pressureAbs, "hPa")} />
         </div>
@@ -402,7 +456,13 @@ export default function Realtime() {
             field="outdoor"
             t={t}
           />
-          <LabelValue label={t('fields.humidity')} value={fmtVU(outdoorH, "%")} />
+          <HumidityLabelValue 
+            label={t('fields.humidity')} 
+            currentHumidity={outdoorH}
+            minMax={tempMinMax}
+            field="outdoor"
+            t={t}
+          />
           <LabelValue label={t('fields.feelsLike')} value={fmtVU(feelsLike, "°C")} />
           <LabelValue label={t('fields.appTemp')} value={fmtVU(appTemp, "°C")} />
           <LabelValue label={t('fields.dewPoint')} value={fmtVU(dewPoint, "°C")} />
@@ -504,13 +564,25 @@ export default function Realtime() {
                   {entries.length === 0 && <div className="text-xs text-gray-500">{t('statuses.noData')}</div>}
                   {entries.map(([name, val]) => {
                     const vu = valueAndUnit(val);
-                    // Show min/max for temperature fields
+                    // Show min/max for temperature and humidity fields
                     if (name === 'temperature') {
                       return (
                         <TemperatureLabelValue 
                           key={name} 
                           label={i18nLabel(name, t)} 
                           currentTemp={vu}
+                          minMax={tempMinMax}
+                          field={ck}
+                          t={t}
+                        />
+                      );
+                    }
+                    if (name === 'humidity') {
+                      return (
+                        <HumidityLabelValue 
+                          key={name} 
+                          label={i18nLabel(name, t)} 
+                          currentHumidity={vu}
                           minMax={tempMinMax}
                           field={ck}
                           t={t}

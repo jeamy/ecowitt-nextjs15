@@ -226,15 +226,19 @@ function MinMaxDisplay(props: {
   sensorKey: string;
   tempMinMax: any;
   unit?: string;
+  isHumidity?: boolean;
 }) {
-  const { sensorKey, tempMinMax, unit = "°C" } = props;
+  const { sensorKey, tempMinMax, unit = "°C", isHumidity = false } = props;
   const { t, i18n } = useTranslation();
   
-  if (!tempMinMax?.sensors?.[sensorKey]) {
+  // Use humidity data if isHumidity flag is set, otherwise use temperature data
+  const dataSource = isHumidity ? tempMinMax?.humidity : tempMinMax?.sensors;
+  
+  if (!dataSource?.[sensorKey]) {
     return null;
   }
   
-  const sensor = tempMinMax.sensors[sensorKey];
+  const sensor = dataSource[sensorKey];
   const formatTime = (isoString: string) => {
     try {
       const date = new Date(isoString);
@@ -289,6 +293,7 @@ function DonutGauge(props: {
   extras?: Array<{ value: number | null; color: string; opacity?: number }>; // additional rings
   sensorKey?: string; // for min/max display
   tempMinMax?: any; // min/max data
+  isHumidity?: boolean; // flag to use humidity min/max instead of temperature
 }) {
   const {
     label,
@@ -445,9 +450,14 @@ function DonutGauge(props: {
             </text>
           )}
         </svg>
-        {/* Min/Max overlay for temperature sensors */}
+        {/* Min/Max overlay for temperature/humidity sensors */}
         {props.sensorKey && props.tempMinMax && (
-          <MinMaxDisplay sensorKey={props.sensorKey} tempMinMax={props.tempMinMax} unit={unit} />
+          <MinMaxDisplay 
+            sensorKey={props.sensorKey} 
+            tempMinMax={props.tempMinMax} 
+            unit={unit} 
+            isHumidity={props.isHumidity}
+          />
         )}
       </div>
       <div className="mt-1 text-sm text-gray-600 dark:text-gray-300" style={{ color: captionColor }}>{label}</div>
@@ -834,6 +844,9 @@ export default function Gauges() {
               showMinorTicks={false}
               fullColorRing={true}
               ringOpacity={0.6}
+              sensorKey="outdoor"
+              tempMinMax={tempMinMax}
+              isHumidity={true}
             />
             <HumGradientBar min={1} max={100} step={10} height={200} />
           </div>
@@ -878,7 +891,7 @@ export default function Gauges() {
           <DonutGauge label={t('gauges.indoorTemp')} value={indoorT} min={10} max={35} unit="°C" color={tempColor(indoorT)} valuePrecision={1} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} sensorKey="indoor" tempMinMax={tempMinMax} />
         </div>
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
-          <DonutGauge label={t('gauges.indoorHumidity')} value={indoorH} min={0} max={100} unit="%" color={humColor(indoorH)} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
+          <DonutGauge label={t('gauges.indoorHumidity')} value={indoorH} min={0} max={100} unit="%" color={humColor(indoorH)} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} sensorKey="indoor" tempMinMax={tempMinMax} isHumidity={true} />
         </div>
       </div>
 
@@ -952,7 +965,7 @@ export default function Gauges() {
                   </div>
                   <div className="grid grid-cols-2 gap-2 items-center">
                     <DonutGauge label={t('gauges.tempShort')} value={tempVal} min={-20} max={45} unit="°C" color={colT} valuePrecision={1} size={180} ticks={0} showTicks={false} showMinorTicks={false} showTickLabels={false} fullColorRing={true} ringOpacity={0.6} captionColor="#000" valueColor="#000" unitColor="#000" sensorKey={ck} tempMinMax={tempMinMax} />
-                    <DonutGauge label={t('gauges.humidityShort')} value={h} min={0} max={100} unit="%" color={humColor(h)} size={180} ticks={0} showTicks={false} showMinorTicks={false} showTickLabels={false} fullColorRing={true} ringOpacity={0.6} captionColor="#000" valueColor="#000" unitColor="#000" />
+                    <DonutGauge label={t('gauges.humidityShort')} value={h} min={0} max={100} unit="%" color={humColor(h)} size={180} ticks={0} showTicks={false} showMinorTicks={false} showTickLabels={false} fullColorRing={true} ringOpacity={0.6} captionColor="#000" valueColor="#000" unitColor="#000" sensorKey={ck} tempMinMax={tempMinMax} isHumidity={true} />
                   </div>
                 </div>
               );
