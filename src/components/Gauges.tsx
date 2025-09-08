@@ -6,12 +6,23 @@ import { API_ENDPOINTS } from "@/constants";
 import { useRealtime } from "@/contexts/RealtimeContext";
 import { computeAstro, formatTime } from "@/lib/astro";
 
-// Lightweight helpers – duplicated to keep this component self-contained
+/**
+ * Safely reads a nested property from an object.
+ * @param obj - The object to read from.
+ * @param path - The dot-separated path to the property.
+ * @returns The property value, or undefined if not found.
+ * @private
+ */
 function tryRead(obj: any, path: string): any {
   return path.split(".").reduce((acc, key) => (acc && key in acc ? (acc as any)[key] : undefined), obj);
 }
 
-// Temperature/Humidity color helpers shared across components
+/**
+ * Determines the color for a given temperature value based on a predefined scale.
+ * @param t - The temperature in Celsius.
+ * @returns A hex color string.
+ * @private
+ */
 function tempColor(t: number | null): string {
   // Reversed spectrum: violet at cold end, red at hot end
   // Red at +45°C, violet around -20°C (and below). Thresholds in °C (converted from the given Fahrenheit table).
@@ -33,6 +44,12 @@ function tempColor(t: number | null): string {
   return "#b91c1c"; // red-700 above +45°C
 }
 
+/**
+ * Determines the color for a given humidity value based on a predefined scale.
+ * @param h - The humidity in percent.
+ * @returns A hex color string.
+ * @private
+ */
 function humColor(h: number | null): string {
   // Similar reversed spectrum from 0% (violet) to 100% (red)
   if (h == null || !isFinite(h)) return "#94a3b8";
@@ -49,7 +66,17 @@ function humColor(h: number | null): string {
   return "#dc2626"; // red-600 to 100%
 }
 
-// Vertical temperature gradient bar with ticks every `step` degrees
+/**
+ * Renders a vertical temperature gradient bar with tick marks.
+ * @param props - The component props.
+ * @param props.min - The minimum temperature of the scale.
+ * @param props.max - The maximum temperature of the scale.
+ * @param props.step - The interval for tick marks.
+ * @param props.height - The height of the SVG element.
+ * @param props.width - The width of the bar itself.
+ * @returns A React SVG component.
+ * @private
+ */
 function TempGradientBar(props: { min: number; max: number; step: number; height?: number; width?: number }) {
   const { min, max, step, height = 200, width = 28 } = props;
   const pad = 12;
@@ -111,7 +138,17 @@ function TempGradientBar(props: { min: number; max: number; step: number; height
   );
 }
 
-// Vertical humidity gradient bar (1–100%) with hard edges and labels
+/**
+ * Renders a vertical humidity gradient bar with tick marks.
+ * @param props - The component props.
+ * @param props.min - The minimum humidity of the scale.
+ * @param props.max - The maximum humidity of the scale.
+ * @param props.step - The interval for tick marks.
+ * @param props.height - The height of the SVG element.
+ * @param props.width - The width of the bar itself.
+ * @returns A React SVG component.
+ * @private
+ */
 function HumGradientBar(props: { min: number; max: number; step: number; height?: number; width?: number }) {
   const { min, max, step, height = 200, width = 28 } = props;
   const pad = 12;
@@ -169,6 +206,12 @@ function HumGradientBar(props: { min: number; max: number; step: number; height?
   );
 }
 
+/**
+ * Safely extracts a numeric value from various possible data structures.
+ * @param v - The value to parse, which can be a number, string, or object with a `value` property.
+ * @returns The numeric value, or null if parsing fails.
+ * @private
+ */
 function numVal(v: any): number | null {
   if (v == null) return null;
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
@@ -182,6 +225,12 @@ function numVal(v: any): number | null {
   return null;
 }
 
+/**
+ * Extracts a value and its unit from a potential value-unit object.
+ * @param v - The value, which can be a primitive or an object like `{ value: 10, unit: '°C' }`.
+ * @returns An object containing the value and an optional unit.
+ * @private
+ */
 function valueAndUnit(v: any): { value: string | number | null; unit?: string } {
   if (v == null) return { value: null };
   if (typeof v === "object" && ("value" in v)) {
@@ -190,13 +239,26 @@ function valueAndUnit(v: any): { value: string | number | null; unit?: string } 
   return { value: v };
 }
 
+/**
+ * Formats a value-unit object into a display string.
+ * @param vu - The value-unit object.
+ * @param fallbackUnit - A fallback unit to use if the object doesn't specify one.
+ * @returns A formatted string like "10 °C" or "—" if the value is null.
+ * @private
+ */
 function fmtVU(vu: { value: string | number | null; unit?: string }, fallbackUnit?: string) {
   if (vu.value == null || vu.value === "") return "—";
   const unit = vu.unit ?? fallbackUnit ?? "";
   return `${vu.value}${unit ? ` ${unit}` : ""}`;
 }
 
-// Derived metrics
+/**
+ * Calculates the dew point.
+ * @param temperature - The temperature in Celsius.
+ * @param humidity - The relative humidity in percent.
+ * @returns The calculated dew point in Celsius.
+ * @private
+ */
 function calculateDewPoint(temperature: number, humidity: number): number {
   const a = 17.27;
   const b = 237.7;
@@ -205,6 +267,13 @@ function calculateDewPoint(temperature: number, humidity: number): number {
   return Number.isFinite(dewPoint) ? Math.round(dewPoint * 10) / 10 : temperature;
 }
 
+/**
+ * Calculates the heat index (apparent temperature).
+ * @param temperature - The temperature in Celsius.
+ * @param humidity - The relative humidity in percent.
+ * @returns The calculated heat index in Celsius.
+ * @private
+ */
 function calculateHeatIndex(temperature: number, humidity: number): number {
   if (temperature < 20) return temperature;
   const t = temperature;
@@ -223,7 +292,17 @@ function calculateHeatIndex(temperature: number, humidity: number): number {
   return Number.isFinite(hi) ? Math.round(hi * 10) / 10 : temperature;
 }
 
-// Min/Max display component for temperature gauges
+/**
+ * A component that displays the minimum and maximum values for a sensor,
+ * typically overlaid on a gauge.
+ * @param props - The component props.
+ * @param props.sensorKey - The key identifying the sensor in the min/max data object.
+ * @param props.tempMinMax - The object containing min/max data for all sensors.
+ * @param props.unit - The unit to display (e.g., "°C").
+ * @param props.isHumidity - If true, it uses the humidity min/max data instead of temperature.
+ * @returns A React component showing min/max values with timestamps.
+ * @private
+ */
 function MinMaxDisplay(props: {
   sensorKey: string;
   tempMinMax: any;
@@ -270,7 +349,13 @@ function MinMaxDisplay(props: {
   );
 }
 
-// Enhanced donut gauge with tick labels, segments and extra rings
+/**
+ * A highly customizable donut gauge component for displaying sensor values.
+ * It supports ticks, labels, color segments, and overlaying multiple data rings.
+ * @param props - The component props.
+ * @returns A React SVG component representing the gauge.
+ * @private
+ */
 function DonutGauge(props: {
   label: string;
   value: number | null;
@@ -467,6 +552,14 @@ function DonutGauge(props: {
   );
 }
 
+/**
+ * A simple Key Performance Indicator (KPI) display box.
+ * @param props - The component props.
+ * @param props.label - The label for the KPI.
+ * @param props.value - The value of the KPI.
+ * @returns A React component for displaying a KPI.
+ * @private
+ */
 function KPI(props: { label: string; value: React.ReactNode }) {
   return (
     <div className="p-3 rounded border border-gray-200 dark:border-neutral-800">
@@ -476,7 +569,15 @@ function KPI(props: { label: string; value: React.ReactNode }) {
   );
 }
 
-// Raindrop icon with fill level based on hourly rate
+/**
+ * Renders a raindrop icon with a fill level corresponding to the rain rate.
+ * @param props - The component props.
+ * @param props.rate - The rain rate.
+ * @param props.unit - The unit of the rain rate.
+ * @param props.size - The size of the SVG icon.
+ * @returns A React SVG component of a raindrop.
+ * @private
+ */
 function Raindrop({ rate, unit = "mm/hr", size = 84 }: { rate: number | null; unit?: string; size?: number }) {
   const id = React.useMemo(() => `drop-${Math.random().toString(36).slice(2)}` , []);
   let v = rate ?? 0;
@@ -523,6 +624,16 @@ function Raindrop({ rate, unit = "mm/hr", size = 84 }: { rate: number | null; un
   );
 }
 
+/**
+ * Renders a compass for displaying wind direction and speed.
+ * @param props - The component props.
+ * @param props.dir - The wind direction in degrees.
+ * @param props.speed - The wind speed.
+ * @param props.gust - The wind gust speed.
+ * @param props.unit - The unit for speed and gust.
+ * @returns A React component showing a wind compass.
+ * @private
+ */
 function CompassWind(props: { dir: number | null; speed: number | null; gust?: number | null; unit?: string }) {
   const { dir, speed, gust, unit = "" } = props;
   const { t } = useTranslation();
@@ -581,6 +692,13 @@ function CompassWind(props: { dir: number | null; speed: number | null; gust?: n
   );
 }
 
+/**
+ * The main component that renders all the gauges and KPIs for the dashboard.
+ * It fetches real-time data, channel configurations, device info, and min/max temperature data,
+ * and then displays it using various gauge and chart components.
+ *
+ * @returns The main Gauges component.
+ */
 export default function Gauges() {
   const { t, i18n } = useTranslation();
   const { data, error, loading, lastUpdated } = useRealtime();

@@ -1,3 +1,8 @@
+/**
+ * @file This file initializes the i18next library for internationalization.
+ * It sets up the German and English language resources and configures the default settings.
+ * The i18n instance is initialized only once and can be safely imported in client components.
+ */
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 

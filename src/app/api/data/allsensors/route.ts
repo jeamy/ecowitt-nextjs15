@@ -8,6 +8,23 @@ import { ensureAllsensorsParquetForMonth, ensureAllsensorsParquetsInRange } from
 
 export const runtime = "nodejs";
 
+/**
+ * API route to get aggregated 'allsensors' data.
+ * This function handles GET requests to /api/data/allsensors.
+ * It can filter data by month or by a time range, and aggregate it by minute, hour, or day.
+ * It first attempts to use a fast path with DuckDB and Parquet files, and falls back to parsing CSV files if that fails.
+ *
+ * @param {Request} req - The incoming request object.
+ * @returns {Promise<NextResponse>} A JSON response containing the aggregated data, or an error message.
+ *
+ * @example
+ * // Get data for a specific month with hourly resolution
+ * GET /api/data/allsensors?month=202508&resolution=hour
+ *
+ * @example
+ * // Get data for a specific time range with daily resolution
+ * GET /api/data/allsensors?start=2025-08-01T00:00:00&end=2025-08-15T23:59:59&resolution=day
+ */
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
