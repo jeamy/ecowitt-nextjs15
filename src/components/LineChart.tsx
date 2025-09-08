@@ -2,32 +2,55 @@
 
 import React, { useMemo, useState } from "react";
 
+/**
+ * Represents a single point in a line chart series.
+ */
 export type LinePoint = { x: number; y: number; label?: string };
+
+/**
+ * Represents a series of data for the line chart.
+ */
 export type LineSeries = { id: string; color: string; points: LinePoint[] };
 
+/**
+ * Props for the LineChart component.
+ */
 type Props = {
+  /** The array of data series to plot. */
   series: LineSeries[];
+  /** The height of the chart canvas. */
   height?: number;
+  /** The label for the Y-axis. */
   yLabel?: string;
+  /** A function to format the X-axis tick labels. */
   xTickFormatter?: (v: number) => string;
-  // Optional dedicated formatter for hover time (overrides xTickFormatter in tooltip)
+  /** A dedicated formatter for the time displayed in the hover tooltip. */
   hoverTimeFormatter?: (v: number) => string;
+  /** The label for the X-axis. */
   xLabel?: string;
+  /** Whether to display the legend. */
   showLegend?: boolean;
-  // Optional: render as vertical bars (useful for daily rainfall)
+  /** If true, renders the data as vertical bars instead of a line. */
   bars?: boolean;
-  // Bar width in x-units (minutes); defaults to spanX/(tickCount*1.5)
+  /** The width of bars in data units (e.g., minutes). */
   barWidth?: number;
-  // Optional fixed bar width in pixels (overrides barWidth)
+  /** A fixed width for bars in pixels, overriding `barWidth`. */
   barWidthPx?: number;
-  // Show hover crosshair and current values tooltip
+  /** If true, shows a crosshair and tooltip on hover. */
   showHover?: boolean;
-  // Optional unit appended to hover value, e.g. "mm"
+  /** The unit to append to the Y-value in the tooltip. */
   yUnit?: string;
-  // Optional custom formatter for hover value
+  /** A custom function to format the value displayed in the tooltip. */
   valueFormatter?: (v: number) => string;
 };
 
+/**
+ * A responsive line chart component built with SVG.
+ * It supports multiple series, tooltips, legends, and rendering as bar charts.
+ *
+ * @param props - The component props.
+ * @returns A React component that renders the line chart.
+ */
 export default function LineChart({ series, height = 220, yLabel, xTickFormatter, hoverTimeFormatter, xLabel, showLegend = true, bars = false, barWidth, barWidthPx, showHover = true, yUnit, valueFormatter }: Props) {
   const padding = { top: 20, right: 12, bottom: 28, left: 36 };
   const width = 800; // SVG viewBox width; scales responsively via CSS

@@ -1,5 +1,21 @@
 import SunCalc from "suncalc";
 
+/**
+ * Represents the result of astronomical calculations.
+ * @property {Date | null} sunrise - The time of sunrise.
+ * @property {Date | null} sunset - The time of sunset.
+ * @property {Date | null} moonrise - The time of moonrise.
+ * @property {Date | null} moonset - The time of moonset.
+ * @property {number} phase - The moon phase, from 0.0 (new moon) to 1.0 (new moon).
+ * @property {string} phaseName - The name of the moon phase.
+ * @property {number} illumination - The fraction of the moon's illuminated limb.
+ * @property {Date | null} civilDawn - The time when the sun is 6 degrees below the horizon in the morning.
+ * @property {Date | null} civilDusk - The time when the sun is 6 degrees below the horizon in the evening.
+ * @property {Date | null} nauticalDawn - The time when the sun is 12 degrees below the horizon in the morning.
+ * @property {Date | null} nauticalDusk - The time when the sun is 12 degrees below the horizon in the evening.
+ * @property {Date | null} astronomicalDawn - The time when the sun is 18 degrees below the horizon in the morning.
+ * @property {Date | null} astronomicalDusk - The time when the sun is 18 degrees below the horizon in the evening.
+ */
 export type AstroResult = {
   sunrise: Date | null;
   sunset: Date | null;
@@ -17,8 +33,14 @@ export type AstroResult = {
   astronomicalDusk: Date | null;// Sun -18° -> end of astronomical twilight (night begins)
 };
 
+/**
+ * Gets the name of the moon phase for a given phase value.
+ * @param {number} phase - The moon phase, from 0.0 (new moon) to 1.0 (new moon).
+ * @param {string} [locale="en"] - The locale to use for the phase name (e.g., "en" or "de").
+ * @returns {string} The name of the moon phase.
+ */
 export function moonPhaseName(phase: number, locale: string = "en"): string {
-  // 0 new, 0.25 first quarter, 0.5 full, 0.75 last quarter
+  // Phase: 0=new, 0.25=first quarter, 0.5=full, 0.75=last quarter
   const namesEn = [
     "New Moon",
     "Waxing Crescent",
@@ -43,6 +65,14 @@ export function moonPhaseName(phase: number, locale: string = "en"): string {
   return (locale?.startsWith("de") ? namesDe : namesEn)[idx];
 }
 
+/**
+ * Computes astronomical data for a given latitude, longitude, and date.
+ * @param {number} lat - The latitude.
+ * @param {number} lon - The longitude.
+ * @param {Date} [date=new Date()] - The date for the calculation.
+ * @param {string} [locale="en"] - The locale for the moon phase name.
+ * @returns {AstroResult} An object containing the astronomical data.
+ */
 export function computeAstro(lat: number, lon: number, date: Date = new Date(), locale: string = "en"): AstroResult {
   const times = SunCalc.getTimes(date, lat, lon);
   const mt = SunCalc.getMoonTimes(date, lat, lon, true /* UTC to avoid host tz issues */);
@@ -65,6 +95,13 @@ export function computeAstro(lat: number, lon: number, date: Date = new Date(), 
   };
 }
 
+/**
+ * Formats a date object into a time string (HH:mm).
+ * @param {Date | null} d - The date to format.
+ * @param {string} [tz] - The time zone to use.
+ * @param {string} [locale="en"] - The locale to use for formatting.
+ * @returns {string} The formatted time string, or "—" if the date is null.
+ */
 export function formatTime(d: Date | null, tz?: string, locale: string = "en"): string {
   if (!d) return "—";
   try {
@@ -81,6 +118,12 @@ export function formatTime(d: Date | null, tz?: string, locale: string = "en"): 
   }
 }
 
+/**
+ * Calculates the percentage of the day that has passed for a given date and time zone.
+ * @param {Date} d - The date object.
+ * @param {string} [tz] - The time zone to use.
+ * @returns {number} The percentage of the day passed, from 0.0 to 1.0.
+ */
 export function timeOfDayPercent(d: Date, tz?: string): number {
   // returns 0..1 position within day for the given date in tz
   try {

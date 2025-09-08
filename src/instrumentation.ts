@@ -6,6 +6,15 @@ declare global {
   var __rtPoller: NodeJS.Timer | undefined;
 }
 
+/**
+ * This function is registered to run when the Next.js server starts.
+ * It sets up a background poller to periodically fetch real-time data from the weather station
+ * and archive it. This ensures that the latest data is always available in a cache,
+ * even if a user has not recently visited the site.
+ *
+ * It runs only on the Node.js runtime, not on the Edge runtime.
+ * A global variable is used to prevent multiple pollers from running in development due to HMR.
+ */
 export async function register() {
   // Only run on Node.js runtime (not Edge)
   if (process.env.NEXT_RUNTIME === "edge") return;

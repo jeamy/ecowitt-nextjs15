@@ -6,16 +6,32 @@ import { API_ENDPOINTS } from "@/constants";
 import LineChart, { type LineSeries } from "@/components/LineChartChartJS";
 import { CheckIcon } from "@heroicons/react/24/outline";
 
+/**
+ * Represents the response from the months API endpoint.
+ * @private
+ */
 type MonthsResp = { months: string[] };
 
+/**
+ * Represents the response from the data API endpoints.
+ * @private
+ */
 type DataResp = {
   file: string;
   header: string[];
   rows: Array<Record<string, number | string | null>>; // time as string, numeric values averaged
 };
 
+/**
+ * Represents the channel configuration.
+ * @private
+ */
 type ChannelsConfig = Record<string, { name: string }>; // { ch1: { name: "Living" }, ... }
 
+/**
+ * Renders the charts for a single channel card.
+ * @private
+ */
 function renderChannelCardCharts(
   data: DataResp,
   channelsCfg: ChannelsConfig,
@@ -33,12 +49,12 @@ function renderChannelCardCharts(
   const fmt = makeTimeTickFormatter(xBase, spanMin, locale);
   const hoverFmt = makeHoverTimeFormatter(xBase, locale);
   
-  // Temperaturmetriken gruppieren
+  // Group temperature metrics
   const tempMetrics: ChannelMetric[] = ["Temperatur", "Taupunkt", "Gefühlte Temperatur"];
   const chNum = (chKey.match(/\d+/)?.[0]) || "1";
   const out: React.ReactNode[] = [];
   
-  // Temperaturdiagramm erstellen
+  // Create temperature chart
   const tempSeries: LineSeries[] = [];
   for (let i = 0; i < tempMetrics.length; i++) {
     const metric = tempMetrics[i];
@@ -342,6 +358,21 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
   return <>{out}</>;
 }
 
+/**
+ * Renders the global time range selection controls.
+ * This includes datetime-local inputs and range sliders to define a start and end time.
+ * @param props - The component props.
+ * @param props.min - The absolute minimum date for the range.
+ * @param props.max - The absolute maximum date for the range.
+ * @param props.pctStart - The start of the selected range as a percentage (0-1000) of the total range.
+ * @param props.pctEnd - The end of the selected range as a percentage (0-1000) of the total range.
+ * @param props.setPctStart - Callback to set the start percentage.
+ * @param props.setPctEnd - Callback to set the end percentage.
+ * @param props.setDateRangeChanged - Optional callback to signal that the date range has been modified by the user.
+ * @param props.setConfirmButtonActive - Optional callback to activate the confirmation button.
+ * @returns A React component for global range controls.
+ * @private
+ */
 function GlobalRangeControls(props: {
   min: Date | null;
   max: Date | null;
@@ -433,9 +464,23 @@ function GlobalRangeControls(props: {
   );
 }
 
+/**
+ * Pads a number with a leading zero if it's less than 10.
+ * @param n - The number to pad.
+ * @returns The padded string.
+ * @private
+ */
 function pad2(n: number) { return n < 10 ? `0${n}` : String(n); }
 
-// Hilfsfunktionen für Statistikberechnung
+/**
+ * Calculates temperature statistics from the provided data.
+ * This includes counting days above 30°C and below 0°C, and finding the min/max temperatures.
+ * @param rows - The data rows.
+ * @param times - The corresponding timestamps for each row.
+ * @param tempColumns - The names of the columns containing temperature data.
+ * @returns An object with calculated temperature statistics.
+ * @private
+ */
 function calculateTemperatureStats(rows: Array<Record<string, number | string | null>>, times: Date[], tempColumns: string[]) {
   // Gruppiere nach Tagen
   const dayMap = new Map<string, { date: Date; maxTemp: number; minTemp: number; hasOver30: boolean; hasUnder0: boolean }>(); 
@@ -517,6 +562,15 @@ function calculateTemperatureStats(rows: Array<Record<string, number | string | 
   };
 }
 
+/**
+ * Calculates rain statistics from the provided data.
+ * This includes counting days with heavy rain (>30mm) and the total number of rain days.
+ * @param rows - The data rows.
+ * @param times - The corresponding timestamps for each row.
+ * @param rainColumn - The name of the column containing rain data.
+ * @returns An object with calculated rain statistics.
+ * @private
+ */
 function calculateRainStats(rows: Array<Record<string, number | string | null>>, times: Date[], rainColumn: string | null) {
   if (!rainColumn) return { daysOver30mm: 0, totalDays: 0, totalPeriodDays: 0 };
   
@@ -564,7 +618,15 @@ function calculateRainStats(rows: Array<Record<string, number | string | null>>,
   
   return { daysOver30mm, totalDays: rainDays, totalPeriodDays };
 }
-// Min/Max-Statistik für eine numerische Spalte (z.B. Wind/Böe)
+
+/**
+ * Calculates the minimum and maximum values for a specific numeric column.
+ * @param rows - The data rows.
+ * @param times - The corresponding timestamps for each row.
+ * @param column - The name of the column to analyze.
+ * @returns An object containing the min and max values and their corresponding timestamps.
+ * @private
+ */
 function calculateMinMaxForColumn(
   rows: Array<Record<string, number | string | null>>,
   times: Date[],
@@ -590,6 +652,14 @@ function calculateMinMaxForColumn(
   };
 }
 
+/**
+ * Creates a formatter function for chart x-axis time ticks.
+ * @param t0 - The baseline timestamp (in milliseconds) for the x-axis.
+ * @param spanMin - The total time span in minutes (not currently used).
+ * @param locale - The locale string (e.g., 'en-US', 'de').
+ * @returns A function that formats a minute offset into a date string.
+ * @private
+ */
 function makeTimeTickFormatter(t0: number, spanMin: number = 0, locale: string) {
   return (v: number) => {
     const d = new Date(t0 + Math.round(v) * 60000);
@@ -603,6 +673,13 @@ function makeTimeTickFormatter(t0: number, spanMin: number = 0, locale: string) 
   };
 }
 
+/**
+ * Creates a formatter function for the tooltip displayed on chart hover.
+ * @param t0 - The baseline timestamp (in milliseconds) for the x-axis.
+ * @param locale - The locale string (e.g., 'en-US', 'de').
+ * @returns A function that formats a minute offset into a full date-time string.
+ * @private
+ */
 function makeHoverTimeFormatter(t0: number, locale: string) {
   return (v: number) => {
     const d = new Date(t0 + Math.round(v) * 60000);
@@ -610,7 +687,13 @@ function makeHoverTimeFormatter(t0: number, locale: string) {
   };
 }
 
-// Locale-aware display formatter with safe fallback
+/**
+ * Formats a Date object into a locale-aware string with a safe fallback.
+ * @param d - The Date object to format.
+ * @param locale - The locale string.
+ * @returns The formatted date-time string.
+ * @private
+ */
 function formatDisplayLocale(d: Date, locale: string): string {
   try {
     return new Intl.DateTimeFormat(locale || 'de', {
@@ -627,7 +710,14 @@ function formatDisplayLocale(d: Date, locale: string): string {
     return `${dd}.${mm}.${yyyy} ${hh}:${mi}:${ss}`;
   }
 }
-// Locale-aware month name helper (1-12)
+
+/**
+ * Gets the localized name of a month.
+ * @param month - The month number (1-12).
+ * @param locale - The locale string.
+ * @returns The full month name.
+ * @private
+ */
 function getMonthName(month: number, locale: string): string {
   const m = Math.max(1, Math.min(12, Math.floor(month)));
   try {
@@ -640,8 +730,19 @@ function getMonthName(month: number, locale: string): string {
   }
 }
 
+/**
+ * Defines the types of metrics available for channel sensors.
+ * @private
+ */
 type ChannelMetric = "Temperatur" | "Luftfeuchtigkeit" | "Taupunkt" | "Gefühlte Temperatur";
 
+/**
+ * Gets the internationalized display label for a given metric.
+ * @param metric - The metric to get the label for.
+ * @param t - The translation function.
+ * @returns The translated display label.
+ * @private
+ */
 function metricDisplayLabel(metric: ChannelMetric, t: (key: string) => string): string {
   const map: Record<string, string> = {
     "Temperatur": t('fields.temperature'),
@@ -652,8 +753,17 @@ function metricDisplayLabel(metric: ChannelMetric, t: (key: string) => string): 
   return map[metric] || metric;
 }
 
+/**
+ * Defines the available datasets for fetching data.
+ * `allsensors` includes all channel sensor data, while `main` is for the main weather station sensors.
+ * @private
+ */
 type Dataset = "allsensors" | "main";
 
+/**
+ * Defines the available data resolutions for API requests.
+ * @private
+ */
 type Resolution = "minute" | "hour" | "day";
 
 const COLORS = [
@@ -667,6 +777,13 @@ const COLORS = [
   "#f97316",
 ];
 
+/**
+ * The main component for the dashboard page.
+ * It manages state for data fetching, user selections (like year, month, resolution),
+ * and renders the appropriate charts based on user input.
+ *
+ * @returns The main dashboard component.
+ */
 export default function Dashboard() {
   const { t, i18n } = useTranslation();
   const locale = i18n.language || 'de';
@@ -1120,6 +1237,18 @@ export default function Dashboard() {
   );
 }
 
+/**
+ * Renders a single line chart for a specific metric of a specific channel.
+ * @param data - The data for all sensors.
+ * @param chKey - The key of the channel to render (e.g., 'ch1').
+ * @param metric - The metric to display.
+ * @param channelsCfg - The channel configuration.
+ * @param xBase - The baseline timestamp for the x-axis.
+ * @param t - The translation function.
+ * @param locale - The current locale.
+ * @returns A React component containing the line chart.
+ * @private
+ */
 function renderChannelChart(data: DataResp, chKey: string, metric: ChannelMetric, channelsCfg: ChannelsConfig, xBase: number | null, t: (key: string) => string, locale: string) {
   const rows = data.rows || [];
   if (!rows.length || !xBase) return <div className="text-xs text-gray-500">{t('statuses.noData')}</div>;
@@ -1144,6 +1273,17 @@ function renderChannelChart(data: DataResp, chKey: string, metric: ChannelMetric
   );
 }
 
+/**
+ * Renders all charts for the main weather station sensors.
+ * This includes temperature, rain, wind, and other metrics, along with statistical cards.
+ * @param data - The data from the 'main' dataset.
+ * @param xBase - The baseline timestamp for the x-axis.
+ * @param minuteData - Higher-resolution minute data for more accurate statistics.
+ * @param t - The translation function.
+ * @param locale - The current locale.
+ * @returns A React fragment containing all the charts for the main sensors.
+ * @private
+ */
 function renderMainCharts(data: DataResp, xBase: number | null, minuteData: DataResp | null, t: (key: string) => string, locale: string) {
   const rows = data.rows || [];
   if (!rows.length || !xBase) return <div className="text-xs text-gray-500">{t('statuses.noData')}</div>;
@@ -1668,7 +1808,12 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
   );
 }
 
-// Hilfsfunktion zum Identifizieren von Temperaturmetriken in den Hauptsensoren
+/**
+ * Finds columns related to temperature from a list of headers.
+ * @param header - An array of header strings.
+ * @returns An array of header strings that are identified as temperature metrics.
+ * @private
+ */
 function findTemperatureColumns(header: string[]): string[] {
   const tempColumns: string[] = [];
   
@@ -1686,7 +1831,13 @@ function findTemperatureColumns(header: string[]): string[] {
   return tempColumns;
 }
 
-// Hilfsfunktion zum Identifizieren von Regenmetriken in den Hauptsensoren
+/**
+ * Finds columns related to rain from a list of headers.
+ * It specifically looks for weekly, monthly, and yearly totals.
+ * @param header - An array of header strings.
+ * @returns An array of header strings identified as rain total metrics.
+ * @private
+ */
 function findRainColumns(header: string[]): string[] {
   const rainColumns: string[] = [];
   
@@ -1731,7 +1882,12 @@ function findRainColumns(header: string[]): string[] {
   return rainColumns;
 }
 
-// Hilfsfunktion zum Identifizieren von Wind/Böe-Spalten in den Hauptsensoren
+/**
+ * Finds columns for wind speed and wind gust from a list of headers.
+ * @param header - An array of header strings.
+ * @returns An object containing the identified wind and gust column names, or null if not found.
+ * @private
+ */
 function findWindColumns(header: string[]): { windCol: string | null; gustCol: string | null } {
   let windCol: string | null = null;
   let gustCol: string | null = null;
@@ -1755,7 +1911,12 @@ function findWindColumns(header: string[]): { windCol: string | null; gustCol: s
   return { windCol, gustCol };
 }
 
-// Hilfsfunktion: Solarstrahlung und UV-Index identifizieren
+/**
+ * Finds columns for solar radiation and UV index from a list of headers.
+ * @param header - An array of header strings.
+ * @returns An object containing the identified solar and UV column names, or null if not found.
+ * @private
+ */
 function findSolarUvColumns(header: string[]): { solarCol: string | null; uvCol: string | null } {
   let solarCol: string | null = null;
   let uvCol: string | null = null;
@@ -1773,6 +1934,13 @@ function findSolarUvColumns(header: string[]): { solarCol: string | null; uvCol:
   return { solarCol, uvCol };
 }
 
+/**
+ * Parses a string into a Date object.
+ * Handles multiple common date formats and provides a fallback.
+ * @param s - The date string to parse.
+ * @returns A Date object, or null if parsing fails.
+ * @private
+ */
 function toDate(s: string): Date | null {
   // try YYYY/M/D H:MM
   let m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{1,2})/);
@@ -1785,14 +1953,35 @@ function toDate(s: string): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Safely converts a value to a number, returning NaN for invalid inputs.
+ * @param v - The value to convert.
+ * @returns A number or NaN.
+ * @private
+ */
 function numOrNaN(v: any): number {
   if (v == null) return NaN;
   const n = typeof v === "number" ? v : Number(v);
   return isNaN(n) ? NaN : n;
 }
 
-// Helpers for time range controls
+/**
+ * Clamps a number between a minimum and maximum value.
+ * @param n - The number to clamp.
+ * @param min - The minimum value.
+ * @param max - The maximum value.
+ * @returns The clamped number.
+ * @private
+ */
 function clamp(n: number, min: number, max: number) { return Math.max(min, Math.min(max, n)); }
+
+/**
+ * Finds the index of the nearest time in an array of dates to a given timestamp.
+ * @param times - A sorted array of Date objects.
+ * @param ms - The timestamp in milliseconds to find the nearest match for.
+ * @returns The index of the nearest time.
+ * @private
+ */
 function nearestIndex(times: Date[], ms: number) {
   if (!times.length) return 0;
   let lo = 0, hi = times.length - 1;
@@ -1808,6 +1997,13 @@ function nearestIndex(times: Date[], ms: number) {
   const d1 = Math.abs(times[i1].getTime() - ms);
   return d0 < d1 ? i0 : i1;
 }
+
+/**
+ * Formats a Date object for display in `DD.MM.YYYY HH:MI` format.
+ * @param d - The Date object.
+ * @returns The formatted string.
+ * @private
+ */
 function formatDisplay(d: Date) {
   const dd = pad2(d.getDate());
   const mm = pad2(d.getMonth() + 1);
@@ -1816,6 +2012,13 @@ function formatDisplay(d: Date) {
   const mi = pad2(d.getMinutes());
   return `${dd}.${mm}.${yyyy} ${hh}:${mi}`;
 }
+
+/**
+ * Formats a Date object into a string suitable for `datetime-local` input fields (`YYYY-MM-DDTHH:MI`).
+ * @param d - The Date object.
+ * @returns The formatted string.
+ * @private
+ */
 function formatLocal(d: Date) {
   const yyyy = d.getFullYear();
   const mm = pad2(d.getMonth() + 1);
@@ -1824,6 +2027,13 @@ function formatLocal(d: Date) {
   const mi = pad2(d.getMinutes());
   return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
 }
+
+/**
+ * Formats a Date object into a string suitable for API requests (`YYYY-MM-DDTHH:MI`).
+ * @param d - The Date object.
+ * @returns The formatted string.
+ * @private
+ */
 function formatForApi(d: Date) {
   const yyyy = d.getFullYear();
   const mm = pad2(d.getMonth() + 1);
@@ -1833,6 +2043,13 @@ function formatForApi(d: Date) {
   return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
 }
 
+/**
+ * Generates a pretty label for a sensor header, replacing 'CHx' with its configured name.
+ * @param header - The raw header string (e.g., "CH1 Temperatur").
+ * @param cfg - The channels configuration.
+ * @returns A user-friendly label (e.g., "Living Room Temperatur").
+ * @private
+ */
 function prettyAllsensorsLabel(header: string, cfg: ChannelsConfig) {
   // Replace leading CHx with configured channel name if present
   const m = header.match(/^CH(\d+)\s+(.*)$/);
@@ -1844,18 +2061,41 @@ function prettyAllsensorsLabel(header: string, cfg: ChannelsConfig) {
   return header;
 }
 
+/**
+ * Gets the configured name for a channel key.
+ * @param key - The channel key (e.g., 'ch1').
+ * @param cfg - The channels configuration.
+ * @returns The configured name or the key itself as a fallback.
+ * @private
+ */
 function channelName(key: string, cfg: ChannelsConfig) {
   const c = cfg[key];
   if (!c) return key.toUpperCase();
   return c.name || key.toUpperCase();
 }
 
+/**
+ * Gets a sorted list of channel keys from the configuration.
+ * Provides a default list if the configuration is empty.
+ * @param cfg - The channels configuration.
+ * @returns A sorted array of channel keys.
+ * @private
+ */
 function getChannelKeys(cfg: ChannelsConfig): string[] {
   const keys = Object.keys(cfg);
   if (keys.length) return keys.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   return ["ch1","ch2","ch3","ch4","ch5","ch6","ch7","ch8"];
 }
 
+/**
+ * Finds the correct header key for a given metric and channel number in the 'allsensors' dataset.
+ * It handles synonyms for metric names.
+ * @param header - The array of header strings from the data.
+ * @param metric - The metric to find (e.g., "Temperatur").
+ * @param chNum - The channel number as a string (e.g., "1").
+ * @returns The matching header key, or a fallback.
+ * @private
+ */
 function headerKeyForAllsensors(header: string[], metric: string, chNum: string): string {
   // Prefer CHx <metric>
   const synonyms: Record<string, string[]> = {
@@ -1884,6 +2124,12 @@ function headerKeyForAllsensors(header: string[], metric: string, chNum: string)
   return header[1] || "";
 }
 
+/**
+ * Infers which columns in a dataset are numeric based on a sample of rows.
+ * @param data - The dataset to analyze.
+ * @returns An array of header strings that are determined to be numeric.
+ * @private
+ */
 function inferNumericColumns(data: DataResp | null): string[] {
   if (!data) return [];
   const header = data.header || [];
@@ -1902,7 +2148,12 @@ function inferNumericColumns(data: DataResp | null): string[] {
   return numeric;
 }
 
-// Units helpers
+/**
+ * Returns the appropriate unit for a given channel metric.
+ * @param metric - The channel metric.
+ * @returns The unit string (e.g., "°C", "%").
+ * @private
+ */
 function unitForMetric(metric: ChannelMetric): string {
   switch (metric) {
     case "Temperatur":
@@ -1916,6 +2167,12 @@ function unitForMetric(metric: ChannelMetric): string {
   }
 }
 
+/**
+ * Infers the measurement unit from a header string.
+ * @param header - The header string (e.g., "Temperatur Aussen").
+ * @returns The inferred unit string (e.g., "°C", "mm", "km/h").
+ * @private
+ */
 function unitForHeader(header: string): string {
   const s = header.toLowerCase();
   // Rain
