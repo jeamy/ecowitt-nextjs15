@@ -6,12 +6,6 @@ import { parseTimestamp } from "@/lib/time";
 
 export const runtime = "nodejs";
 
-/**
- * Formats a Date object into an ISO-like string up to the minute (YYYY-MM-DDTHH:mm).
- * @param {Date} d - The date to format.
- * @returns {string} The formatted date string.
- * @private
- */
 function toIsoMinute(d: Date) {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -21,18 +15,6 @@ function toIsoMinute(d: Date) {
   return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
 }
 
-/**
- * API route to get the global time range (min and max timestamps) of all available data.
- * It scans the first and last CSV files to find the earliest and latest timestamps.
- * @returns {Promise<NextResponse>} A JSON response with `min` and `max` timestamps, or an error.
- * @example
- * // GET /api/data/extent
- * // Returns:
- * // {
- * //   "min": "2024-01-01T00:00",
- * //   "max": "2025-08-15T14:30"
- * // }
- */
 export async function GET() {
   try {
     const mainFiles = await getMainFilesInRange();

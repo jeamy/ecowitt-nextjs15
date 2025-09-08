@@ -3,12 +3,6 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 
-/**
- * A component that allows the user to switch between supported languages (DE and EN).
- * It highlights the currently active language and handles the language change logic.
- *
- * @returns A React component with language switching buttons.
- */
 export default function LanguageSwitcher() {
   const { i18n } = useTranslation();
   const cur = i18n.language || "de";

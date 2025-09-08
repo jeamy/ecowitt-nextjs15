@@ -4,11 +4,6 @@ import EcoCon from "eco";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-/**
- * Builds the URL for the Ecowitt device info API endpoint.
- * @returns {string} The full URL for the API request.
- * @private
- */
 function buildDeviceInfoUrl() {
   const eco = EcoCon.getInstance().getConfig();
   const params = new URLSearchParams({
@@ -21,21 +16,6 @@ function buildDeviceInfoUrl() {
   return `${baseUrl}?${params.toString()}`;
 }
 
-/**
- * API route to get device information from the Ecowitt API.
- * Fetches timezone, latitude, and longitude for the weather station.
- * @returns {Promise<NextResponse>} A JSON response containing the device info, or an error.
- * @example
- * // GET /api/device/info
- * // Returns:
- * // {
- * //   "ok": true,
- * //   "timezone": "Europe/Berlin",
- * //   "latitude": 52.52,
- * //   "longitude": 13.40,
- * //   "raw": { ...full api response... }
- * // }
- */
 export async function GET() {
   try {
     const url = buildDeviceInfoUrl();

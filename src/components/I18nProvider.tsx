@@ -4,14 +4,6 @@ import React, { useEffect } from "react";
 import { I18nextProvider } from "react-i18next";
 import i18n from "@/lib/i18n";
 
-/**
- * Provides the i18next context to its children and manages the application's language settings.
- * It initializes the language from localStorage or the browser's settings and updates the `<html>` tag's `lang` attribute.
- *
- * @param props - The component props.
- * @param props.children - The child components to render within the provider.
- * @returns A React component that provides i18next context.
- */
 export default function I18nProvider({ children }: { children: React.ReactNode }) {
   // Initialize language preference from localStorage or browser
   useEffect(() => {

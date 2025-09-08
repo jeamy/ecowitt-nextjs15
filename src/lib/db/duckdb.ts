@@ -4,11 +4,6 @@ import { promises as fs } from "fs";
 
 let conn: DuckDBConnection | null = null;
 
-/**
- * Gets a singleton DuckDB connection.
- * If a connection already exists, it is returned. Otherwise, a new connection is created.
- * @returns {Promise<DuckDBConnection>} A promise that resolves with the DuckDB connection.
- */
 export async function getDuckConn(): Promise<DuckDBConnection> {
   if (conn) return conn;
   const dataDir = path.join(process.cwd(), "data");

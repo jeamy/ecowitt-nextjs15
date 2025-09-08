@@ -1,13 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
-/**
- * Interface for storing daily minimum and maximum temperature and humidity data.
- */
 interface TempMinMax {
-  /** The date in YYYY-MM-DD format. */
-  date: string;
-  /** A map of sensor keys to their min/max temperature data. */
+  date: string; // YYYY-MM-DD format
   sensors: {
     [sensorKey: string]: {
       min: number;
@@ -16,7 +11,6 @@ interface TempMinMax {
       maxTime: string; // ISO timestamp
     };
   };
-  /** A map of sensor keys to their min/max humidity data. */
   humidity: {
     [sensorKey: string]: {
       min: number;
@@ -29,11 +23,7 @@ interface TempMinMax {
 
 const DATA_FILE = path.join(process.cwd(), 'temp-minmax-data.json');
 
-/**
- * Loads today's min/max data from the JSON file.
- * @returns {TempMinMax | null} The data for today, or null if it doesn't exist or an error occurs.
- * @private
- */
+// Load existing data from file (only today's data)
 function loadData(): TempMinMax | null {
   try {
     if (fs.existsSync(DATA_FILE)) {
@@ -52,11 +42,7 @@ function loadData(): TempMinMax | null {
   return null;
 }
 
-/**
- * Saves the min/max data to the JSON file.
- * @param {TempMinMax} data - The data to save.
- * @private
- */
+// Save data to file
 function saveData(data: TempMinMax): void {
   try {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
@@ -65,19 +51,12 @@ function saveData(data: TempMinMax): void {
   }
 }
 
-/**
- * Gets today's date in YYYY-MM-DD format.
- * @returns {string} Today's date string.
- * @private
- */
+// Get today's date in YYYY-MM-DD format
 function getTodayDate(): string {
   return new Date().toISOString().split('T')[0];
 }
 
-/**
- * Updates the min/max temperature and humidity for the current day based on new sensor data.
- * @param {Record<string, any>} sensorData - The latest sensor data payload.
- */
+// Update min/max temperatures for current day
 export function updateTempMinMax(sensorData: Record<string, any>): void {
   const today = getTodayDate();
   const now = new Date().toISOString();
@@ -202,19 +181,12 @@ export function updateTempMinMax(sensorData: Record<string, any>): void {
   saveData(todayEntry!);
 }
 
-/**
- * Gets today's min/max temperature and humidity data.
- * @returns {TempMinMax | null} The data for today, or null if not found.
- */
+// Get today's min/max temperatures
 export function getTodayTempMinMax(): TempMinMax | null {
   return loadData();
 }
 
-/**
- * Gets the min/max data for a specific date. Note: This currently only works for today.
- * @param {string} date - The date in YYYY-MM-DD format.
- * @returns {TempMinMax | null} The data for the specified date, or null if not found.
- */
+// Get min/max data for a specific date (only works for today)
 export function getTempMinMaxForDate(date: string): TempMinMax | null {
   const data = loadData();
   if (data && data.date === date) {
@@ -223,10 +195,7 @@ export function getTempMinMaxForDate(date: string): TempMinMax | null {
   return null;
 }
 
-/**
- * Gets all stored min/max data. Note: This currently only returns today's data.
- * @returns {TempMinMax[]} An array containing today's min/max data, or an empty array if none exists.
- */
+// Get all min/max data (for debugging - only today's data)
 export function getAllTempMinMax(): TempMinMax[] {
   const data = loadData();
   return data ? [data] : [];

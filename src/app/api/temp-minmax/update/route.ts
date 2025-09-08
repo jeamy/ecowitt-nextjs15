@@ -2,19 +2,6 @@ import { NextResponse } from 'next/server';
 import { updateTempMinMax, getTodayTempMinMax } from '@/lib/temp-minmax';
 import { getLastRealtime } from '@/lib/realtimeArchiver';
 
-/**
- * API route to update and then retrieve the daily min/max temperature and humidity data.
- * This is triggered to ensure the min/max values are current based on the latest real-time data.
- * @returns {Promise<NextResponse>} A JSON response with the updated min/max data.
- * @example
- * // POST /api/temp-minmax/update
- * // Returns:
- * // {
- * //   "ok": true,
- * //   "data": { ... updated min/max data ... },
- * //   "message": "All temperatures updated successfully"
- * // }
- */
 export async function POST() {
   try {
     // Get current realtime data directly
@@ -35,10 +22,7 @@ export async function POST() {
   }
 }
 
-/**
- * Also allow GET for convenience. See POST for details.
- * @returns {Promise<NextResponse>} A JSON response with the updated min/max data.
- */
+// Also allow GET for convenience
 export async function GET() {
   return POST();
 }

@@ -91,19 +91,6 @@ Supported weather stations:
   - Common date format `YYYY/M/D H:MM` (dashboard also supports ISO-like variants)
   - German headers (e.g., `Zeit`, `Luftfeuchtigkeit`, `Taupunkt`, `Wärmeindex`)
 
-### Code Structure and Documentation
-
-The project is structured to separate concerns, making it easier to navigate and maintain. All functions, classes, and components are fully documented with JSDoc comments.
-
--   **`src/app`**: Contains the main application pages, layouts, and API routes.
-    -   **`src/app/api`**: All server-side API logic resides here. Each subdirectory corresponds to a specific endpoint.
--   **`src/components`**: Reusable React components used throughout the application.
--   **`src/lib`**: Core logic, utilities, and third-party library configurations.
-    -   **`src/lib/db`**: Database-related logic, including data ingestion and querying with DuckDB.
--   **`src/contexts`**: React context providers for managing global state.
--   **`src/scripts`**: Standalone scripts for tasks like pre-warming the data cache.
--   **`src/types`**: TypeScript type definitions, including declarations for external modules.
-
 ## Channel name configuration
 
 - File: `src/config/channels.json`

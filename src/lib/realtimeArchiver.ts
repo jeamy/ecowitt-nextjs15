@@ -4,12 +4,6 @@ import { promises as fs } from "fs";
 import path from "path";
 import { updateTempMinMax } from "./temp-minmax";
 
-/**
- * Builds the URL parameters for the Ecowitt API request.
- * @param {boolean} all - Whether to fetch all data or a subset.
- * @returns {URLSearchParams} The URL parameters.
- * @private
- */
 function buildParams(all: boolean) {
   const eco = EcoCon.getInstance().getConfig();
   const params = new URLSearchParams({
@@ -27,11 +21,6 @@ function buildParams(all: boolean) {
   return params;
 }
 
-/**
- * Builds the full target URL for the Ecowitt API request.
- * @param {boolean} all - Whether to fetch all data or a subset.
- * @returns {string} The full URL.
- */
 export function buildTargetUrl(all: boolean) {
   const eco = EcoCon.getInstance().getConfig();
   const baseUrl = `https://${eco.server}/api/v3/device/real_time`;
@@ -39,12 +28,6 @@ export function buildTargetUrl(all: boolean) {
   return `${baseUrl}?${qs.toString()}`;
 }
 
-/**
- * Formats a date into a YYYYMM string.
- * @param {Date} d - The date to format.
- * @returns {string} The formatted date string.
- * @private
- */
 function yyyymm(d: Date) {
   const y = d.getFullYear();
   const m = d.getMonth() + 1;
@@ -52,12 +35,6 @@ function yyyymm(d: Date) {
   return `${y}${mm}`;
 }
 
-/**
- * Formats a date into a "YYYY/MM/DD HH:mm" string.
- * @param {Date} d - The date to format.
- * @returns {string} The formatted time string.
- * @private
- */
 function timeString(d: Date) {
   // Format: 2025/08/13 12:03 (with leading zeros)
   const y = d.getFullYear();
@@ -75,23 +52,10 @@ function timeString(d: Date) {
   return `${y}/${mm}/${dd} ${hh}:${min}`;
 }
 
-/**
- * Safely reads a nested property from an object using a dotted string path.
- * @param {any} obj - The object to read from.
- * @param {string} dotted - The dotted string path (e.g., "outdoor.temperature").
- * @returns {any} The value of the property, or undefined if not found.
- * @private
- */
 function tryRead(obj: any, dotted: string): any {
   return dotted.split(".").reduce((o, k) => (o && typeof o === "object" ? (k in o ? o[k] : undefined) : undefined), obj);
 }
 
-/**
- * Converts a value to a number, handling various input types.
- * @param {any} v - The value to convert.
- * @returns {number | null} The numeric value, or null if conversion is not possible.
- * @private
- */
 function numVal(v: any): number | null {
   if (v == null) return null;
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
@@ -105,13 +69,6 @@ function numVal(v: any): number | null {
   return null;
 }
 
-/**
- * Calculates the dew point from temperature and humidity.
- * @param {number | null} temperature - The temperature in Celsius.
- * @param {number | null} humidity - The relative humidity in percent.
- * @returns {number | null} The dew point in Celsius, or null if inputs are invalid.
- * @private
- */
 function calculateDewPoint(temperature: number | null, humidity: number | null): number | null {
   if (temperature === null || humidity === null) return null;
   
@@ -125,13 +82,6 @@ function calculateDewPoint(temperature: number | null, humidity: number | null):
   return Number.isFinite(dewPoint) ? Math.round(dewPoint * 10) / 10 : null;
 }
 
-/**
- * Calculates the heat index from temperature and humidity.
- * @param {number | null} temperature - The temperature in Celsius.
- * @param {number | null} humidity - The relative humidity in percent.
- * @returns {number | null} The heat index in Celsius, or null if inputs are invalid.
- * @private
- */
 function calculateHeatIndex(temperature: number | null, humidity: number | null): number | null {
   if (temperature === null || humidity === null) return null;
   
@@ -162,22 +112,10 @@ function calculateHeatIndex(temperature: number | null, humidity: number | null)
   return Number.isFinite(heatIndex) ? Math.round(heatIndex * 10) / 10 : temperature;
 }
 
-/**
- * Ensures that a directory exists, creating it if necessary.
- * @param {string} p - The path to the directory.
- * @private
- */
 async function ensureDir(p: string) {
   await fs.mkdir(p, { recursive: true });
 }
 
-/**
- * Appends a row to a CSV file, creating the file and header if it doesn't exist.
- * @param {string} abs - The absolute path to the CSV file.
- * @param {string[]} header - The header row.
- * @param {(string | number | null)[]} row - The data row to append.
- * @private
- */
 async function appendCsv(abs: string, header: string[], row: (string | number | null)[]) {
   let exists = true;
   try { await fs.access(abs); } catch { exists = false; }
@@ -190,10 +128,6 @@ async function appendCsv(abs: string, header: string[], row: (string | number | 
   await fs.appendFile(abs, lines.join("\n") + "\n", "utf8");
 }
 
-/**
- * Writes the live weather data payload to the appropriate monthly CSV files.
- * @param {any} payload - The data payload from the Ecowitt API.
- */
 export async function writeLiveToDNT(payload: any) {
   const now = new Date();
   const ym = yyyymm(now);
@@ -284,19 +218,10 @@ export async function writeLiveToDNT(payload: any) {
   await appendCsv(mainFile, mainHeader, mainRow);
 }
 
-/**
- * Gets the path to the realtime data cache file.
- * @returns {string} The cache file path.
- * @private
- */
 function cachePath() {
   return path.join(process.cwd(), "DNT", "rt-last.json");
 }
 
-/**
- * Caches the latest realtime data record to a file.
- * @param {{ ok: boolean; updatedAt: string; data?: any; error?: string }} rec - The record to cache.
- */
 export async function setLastRealtime(rec: { ok: boolean; updatedAt: string; data?: any; error?: string }) {
   const dnt = path.join(process.cwd(), "DNT");
   await ensureDir(dnt);
@@ -307,10 +232,6 @@ export async function setLastRealtime(rec: { ok: boolean; updatedAt: string; dat
   }
 }
 
-/**
- * Retrieves the last cached realtime data record.
- * @returns {Promise<{ ok: boolean; updatedAt: string; data?: any; error?: string } | null>} A promise that resolves to the cached record, or null if not found.
- */
 export async function getLastRealtime(): Promise<{ ok: boolean; updatedAt: string; data?: any; error?: string } | null> {
   try {
     const txt = await fs.readFile(cachePath(), "utf8");
@@ -320,11 +241,6 @@ export async function getLastRealtime(): Promise<{ ok: boolean; updatedAt: strin
   }
 }
 
-/**
- * Fetches the latest data from the Ecowitt API, archives it to CSV, and caches it.
- * @param {boolean} [all=true] - Whether to fetch all data or a subset.
- * @returns {Promise<any>} A promise that resolves to the JSON response from the API.
- */
 export async function fetchAndArchive(all: boolean = true) {
   const target = buildTargetUrl(all);
   const res = await fetch(target, { cache: "no-store" });

@@ -11,48 +11,18 @@ import {
   ensureMainParquetForMonth,
 } from "../lib/db/ingest";
 
-/**
- * Checks if a file exists at the given path.
- * @param p - The file path.
- * @returns True if the file exists, false otherwise.
- * @private
- */
 async function fileExists(p: string) {
   try { await fs.access(p); return true; } catch { return false; }
 }
-
-/**
- * Gets the modification time of a file in milliseconds.
- * @param p - The file path.
- * @returns The modification time in milliseconds since the epoch.
- * @private
- */
 async function mtimeMs(p: string): Promise<number> {
   const st = await fs.stat(p); return st.mtimeMs;
 }
 
-/**
- * Extracts the year and month (YYYYMM) from a CSV filename.
- * @param file - The filename.
- * @returns The YYYYMM string, or null if not found.
- * @private
- */
 function ymFromFilename(file: string): string | null {
   const m = file.match(/(\d{6})/);
   return m ? m[1] : null;
 }
 
-/**
- * Processes a dataset ("Allsensors" or "Main") by converting new or updated CSV files
- * for each month into Parquet format. It checks file modification times to avoid
- * unnecessary conversions.
- *
- * @param label - The name of the dataset.
- * @param files - A list of CSV filenames for the dataset.
- * @param ensureDir - A function that ensures the output Parquet directory exists.
- * @param ensureMonth - A function that handles the conversion of a single month's CSV to Parquet.
- * @private
- */
 async function prewarmDataset(
   label: "Allsensors" | "Main",
   files: string[],
@@ -96,11 +66,6 @@ async function prewarmDataset(
   console.log(`[prewarm] ${label}: ${built} built, ${months.length - built} up-to-date.`);
 }
 
-/**
- * The main function for the prewarm script.
- * It scans for all available CSV data files and triggers the prewarming process
- * for both the "Allsensors" and "Main" datasets.
- */
 async function main() {
   try {
     console.log("[prewarm] Scanning DNT/ for new CSV files and materializing Parquet via DuckDB...");

@@ -33,57 +33,32 @@ Chart.register(
   CategoryScale,
 );
 
-/**
- * Represents a single point in a line chart series.
- * This type is compatible with the other LineChart component.
- */
 export type LinePoint = { x: number; y: number; label?: string };
-
-/**
- * Represents a series of data for the line chart.
- * This type is compatible with the other LineChart component.
- */
 export type LineSeries = { id: string; color: string; points: LinePoint[] };
 
-/**
- * Props for the LineChart component, powered by Chart.js.
- */
 type Props = {
-  /** The array of data series to plot. */
   series: LineSeries[];
-  /** The height of the chart canvas. */
   height?: number;
-  /** The label for the Y-axis. */
   yLabel?: string;
-  /** A function to format the X-axis tick labels. */
   xTickFormatter?: (v: number) => string;
-  /** A dedicated formatter for the time displayed in the hover tooltip. */
+  // Optional dedicated formatter for hover time (overrides xTickFormatter in tooltip)
   hoverTimeFormatter?: (v: number) => string;
-  /** The label for the X-axis. */
   xLabel?: string;
-  /** Whether to display the legend. */
   showLegend?: boolean;
-  /** If true, renders the data as vertical bars instead of a line. */
+  // Optional: render as vertical bars (useful for daily rainfall)
   bars?: boolean;
-  /** The width of bars in data units (kept for API compatibility, not used by Chart.js). */
+  // Bar width in x-units (minutes); not used directly by Chart.js but kept for API compatibility
   barWidth?: number;
-  /** A fixed width for bars in pixels. */
+  // Optional fixed bar width in pixels
   barWidthPx?: number;
-  /** If true, shows a tooltip on hover. */
+  // Show hover crosshair (handled by tooltip in Chart.js)
   showHover?: boolean;
-  /** The unit to append to the Y-value in the tooltip. */
+  // Optional unit appended to hover value, e.g. "mm"
   yUnit?: string;
-  /** A custom function to format the value displayed in the tooltip. */
+  // Optional custom formatter for hover value
   valueFormatter?: (v: number) => string;
 };
 
-/**
- * A responsive line or bar chart component powered by Chart.js.
- * It supports multiple series, tooltips, legends, zooming, and panning.
- *
- * @param props - The component props.
- * @returns A React component that renders the chart.
- */
 export default function LineChart({
   series,
   height = 220,

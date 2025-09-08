@@ -2,19 +2,6 @@ import { NextResponse } from 'next/server';
 import { updateTempMinMax, getTodayTempMinMax } from '@/lib/temp-minmax';
 import { getLastRealtime } from '@/lib/realtimeArchiver';
 
-/**
- * API route to manually trigger an update of the daily min/max temperature and humidity data.
- * It uses the last cached real-time data to perform the update.
- * @returns {Promise<NextResponse>} A JSON response indicating success or failure, and the updated data.
- * @example
- * // POST /api/temp-minmax/trigger
- * // Returns:
- * // {
- * //   "ok": true,
- * //   "data": { ... updated min/max data ... },
- * //   "message": "Min/max updated successfully"
- * // }
- */
 export async function POST() {
   try {
     // Get current realtime data directly

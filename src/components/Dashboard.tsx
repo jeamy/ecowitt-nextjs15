@@ -6,38 +6,22 @@ import { API_ENDPOINTS } from "@/constants";
 import LineChart, { type LineSeries } from "@/components/LineChartChartJS";
 import { CheckIcon } from "@heroicons/react/24/outline";
 
-/**
- * Represents the response from the months API endpoint.
- * @private
- */
 type MonthsResp = { months: string[] };
 
-/**
- * Represents the response from the data API endpoints.
- * @private
- */
 type DataResp = {
   file: string;
   header: string[];
   rows: Array<Record<string, number | string | null>>; // time as string, numeric values averaged
 };
 
-/**
- * Represents the channel configuration.
- * @private
- */
 type ChannelsConfig = Record<string, { name: string }>; // { ch1: { name: "Living" }, ... }
 
-/**
- * Renders the charts for a single channel card.
- * @private
- */
 function renderChannelCardCharts(
   data: DataResp,
   channelsCfg: ChannelsConfig,
   xBase: number | null,
   chKey: string,
-  minuteDataAll: DataResp | null,
+  stats: any,
   t: (key: string) => string,
   locale: string
 ) {
@@ -49,12 +33,12 @@ function renderChannelCardCharts(
   const fmt = makeTimeTickFormatter(xBase, spanMin, locale);
   const hoverFmt = makeHoverTimeFormatter(xBase, locale);
   
-  // Group temperature metrics
+  // Temperaturmetriken gruppieren
   const tempMetrics: ChannelMetric[] = ["Temperatur", "Taupunkt", "Gefühlte Temperatur"];
   const chNum = (chKey.match(/\d+/)?.[0]) || "1";
   const out: React.ReactNode[] = [];
   
-  // Create temperature chart
+  // Temperaturdiagramm erstellen
   const tempSeries: LineSeries[] = [];
   for (let i = 0; i < tempMetrics.length; i++) {
     const metric = tempMetrics[i];
@@ -83,84 +67,32 @@ function renderChannelCardCharts(
           yUnit="°C" 
         />
         {/* Temperatur-Statistiken für diesen Kanal (nur echte Temperatur; Minutenbasis falls vorhanden) */}
-        {(() => {
-          const chNum = (chKey.match(/\d+/)?.[0]) || "1";
-          const tempCol = headerKeyForAllsensors(data.header || [], "Temperatur", chNum);
-          const feltCol = headerKeyForAllsensors(data.header || [], "Gefühlte Temperatur", chNum);
-          // Standard: aktuelle aufgelöste Daten
-          let statsRows = rows;
-          let statsTimes = times;
-          let tempColResolved = tempCol;
-          let feltColResolved = feltCol;
-          // Durchschnitt aus Chart-Daten (nicht Minutendaten)
-          const avgOfCol = (rs: typeof rows, col?: string | null) => {
-            if (!col) return NaN;
-            let sum = 0, count = 0;
-            for (const r of rs) {
-              const v = numOrNaN(r[col]);
-              if (Number.isFinite(v)) { sum += v; count++; }
-            }
-            return count ? (sum / count) : NaN;
-          };
-          const avgTemp = tempCol ? avgOfCol(rows, tempCol) : NaN;
-          // Minutenbasis verwenden, wenn vorhanden
-          if (minuteDataAll && minuteDataAll.rows && minuteDataAll.rows.length > 0) {
-            const mHeader = minuteDataAll.header || [];
-            tempColResolved = mHeader.find(h => h === tempCol) || tempCol;
-            feltColResolved = feltCol ? (mHeader.find(h => h === feltCol) || feltCol) : feltCol;
-            statsRows = minuteDataAll.rows;
-            statsTimes = statsRows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
-          }
-          const tempCols = tempColResolved ? [tempColResolved] : [];
-          const feltCols = feltColResolved ? [feltColResolved] : [];
-          const statsTemp = tempCols.length ? calculateTemperatureStats(statsRows, statsTimes, tempCols) : null;
-          const statsFelt = feltCols.length ? calculateTemperatureStats(statsRows, statsTimes, feltCols) : null;
-          if (!statsTemp && !statsFelt) return null;
-          return (
-            <div className="mt-2 text-sm border-t border-gray-100 pt-2">
-              {statsTemp && (
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
-                  <div className="bg-amber-50 p-2 rounded">
-                    <div className="font-medium text-amber-700">{t('dashboard.daysOver30C')}</div>
-                    <div className="text-lg">{statsTemp.daysOver30} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsTemp.totalPeriodDays}</span></div>
-                  </div>
-                  <div className="bg-blue-50 p-2 rounded">
-                    <div className="font-medium text-blue-700">{t('dashboard.daysUnder0C')}</div>
-                    <div className="text-lg">{statsTemp.daysUnder0} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsTemp.totalPeriodDays}</span></div>
-                  </div>
-                  <div className="bg-rose-50 p-2 rounded">
-                    <div className="font-medium text-rose-700">{t('dashboard.highestTemperature')}</div>
-                    <div className="text-lg">{Number.isFinite(statsTemp.maxTemp) ? `${statsTemp.maxTemp.toFixed(1)} °C` : "—"}</div>
-                    {statsTemp.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsTemp.maxTime, locale)}</div>)}
-                  </div>
-                  <div className="bg-indigo-50 p-2 rounded">
-                    <div className="font-medium text-indigo-700">{t('dashboard.lowestTemperature')}</div>
-                    <div className="text-lg">{Number.isFinite(statsTemp.minTemp) ? `${statsTemp.minTemp.toFixed(1)} °C` : "—"}</div>
-                    {statsTemp.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsTemp.minTime, locale)}</div>)}
-                  </div>
-                  <div className="bg-teal-50 p-2 rounded">
-                    <div className="font-medium text-teal-700">{t('dashboard.average')}</div>
-                    <div className="text-lg">{Number.isFinite(avgTemp) ? `${avgTemp.toFixed(1)} °C` : "—"}</div>
-                  </div>
-                </div>
-              )}
-              {statsFelt && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-orange-50 p-2 rounded">
-                    <div className="font-medium text-orange-700">{t('dashboard.feelsLikeMax')}</div>
-                    <div className="text-lg">{Number.isFinite(statsFelt.maxTemp) ? `${statsFelt.maxTemp.toFixed(1)} °C` : "—"}</div>
-                    {statsFelt.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.maxTime, locale)}</div>)}
-                  </div>
-                  <div className="bg-cyan-50 p-2 rounded">
-                    <div className="font-medium text-cyan-700">{t('dashboard.feelsLikeMin')}</div>
-                    <div className="text-lg">{Number.isFinite(statsFelt.minTemp) ? `${statsFelt.minTemp.toFixed(1)} °C` : "—"}</div>
-                    {statsFelt.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.minTime, locale)}</div>)}
-                  </div>
-                </div>
-              )}
+        {stats && (
+          <div className="mt-2 text-sm border-t border-gray-100 pt-2">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
+              <div className="bg-amber-50 p-2 rounded">
+                <div className="font-medium text-amber-700">{t('dashboard.daysOver30C')}</div>
+                <div className="text-lg">{stats.days_over_30} <span className="text-xs text-gray-500">{t('dashboard.of')} {stats.total_days}</span></div>
+              </div>
+              <div className="bg-blue-50 p-2 rounded">
+                <div className="font-medium text-blue-700">{t('dashboard.daysUnder0C')}</div>
+                <div className="text-lg">{stats.days_under_0} <span className="text-xs text-gray-500">{t('dashboard.of')} {stats.total_days}</span></div>
+              </div>
+              <div className="bg-rose-50 p-2 rounded">
+                <div className="font-medium text-rose-700">{t('dashboard.highestTemperature')}</div>
+                <div className="text-lg">{Number.isFinite(stats.max_temp) ? `${stats.max_temp.toFixed(1)} °C` : "—"}</div>
+              </div>
+              <div className="bg-indigo-50 p-2 rounded">
+                <div className="font-medium text-indigo-700">{t('dashboard.lowestTemperature')}</div>
+                <div className="text-lg">{Number.isFinite(stats.min_temp) ? `${stats.min_temp.toFixed(1)} °C` : "—"}</div>
+              </div>
+              <div className="bg-orange-50 p-2 rounded">
+                <div className="font-medium text-orange-700">{t('dashboard.feelsLikeMax')}</div>
+                <div className="text-lg">{Number.isFinite(stats.max_felt_temp) ? `${stats.max_felt_temp.toFixed(1)} °C` : "—"}</div>
+              </div>
             </div>
-          );
-        })()}
+          </div>
+        )}
       </div>
     );
   }
@@ -195,7 +127,7 @@ function renderChannelCardCharts(
   return <>{out}</>;
 }
 
-function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xBase: number | null, minuteDataAll: DataResp | null, t: (key: string) => string, locale: string) {
+function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xBase: number | null, stats: any, t: (key: string) => string, locale: string) {
   const rows = data.rows || [];
   if (!rows.length || !xBase) return <div className="text-xs text-gray-500">{t('statuses.noData')}</div>;
   const times = rows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
@@ -240,78 +172,32 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
             showLegend={true} 
             yUnit="°C" 
           />
-          {(() => {
-            const tempCol = headerKeyForAllsensors(data.header || [], "Temperatur", chNumLocal);
-            const feltCol = headerKeyForAllsensors(data.header || [], "Gefühlte Temperatur", chNumLocal);
-            let statsRows = rows;
-            let statsTimes = times;
-            let tempColResolved = tempCol;
-            let feltColResolved = feltCol;
-            // Durchschnitt aus Chart-Daten (nicht Minutendaten)
-            const avgOfCol = (rs: typeof rows, col?: string | null) => {
-              if (!col) return NaN;
-              let sum = 0, count = 0;
-              for (const r of rs) {
-                const v = numOrNaN(r[col]);
-                if (Number.isFinite(v)) { sum += v; count++; }
-              }
-              return count ? (sum / count) : NaN;
-            };
-            const avgTemp = tempCol ? avgOfCol(rows, tempCol) : NaN;
-            if (minuteDataAll && minuteDataAll.rows && minuteDataAll.rows.length > 0) {
-              const mHeader = minuteDataAll.header || [];
-              tempColResolved = mHeader.find(h => h === tempCol) || tempCol;
-              statsRows = minuteDataAll.rows;
-              statsTimes = statsRows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
-            }
-            const statsTemp = tempColResolved ? calculateTemperatureStats(statsRows, statsTimes, [tempColResolved]) : null;
-            const statsFelt = feltColResolved ? calculateTemperatureStats(statsRows, statsTimes, [feltColResolved]) : null;
-            if (!statsTemp && !statsFelt) return null;
-            return (
-              <div className="mt-2 text-sm border-t border-gray-100 pt-2">
-                {statsTemp && (
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
-                    <div className="bg-amber-50 p-2 rounded">
-                      <div className="font-medium text-amber-700">{t('dashboard.daysOver30C')}</div>
-                      <div className="text-lg">{statsTemp.daysOver30} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsTemp.totalPeriodDays}</span></div>
-                    </div>
-                    <div className="bg-blue-50 p-2 rounded">
-                      <div className="font-medium text-blue-700">{t('dashboard.daysUnder0C')}</div>
-                      <div className="text-lg">{statsTemp.daysUnder0} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsTemp.totalPeriodDays}</span></div>
-                    </div>
-                    <div className="bg-rose-50 p-2 rounded">
-                      <div className="font-medium text-rose-700">{t('dashboard.highestTemperature')}</div>
-                      <div className="text-lg">{Number.isFinite(statsTemp.maxTemp) ? `${statsTemp.maxTemp.toFixed(1)} °C` : "—"}</div>
-                      {statsTemp.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsTemp.maxTime, locale)}</div>)}
-                    </div>
-                    <div className="bg-indigo-50 p-2 rounded">
-                      <div className="font-medium text-indigo-700">{t('dashboard.lowestTemperature')}</div>
-                      <div className="text-lg">{Number.isFinite(statsTemp.minTemp) ? `${statsTemp.minTemp.toFixed(1)} °C` : "—"}</div>
-                      {statsTemp.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsTemp.minTime, locale)}</div>)}
-                    </div>
-                    <div className="bg-teal-50 p-2 rounded">
-                      <div className="font-medium text-teal-700">{t('dashboard.average')}</div>
-                      <div className="text-lg">{Number.isFinite(avgTemp) ? `${avgTemp.toFixed(1)} °C` : "—"}</div>
-                    </div>
-                  </div>
-                )}
-                {statsFelt && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-orange-50 p-2 rounded">
-                      <div className="font-medium text-orange-700">{t('dashboard.feelsLikeMax')}</div>
-                      <div className="text-lg">{Number.isFinite(statsFelt.maxTemp) ? `${statsFelt.maxTemp.toFixed(1)} °C` : "—"}</div>
-                      {statsFelt.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.maxTime, locale)}</div>)}
-                    </div>
-                    <div className="bg-cyan-50 p-2 rounded">
-                      <div className="font-medium text-cyan-700">{t('dashboard.feelsLikeMin')}</div>
-                      <div className="text-lg">{Number.isFinite(statsFelt.minTemp) ? `${statsFelt.minTemp.toFixed(1)} °C` : "—"}</div>
-                      {statsFelt.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.minTime, locale)}</div>)}
-                    </div>
-                  </div>
-                )}
+          {stats && (
+            <div className="mt-2 text-sm border-t border-gray-100 pt-2">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
+                <div className="bg-amber-50 p-2 rounded">
+                  <div className="font-medium text-amber-700">{t('dashboard.daysOver30C')}</div>
+                  <div className="text-lg">{stats.days_over_30} <span className="text-xs text-gray-500">{t('dashboard.of')} {stats.total_days}</span></div>
+                </div>
+                <div className="bg-blue-50 p-2 rounded">
+                  <div className="font-medium text-blue-700">{t('dashboard.daysUnder0C')}</div>
+                  <div className="text-lg">{stats.days_under_0} <span className="text-xs text-gray-500">{t('dashboard.of')} {stats.total_days}</span></div>
+                </div>
+                <div className="bg-rose-50 p-2 rounded">
+                  <div className="font-medium text-rose-700">{t('dashboard.highestTemperature')}</div>
+                  <div className="text-lg">{Number.isFinite(stats.max_temp) ? `${stats.max_temp.toFixed(1)} °C` : "—"}</div>
+                </div>
+                <div className="bg-indigo-50 p-2 rounded">
+                  <div className="font-medium text-indigo-700">{t('dashboard.lowestTemperature')}</div>
+                  <div className="text-lg">{Number.isFinite(stats.min_temp) ? `${stats.min_temp.toFixed(1)} °C` : "—"}</div>
+                </div>
+                <div className="bg-orange-50 p-2 rounded">
+                  <div className="font-medium text-orange-700">{t('dashboard.feelsLikeMax')}</div>
+                  <div className="text-lg">{Number.isFinite(stats.max_felt_temp) ? `${stats.max_felt_temp.toFixed(1)} °C` : "—"}</div>
+                </div>
               </div>
-            );
-          })()}
+            </div>
+          )}
         </div>
       );
     }
@@ -358,21 +244,6 @@ function renderAllChannelsCharts(data: DataResp, channelsCfg: ChannelsConfig, xB
   return <>{out}</>;
 }
 
-/**
- * Renders the global time range selection controls.
- * This includes datetime-local inputs and range sliders to define a start and end time.
- * @param props - The component props.
- * @param props.min - The absolute minimum date for the range.
- * @param props.max - The absolute maximum date for the range.
- * @param props.pctStart - The start of the selected range as a percentage (0-1000) of the total range.
- * @param props.pctEnd - The end of the selected range as a percentage (0-1000) of the total range.
- * @param props.setPctStart - Callback to set the start percentage.
- * @param props.setPctEnd - Callback to set the end percentage.
- * @param props.setDateRangeChanged - Optional callback to signal that the date range has been modified by the user.
- * @param props.setConfirmButtonActive - Optional callback to activate the confirmation button.
- * @returns A React component for global range controls.
- * @private
- */
 function GlobalRangeControls(props: {
   min: Date | null;
   max: Date | null;
@@ -464,202 +335,8 @@ function GlobalRangeControls(props: {
   );
 }
 
-/**
- * Pads a number with a leading zero if it's less than 10.
- * @param n - The number to pad.
- * @returns The padded string.
- * @private
- */
 function pad2(n: number) { return n < 10 ? `0${n}` : String(n); }
 
-/**
- * Calculates temperature statistics from the provided data.
- * This includes counting days above 30°C and below 0°C, and finding the min/max temperatures.
- * @param rows - The data rows.
- * @param times - The corresponding timestamps for each row.
- * @param tempColumns - The names of the columns containing temperature data.
- * @returns An object with calculated temperature statistics.
- * @private
- */
-function calculateTemperatureStats(rows: Array<Record<string, number | string | null>>, times: Date[], tempColumns: string[]) {
-  // Gruppiere nach Tagen
-  const dayMap = new Map<string, { date: Date; maxTemp: number; minTemp: number; hasOver30: boolean; hasUnder0: boolean }>(); 
-  
-  // Bestimme den gesamten Zeitraum (alle Tage zwischen erstem und letztem Datum)
-  let minDate: Date | null = null;
-  let maxDate: Date | null = null;
-  
-  // Globale Min/Max im Zeitraum (über alle Temperaturspalten)
-  let globalMaxTemp = -Infinity;
-  let globalMinTemp = Infinity;
-  let globalMaxTime: Date | null = null;
-  let globalMinTime: Date | null = null;
-  
-  for (let i = 0; i < rows.length; i++) {
-    const d = times[i];
-    if (!d) continue;
-    
-    if (!minDate || d < minDate) minDate = new Date(d);
-    if (!maxDate || d > maxDate) maxDate = new Date(d);
-    
-    const key = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-    let entry = dayMap.get(key);
-    
-    if (!entry) {
-      entry = { 
-        date: new Date(d.getFullYear(), d.getMonth(), d.getDate()), 
-        maxTemp: -Infinity, 
-        minTemp: Infinity,
-        hasOver30: false,
-        hasUnder0: false
-      };
-      dayMap.set(key, entry);
-    }
-    
-    // Prüfe alle Temperaturwerte in dieser Zeile
-    for (const col of tempColumns) {
-      const temp = numOrNaN(rows[i][col]);
-      if (!Number.isFinite(temp)) continue;
-      
-      // pro Tag
-      entry.maxTemp = Math.max(entry.maxTemp, temp);
-      entry.minTemp = Math.min(entry.minTemp, temp);
-      
-      // globaler Min/Max
-      if (temp > globalMaxTemp) { globalMaxTemp = temp; globalMaxTime = new Date(d); }
-      if (temp < globalMinTemp) { globalMinTemp = temp; globalMinTime = new Date(d); }
-      
-      if (temp > 30) entry.hasOver30 = true;
-      if (temp < 0) entry.hasUnder0 = true;
-    }
-  }
-  
-  // Berechne die Gesamtzahl der Tage im Zeitraum
-  let totalPeriodDays = 0;
-  if (minDate && maxDate) {
-    const dayInMs = 24 * 60 * 60 * 1000;
-    totalPeriodDays = Math.round((maxDate.getTime() - minDate.getTime()) / dayInMs) + 1;
-  }
-  
-  // Zähle Tage mit bestimmten Bedingungen
-  let daysOver30 = 0;
-  let daysUnder0 = 0;
-  
-  for (const entry of dayMap.values()) {
-    if (entry.hasOver30) daysOver30++;
-    if (entry.hasUnder0) daysUnder0++;
-  }
-  
-  return { 
-    daysOver30, 
-    daysUnder0, 
-    totalDays: dayMap.size, 
-    totalPeriodDays,
-    maxTemp: Number.isFinite(globalMaxTemp) ? globalMaxTemp : NaN,
-    minTemp: Number.isFinite(globalMinTemp) ? globalMinTemp : NaN,
-    maxTime: globalMaxTime,
-    minTime: globalMinTime,
-  };
-}
-
-/**
- * Calculates rain statistics from the provided data.
- * This includes counting days with heavy rain (>30mm) and the total number of rain days.
- * @param rows - The data rows.
- * @param times - The corresponding timestamps for each row.
- * @param rainColumn - The name of the column containing rain data.
- * @returns An object with calculated rain statistics.
- * @private
- */
-function calculateRainStats(rows: Array<Record<string, number | string | null>>, times: Date[], rainColumn: string | null) {
-  if (!rainColumn) return { daysOver30mm: 0, totalDays: 0, totalPeriodDays: 0 };
-  
-  // Gruppiere Regendaten nach Tagen und summiere
-  const dailyRain = new Map<string, number>();
-  
-  // Bestimme den gesamten Zeitraum (alle Tage zwischen erstem und letztem Datum)
-  let minDate: Date | null = null;
-  let maxDate: Date | null = null;
-  
-  // Wenn die Daten bereits nach Tagen aggregiert sind (z.B. bei Tagesauflösung),
-  // können wir sie direkt verwenden
-  for (let i = 0; i < times.length; i++) {
-    const d = times[i];
-    if (!d) continue;
-    
-    if (!minDate || d < minDate) minDate = new Date(d);
-    if (!maxDate || d > maxDate) maxDate = new Date(d);
-    
-    const key = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-    const rain = numOrNaN(rows[i][rainColumn]);
-    
-    if (!Number.isFinite(rain)) continue;
-    
-    // Bei Tagesauflösung ist der Wert bereits der Tageswert
-    const current = dailyRain.get(key) || 0;
-    dailyRain.set(key, current + rain);
-  }
-  
-  // Berechne die Gesamtzahl der Tage im Zeitraum
-  let totalPeriodDays = 0;
-  if (minDate && maxDate) {
-    const dayInMs = 24 * 60 * 60 * 1000;
-    totalPeriodDays = Math.round((maxDate.getTime() - minDate.getTime()) / dayInMs) + 1;
-  }
-  
-  // Zähle Tage mit Regen > 30mm
-  let daysOver30mm = 0;
-  let rainDays = 0;
-  
-  for (const amount of dailyRain.values()) {
-    if (amount > 0) rainDays++;
-    if (amount > 30) daysOver30mm++;
-  }
-  
-  return { daysOver30mm, totalDays: rainDays, totalPeriodDays };
-}
-
-/**
- * Calculates the minimum and maximum values for a specific numeric column.
- * @param rows - The data rows.
- * @param times - The corresponding timestamps for each row.
- * @param column - The name of the column to analyze.
- * @returns An object containing the min and max values and their corresponding timestamps.
- * @private
- */
-function calculateMinMaxForColumn(
-  rows: Array<Record<string, number | string | null>>,
-  times: Date[],
-  column: string
-) {
-  let globalMax = -Infinity;
-  let globalMin = Infinity;
-  let maxTime: Date | null = null;
-  let minTime: Date | null = null;
-  for (let i = 0; i < rows.length; i++) {
-    const d = times[i];
-    if (!d) continue;
-    const v = numOrNaN(rows[i][column]);
-    if (!Number.isFinite(v)) continue;
-    if (v > globalMax) { globalMax = v; maxTime = new Date(d); }
-    if (v < globalMin) { globalMin = v; minTime = new Date(d); }
-  }
-  return {
-    max: Number.isFinite(globalMax) ? globalMax : NaN,
-    min: Number.isFinite(globalMin) ? globalMin : NaN,
-    maxTime,
-    minTime,
-  };
-}
-
-/**
- * Creates a formatter function for chart x-axis time ticks.
- * @param t0 - The baseline timestamp (in milliseconds) for the x-axis.
- * @param spanMin - The total time span in minutes (not currently used).
- * @param locale - The locale string (e.g., 'en-US', 'de').
- * @returns A function that formats a minute offset into a date string.
- * @private
- */
 function makeTimeTickFormatter(t0: number, spanMin: number = 0, locale: string) {
   return (v: number) => {
     const d = new Date(t0 + Math.round(v) * 60000);
@@ -673,13 +350,6 @@ function makeTimeTickFormatter(t0: number, spanMin: number = 0, locale: string) 
   };
 }
 
-/**
- * Creates a formatter function for the tooltip displayed on chart hover.
- * @param t0 - The baseline timestamp (in milliseconds) for the x-axis.
- * @param locale - The locale string (e.g., 'en-US', 'de').
- * @returns A function that formats a minute offset into a full date-time string.
- * @private
- */
 function makeHoverTimeFormatter(t0: number, locale: string) {
   return (v: number) => {
     const d = new Date(t0 + Math.round(v) * 60000);
@@ -687,13 +357,7 @@ function makeHoverTimeFormatter(t0: number, locale: string) {
   };
 }
 
-/**
- * Formats a Date object into a locale-aware string with a safe fallback.
- * @param d - The Date object to format.
- * @param locale - The locale string.
- * @returns The formatted date-time string.
- * @private
- */
+// Locale-aware display formatter with safe fallback
 function formatDisplayLocale(d: Date, locale: string): string {
   try {
     return new Intl.DateTimeFormat(locale || 'de', {
@@ -710,14 +374,7 @@ function formatDisplayLocale(d: Date, locale: string): string {
     return `${dd}.${mm}.${yyyy} ${hh}:${mi}:${ss}`;
   }
 }
-
-/**
- * Gets the localized name of a month.
- * @param month - The month number (1-12).
- * @param locale - The locale string.
- * @returns The full month name.
- * @private
- */
+// Locale-aware month name helper (1-12)
 function getMonthName(month: number, locale: string): string {
   const m = Math.max(1, Math.min(12, Math.floor(month)));
   try {
@@ -730,19 +387,8 @@ function getMonthName(month: number, locale: string): string {
   }
 }
 
-/**
- * Defines the types of metrics available for channel sensors.
- * @private
- */
 type ChannelMetric = "Temperatur" | "Luftfeuchtigkeit" | "Taupunkt" | "Gefühlte Temperatur";
 
-/**
- * Gets the internationalized display label for a given metric.
- * @param metric - The metric to get the label for.
- * @param t - The translation function.
- * @returns The translated display label.
- * @private
- */
 function metricDisplayLabel(metric: ChannelMetric, t: (key: string) => string): string {
   const map: Record<string, string> = {
     "Temperatur": t('fields.temperature'),
@@ -753,17 +399,8 @@ function metricDisplayLabel(metric: ChannelMetric, t: (key: string) => string): 
   return map[metric] || metric;
 }
 
-/**
- * Defines the available datasets for fetching data.
- * `allsensors` includes all channel sensor data, while `main` is for the main weather station sensors.
- * @private
- */
 type Dataset = "allsensors" | "main";
 
-/**
- * Defines the available data resolutions for API requests.
- * @private
- */
 type Resolution = "minute" | "hour" | "day";
 
 const COLORS = [
@@ -777,13 +414,6 @@ const COLORS = [
   "#f97316",
 ];
 
-/**
- * The main component for the dashboard page.
- * It manages state for data fetching, user selections (like year, month, resolution),
- * and renders the appropriate charts based on user input.
- *
- * @returns The main dashboard component.
- */
 export default function Dashboard() {
   const { t, i18n } = useTranslation();
   const locale = i18n.language || 'de';
@@ -797,8 +427,7 @@ export default function Dashboard() {
   const [dataAll, setDataAll] = useState<DataResp | null>(null);
   const [dataMain, setDataMain] = useState<DataResp | null>(null);
   // Minutendaten für Statistikberechnung
-  const [minuteDataMain, setMinuteDataMain] = useState<DataResp | null>(null);
-  const [minuteDataAll, setMinuteDataAll] = useState<DataResp | null>(null);
+  const [stats, setStats] = useState<any | null>(null);
   const [channelsCfg, setChannelsCfg] = useState<ChannelsConfig>({});
   const [loading, setLoading] = useState<boolean>(false);
   const [errAll, setErrAll] = useState<string | null>(null);
@@ -942,83 +571,71 @@ export default function Dashboard() {
     setLoading(true);
     setErrAll(null);
     setErrMain(null);
+    setStats(null);
+
     const uAll = new URL(API_ENDPOINTS.DATA_ALLSENSORS, window.location.origin);
     const uMain = new URL(API_ENDPOINTS.DATA_MAIN, window.location.origin);
-    const uMinuteMain = new URL(API_ENDPOINTS.DATA_MAIN, window.location.origin);
-    const uMinuteAll = new URL(API_ENDPOINTS.DATA_ALLSENSORS, window.location.origin);
-    
+    const uStats = new URL('/api/data/stats', window.location.origin);
+
     if (useGlobalRange) {
       uAll.searchParams.set("resolution", resolution);
       uMain.searchParams.set("resolution", resolution);
-      // Minutendaten immer mit Auflösung "minute" laden
-      uMinuteMain.searchParams.set("resolution", "minute");
-      uMinuteAll.searchParams.set("resolution", "minute");
-      
       if (startParam) {
         uAll.searchParams.set("start", startParam);
         uMain.searchParams.set("start", startParam);
-        uMinuteMain.searchParams.set("start", startParam);
-        uMinuteAll.searchParams.set("start", startParam);
+        uStats.searchParams.set("start", startParam);
       }
-      
       if (endParam) {
         uAll.searchParams.set("end", endParam);
         uMain.searchParams.set("end", endParam);
-        uMinuteMain.searchParams.set("end", endParam);
-        uMinuteAll.searchParams.set("end", endParam);
+        uStats.searchParams.set("end", endParam);
       }
     } else {
       const monthStr = `${year}${mon}`;
       uAll.searchParams.set("month", monthStr);
       uMain.searchParams.set("month", monthStr);
-      uMinuteMain.searchParams.set("month", monthStr);
-      uMinuteAll.searchParams.set("month", monthStr);
-      
-      uAll.searchParams.set("resolution", resolution);
-      uMain.searchParams.set("resolution", resolution);
-      // Minutendaten immer mit Auflösung "minute" laden
-      uMinuteMain.searchParams.set("resolution", "minute");
-      uMinuteAll.searchParams.set("resolution", "minute");
+      uStats.searchParams.set("month", monthStr);
     }
-    
-    Promise.all([
-      fetch(uAll.toString()).then(async (r) => ({ ok: r.ok, body: await r.json() })).catch(() => ({ ok: false, body: null })),
-      fetch(uMain.toString()).then(async (r) => ({ ok: r.ok, body: await r.json() })).catch(() => ({ ok: false, body: null })),
-      fetch(uMinuteMain.toString()).then(async (r) => ({ ok: r.ok, body: await r.json() })).catch(() => ({ ok: false, body: null })),
-      fetch(uMinuteAll.toString()).then(async (r) => ({ ok: r.ok, body: await r.json() })).catch(() => ({ ok: false, body: null })),
-    ])
-      .then(([a, m, mm, mma]) => {
-        if (!a.ok || !a.body || a.body.error) {
-          setErrAll(a.body?.error || t('statuses.loadErrorAllsensors'));
-          setDataAll(null);
+
+    uStats.searchParams.set("dataset", mode === 'main' ? 'main' : 'allsensors');
+    if (mode === 'channel' && selectedChannel !== 'all') {
+      uStats.searchParams.set("ch", selectedChannel);
+    }
+
+    const dataFetch = mode === 'main'
+      ? fetch(uMain.toString()).then(r => r.json())
+      : fetch(uAll.toString()).then(r => r.json());
+
+    const statsFetch = fetch(uStats.toString()).then(r => r.json());
+
+    Promise.all([dataFetch, statsFetch])
+      .then(([dataRes, statsRes]) => {
+        if (mode === 'main') {
+          if (!dataRes || dataRes.error) {
+            setErrMain(dataRes?.error || t('statuses.loadErrorMain'));
+            setDataMain(null);
+          } else {
+            setDataMain(dataRes);
+          }
         } else {
-          setDataAll(a.body);
+          if (!dataRes || dataRes.error) {
+            setErrAll(dataRes?.error || t('statuses.loadErrorAllsensors'));
+            setDataAll(null);
+          } else {
+            setDataAll(dataRes);
+          }
         }
-        
-        if (!m.ok || !m.body || m.body.error) {
-          setErrMain(m.body?.error || t('statuses.loadErrorMain'));
-          setDataMain(null);
-        } else {
-          setDataMain(m.body);
-        }
-        
-        // Minutendaten für Statistikberechnung setzen
-        if (!mm.ok || !mm.body || mm.body.error) {
-          // Minute-data load error (non-critical, used only for statistics)
-          console.warn(t('statuses.minuteDataWarning'), mm.body?.error);
-          setMinuteDataMain(null);
-        } else {
-          setMinuteDataMain(mm.body);
-        }
-        if (!mma.ok || !mma.body || mma.body.error) {
-          console.warn(t('statuses.minuteDataWarningAllsensors'), mma.body?.error);
-          setMinuteDataAll(null);
-        } else {
-          setMinuteDataAll(mma.body);
+
+        if (statsRes && statsRes.ok) {
+          setStats(statsRes.stats);
         }
       })
+      .catch(e => {
+        setErrMain(e.message || 'Failed to fetch data');
+        setErrAll(e.message || 'Failed to fetch data');
+      })
       .finally(() => setLoading(false));
-  }, [useGlobalRange, startParam, endParam, year, mon, resolution, mode, selectedChannel]);
+  }, [useGlobalRange, startParam, endParam, year, mon, resolution, mode, selectedChannel, t]);
 
   // Function to handle date range confirmation
   const handleConfirmDateRange = () => {
@@ -1223,13 +840,13 @@ export default function Dashboard() {
       {!loading && (
         <div className="flex flex-col gap-4">
           {mode === 'main' && dataMain && (
-            <>{renderMainCharts(dataMain, xBaseMain, minuteDataMain, t, locale)}</>
+            <>{renderMainCharts(dataMain, xBaseMain, stats, t, locale)}</>
           )}
           {mode === 'channel' && selectedChannel === 'all' && dataAll && (
-            <>{renderAllChannelsCharts(dataAll, channelsCfg, xBaseAll, minuteDataAll, t, locale)}</>
+            <>{renderAllChannelsCharts(dataAll, channelsCfg, xBaseAll, stats, t, locale)}</>
           )}
           {mode === 'channel' && selectedChannel !== 'all' && dataAll && (
-            <>{renderChannelCardCharts(dataAll, channelsCfg, xBaseAll, selectedChannel, minuteDataAll, t, locale)}</>
+            <>{renderChannelCardCharts(dataAll, channelsCfg, xBaseAll, selectedChannel, stats, t, locale)}</>
           )}
         </div>
       )}
@@ -1237,18 +854,6 @@ export default function Dashboard() {
   );
 }
 
-/**
- * Renders a single line chart for a specific metric of a specific channel.
- * @param data - The data for all sensors.
- * @param chKey - The key of the channel to render (e.g., 'ch1').
- * @param metric - The metric to display.
- * @param channelsCfg - The channel configuration.
- * @param xBase - The baseline timestamp for the x-axis.
- * @param t - The translation function.
- * @param locale - The current locale.
- * @returns A React component containing the line chart.
- * @private
- */
 function renderChannelChart(data: DataResp, chKey: string, metric: ChannelMetric, channelsCfg: ChannelsConfig, xBase: number | null, t: (key: string) => string, locale: string) {
   const rows = data.rows || [];
   if (!rows.length || !xBase) return <div className="text-xs text-gray-500">{t('statuses.noData')}</div>;
@@ -1273,18 +878,7 @@ function renderChannelChart(data: DataResp, chKey: string, metric: ChannelMetric
   );
 }
 
-/**
- * Renders all charts for the main weather station sensors.
- * This includes temperature, rain, wind, and other metrics, along with statistical cards.
- * @param data - The data from the 'main' dataset.
- * @param xBase - The baseline timestamp for the x-axis.
- * @param minuteData - Higher-resolution minute data for more accurate statistics.
- * @param t - The translation function.
- * @param locale - The current locale.
- * @returns A React fragment containing all the charts for the main sensors.
- * @private
- */
-function renderMainCharts(data: DataResp, xBase: number | null, minuteData: DataResp | null, t: (key: string) => string, locale: string) {
+function renderMainCharts(data: DataResp, xBase: number | null, stats: any, t: (key: string) => string, locale: string) {
   const rows = data.rows || [];
   if (!rows.length || !xBase) return <div className="text-xs text-gray-500">{t('statuses.noData')}</div>;
   const times = rows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
@@ -1434,10 +1028,7 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
     }
   }
   
-  // Regenstatistik berechnen
-  const rainStats = calculateRainStats(rows, times, hourlyRainCol || null);
-  
-  const totalRain = rainPoints.reduce((acc, p) => acc + (Number.isFinite(p.y) ? p.y : 0), 0);
+  // Regenstatistik wird vom Backend bezogen
   const nonRainColumns = nonTempRainColumnsFiltered.filter(c => rainSel ? c !== rainSel.col : true);
   
   return (
@@ -1452,38 +1043,7 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
           points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[outsideCol]) })),
         };
         if (!series.points.some((p) => Number.isFinite(p.y))) return null;
-        // Stats & avg
-        let statsRows = rows;
-        let statsTimes = times;
-        let resolvedCol = outsideCol;
-        const avgOfCol = (rs: typeof rows, col?: string | null) => {
-          if (!col) return NaN;
-          let sum = 0, count = 0;
-          for (const r of rs) {
-            const v = numOrNaN(r[col]);
-            if (Number.isFinite(v)) { sum += v; count++; }
-          }
-          return count ? (sum / count) : NaN;
-        };
-        const avgTempOutside = avgOfCol(rows, outsideCol);
-        if (minuteData && minuteData.rows && minuteData.rows.length > 0) {
-          const mHeader = minuteData.header || [];
-          resolvedCol = mHeader.find(h => h === outsideCol) || outsideCol;
-          statsRows = minuteData.rows;
-          statsTimes = statsRows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
-        }
-        const statsOutside = calculateTemperatureStats(statsRows, statsTimes, [resolvedCol]);
-        // Feels like (only with outside)
-        let statsFelt: ReturnType<typeof calculateTemperatureStats> | null = null;
-        const feltBase = (data.header || []).find(h => h.startsWith("Gefühlte Temperatur"));
-        if (feltBase) {
-          let feltCol = feltBase;
-          if (minuteData && minuteData.rows && minuteData.rows.length > 0) {
-            const mHeader = minuteData.header || [];
-            feltCol = mHeader.find(h => h === feltBase) || feltBase;
-          }
-          statsFelt = calculateTemperatureStats(statsRows, statsTimes, [feltCol]);
-        }
+
         return (
           <div className="rounded border border-gray-200 p-3">
             {(() => {
@@ -1521,48 +1081,32 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
                 />
               );
             })()}
-            <div className="mt-2 text-sm border-t border-gray-100 pt-2">
-              {statsOutside && (
+            {stats && (
+              <div className="mt-2 text-sm border-t border-gray-100 pt-2">
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
                   <div className="bg-amber-50 p-2 rounded">
                     <div className="font-medium text-amber-700">{t('dashboard.daysOver30C')}</div>
-                    <div className="text-lg">{statsOutside.daysOver30} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsOutside.totalPeriodDays}</span></div>
+                    <div className="text-lg">{stats.days_over_30} <span className="text-xs text-gray-500">{t('dashboard.of')} {stats.total_days}</span></div>
                   </div>
                   <div className="bg-blue-50 p-2 rounded">
                     <div className="font-medium text-blue-700">{t('dashboard.daysUnder0C')}</div>
-                    <div className="text-lg">{statsOutside.daysUnder0} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsOutside.totalPeriodDays}</span></div>
+                    <div className="text-lg">{stats.days_under_0} <span className="text-xs text-gray-500">{t('dashboard.of')} {stats.total_days}</span></div>
                   </div>
                   <div className="bg-rose-50 p-2 rounded">
                     <div className="font-medium text-rose-700">{t('dashboard.highestTemperature')}</div>
-                    <div className="text-lg">{Number.isFinite(statsOutside.maxTemp) ? `${statsOutside.maxTemp.toFixed(1)} °C` : "—"}</div>
-                    {statsOutside.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsOutside.maxTime, locale)}</div>)}
+                    <div className="text-lg">{Number.isFinite(stats.max_temp) ? `${stats.max_temp.toFixed(1)} °C` : "—"}</div>
                   </div>
                   <div className="bg-indigo-50 p-2 rounded">
                     <div className="font-medium text-indigo-700">{t('dashboard.lowestTemperature')}</div>
-                    <div className="text-lg">{Number.isFinite(statsOutside.minTemp) ? `${statsOutside.minTemp.toFixed(1)} °C` : "—"}</div>
-                    {statsOutside.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsOutside.minTime, locale)}</div>)}
+                    <div className="text-lg">{Number.isFinite(stats.min_temp) ? `${stats.min_temp.toFixed(1)} °C` : "—"}</div>
                   </div>
-                  <div className="bg-teal-50 p-2 rounded">
-                    <div className="font-medium text-teal-700">{t('dashboard.average')}</div>
-                    <div className="text-lg">{Number.isFinite(avgTempOutside) ? `${avgTempOutside.toFixed(1)} °C` : "—"}</div>
-                  </div>
-                </div>
-              )}
-              {statsFelt && (
-                <div className="grid grid-cols-2 gap-2">
                   <div className="bg-orange-50 p-2 rounded">
                     <div className="font-medium text-orange-700">{t('dashboard.feelsLikeMax')}</div>
-                    <div className="text-lg">{Number.isFinite(statsFelt.maxTemp) ? `${statsFelt.maxTemp.toFixed(1)} °C` : "—"}</div>
-                    {statsFelt.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.maxTime, locale)}</div>)}
-                  </div>
-                  <div className="bg-cyan-50 p-2 rounded">
-                    <div className="font-medium text-cyan-700">{t('dashboard.feelsLikeMin')}</div>
-                    <div className="text-lg">{Number.isFinite(statsFelt.minTemp) ? `${statsFelt.minTemp.toFixed(1)} °C` : "—"}</div>
-                    {statsFelt.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.minTime, locale)}</div>)}
+                    <div className="text-lg">{Number.isFinite(stats.max_felt_temp) ? `${stats.max_felt_temp.toFixed(1)} °C` : "—"}</div>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         );
       })()}
@@ -1577,27 +1121,7 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
           points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[insideCol]) })),
         };
         if (!series.points.some((p) => Number.isFinite(p.y))) return null;
-        // Stats & avg
-        let statsRows = rows;
-        let statsTimes = times;
-        let resolvedCol = insideCol;
-        const avgOfCol = (rs: typeof rows, col?: string | null) => {
-          if (!col) return NaN;
-          let sum = 0, count = 0;
-          for (const r of rs) {
-            const v = numOrNaN(r[col]);
-            if (Number.isFinite(v)) { sum += v; count++; }
-          }
-          return count ? (sum / count) : NaN;
-        };
-        const avgTempInside = avgOfCol(rows, insideCol);
-        if (minuteData && minuteData.rows && minuteData.rows.length > 0) {
-          const mHeader = minuteData.header || [];
-          resolvedCol = mHeader.find(h => h === insideCol) || insideCol;
-          statsRows = minuteData.rows;
-          statsTimes = statsRows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
-        }
-        const statsInside = calculateTemperatureStats(statsRows, statsTimes, [resolvedCol]);
+
         return (
           <div className="rounded border border-gray-200 p-3">
             {(() => {
@@ -1637,34 +1161,32 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
                 />
               );
             })()}
-            <div className="mt-2 text-sm border-t border-gray-100 pt-2">
-              {statsInside && (
+            {stats && (
+              <div className="mt-2 text-sm border-t border-gray-100 pt-2">
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
                   <div className="bg-amber-50 p-2 rounded">
                     <div className="font-medium text-amber-700">{t('dashboard.daysOver30C')}</div>
-                    <div className="text-lg">{statsInside.daysOver30} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsInside.totalPeriodDays}</span></div>
+                    <div className="text-lg">{stats.days_over_30} <span className="text-xs text-gray-500">{t('dashboard.of')} {stats.total_days}</span></div>
                   </div>
                   <div className="bg-blue-50 p-2 rounded">
                     <div className="font-medium text-blue-700">{t('dashboard.daysUnder0C')}</div>
-                    <div className="text-lg">{statsInside.daysUnder0} <span className="text-xs text-gray-500">{t('dashboard.of')} {statsInside.totalPeriodDays}</span></div>
+                    <div className="text-lg">{stats.days_under_0} <span className="text-xs text-gray-500">{t('dashboard.of')} {stats.total_days}</span></div>
                   </div>
                   <div className="bg-rose-50 p-2 rounded">
                     <div className="font-medium text-rose-700">{t('dashboard.highestTemperature')}</div>
-                    <div className="text-lg">{Number.isFinite(statsInside.maxTemp) ? `${statsInside.maxTemp.toFixed(1)} °C` : "—"}</div>
-                    {statsInside.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsInside.maxTime, locale)}</div>)}
+                    <div className="text-lg">{Number.isFinite(stats.max_temp) ? `${stats.max_temp.toFixed(1)} °C` : "—"}</div>
                   </div>
                   <div className="bg-indigo-50 p-2 rounded">
                     <div className="font-medium text-indigo-700">{t('dashboard.lowestTemperature')}</div>
-                    <div className="text-lg">{Number.isFinite(statsInside.minTemp) ? `${statsInside.minTemp.toFixed(1)} °C` : "—"}</div>
-                    {statsInside.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsInside.minTime, locale)}</div>)}
+                    <div className="text-lg">{Number.isFinite(stats.min_temp) ? `${stats.min_temp.toFixed(1)} °C` : "—"}</div>
                   </div>
-                  <div className="bg-teal-50 p-2 rounded">
-                    <div className="font-medium text-teal-700">{t('dashboard.average')}</div>
-                    <div className="text-lg">{Number.isFinite(avgTempInside) ? `${avgTempInside.toFixed(1)} °C` : "—"}</div>
+                  <div className="bg-orange-50 p-2 rounded">
+                    <div className="font-medium text-orange-700">{t('dashboard.feelsLikeMax')}</div>
+                    <div className="text-lg">{Number.isFinite(stats.max_felt_temp) ? `${stats.max_felt_temp.toFixed(1)} °C` : "—"}</div>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         );
       })()}
@@ -1683,40 +1205,13 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
         const isGust = (gustCol != null) && (col === gustCol);
         const isSolar = (solarCol != null) && (col === solarCol);
         const isUv = (uvCol != null) && (col === uvCol);
-        let stats: { max: number; min: number; maxTime: Date | null; minTime: Date | null } | null = null;
-        if (isWind || isGust || isSolar || isUv) {
-          let statsRows = rows;
-          let statsTimes = times;
-          let resolvedCol = col;
-          if (minuteData && minuteData.rows && minuteData.rows.length > 0) {
-            const mHeader = minuteData.header || [];
-            resolvedCol = mHeader.find(h => h === col) || col;
-            statsRows = minuteData.rows;
-            statsTimes = statsRows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
-          }
-          stats = calculateMinMaxForColumn(statsRows, statsTimes, resolvedCol);
-        }
+
         const unit = unitForHeader(col) || "";
 
         return (
           <div key={col} className="rounded border border-gray-200 p-3">
             <LineChart series={[series]} yLabel={col} xLabel={t('dashboard.time')} xTickFormatter={fmt} hoverTimeFormatter={hoverFmt} showLegend={false} yUnit={unitForHeader(col)} />
-            {(isWind || isGust || isSolar || isUv) && stats && (
-              <div className="mt-2 text-sm border-t border-gray-100 pt-2">
-                <div className="grid grid-cols-1 gap-2">
-                  <div className="bg-rose-50 p-2 rounded">
-                    <div className="font-medium text-rose-700">{
-                      isWind ? t('dashboard.highestWind') :
-                      isGust ? t('dashboard.highestGust') :
-                      isSolar ? t('dashboard.highestSolar') :
-                      t('dashboard.highestUvi')
-                    }</div>
-                    <div className="text-lg">{Number.isFinite(stats.max) ? `${stats.max.toFixed(1)} ${unit}` : "—"}</div>
-                    {stats.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(stats.maxTime, locale)}</div>)}
-                  </div>
-                </div>
-              </div>
-            )}
+
           </div>
         );
       })}
@@ -1741,7 +1236,7 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
       {rainPoints.length > 0 && (
         <div className="rounded border border-gray-200 p-3">
           <div className="mb-2 text-sm text-gray-700 dark:text-gray-300">
-            <span className="font-medium">{t('dashboard.sumInPeriod')}</span> {totalRain.toFixed(1)} mm
+            <span className="font-medium">{t('dashboard.sumInPeriod')}</span> {stats && Number.isFinite(stats.total_rain) ? stats.total_rain.toFixed(1) : '—'} mm
           </div>
           <LineChart
             series={[{ id: t('dashboard.rainPerDay'), color: COLORS[1], points: rainPoints }]}
@@ -1756,35 +1251,24 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
           />
           
           {/* Regenstatistik */}
-          {(() => {
-            // Verwende die Tageswerte für die Regenstatistik
-            // Bei Tagesauflösung sind die Werte bereits korrekt aggregiert
-            let statsRainCol = hourlyRainCol || null;
-            let statsRows = rows;
-            let statsTimes = times;
-            
-            // Berechne die Regenstatistik
-            const rainStats = calculateRainStats(statsRows, statsTimes, statsRainCol);
-            
-            return (
-              <div className="mt-2 text-sm border-t border-gray-100 pt-2">
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="bg-blue-50 p-2 rounded">
-                    <div className="font-medium text-blue-700">{t('dashboard.daysOver30mm')}</div>
-                    <div className="text-lg">{rainStats.daysOver30mm} <span className="text-xs text-gray-500">{t('dashboard.of')} {rainStats.totalPeriodDays}</span></div>
-                  </div>
-                  <div className="bg-gray-50 p-2 rounded">
-                    <div className="font-medium text-gray-700">{t('dashboard.rainDays')}</div>
-                    <div className="text-lg">{rainStats.totalDays} <span className="text-xs text-gray-500">{t('dashboard.of')} {rainStats.totalPeriodDays}</span></div>
-                  </div>
-                  <div className="bg-emerald-50 p-2 rounded">
-                    <div className="font-medium text-emerald-700">{t('dashboard.total')}</div>
-                    <div className="text-lg">{totalRain.toFixed(1)} <span className="text-xs text-gray-500">mm</span></div>
-                  </div>
+          {stats && (
+            <div className="mt-2 text-sm border-t border-gray-100 pt-2">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-blue-50 p-2 rounded">
+                  <div className="font-medium text-blue-700">{t('dashboard.daysOver30mm')}</div>
+                  <div className="text-lg">{stats.days_over_30mm} <span className="text-xs text-gray-500">{t('dashboard.of')} {stats.total_days}</span></div>
+                </div>
+                <div className="bg-gray-50 p-2 rounded">
+                  <div className="font-medium text-gray-700">{t('dashboard.rainDays')}</div>
+                  <div className="text-lg">{stats.rain_days} <span className="text-xs text-gray-500">{t('dashboard.of')} {stats.total_days}</span></div>
+                </div>
+                <div className="bg-emerald-50 p-2 rounded">
+                  <div className="font-medium text-emerald-700">{t('dashboard.total')}</div>
+                  <div className="text-lg">{Number.isFinite(stats.total_rain) ? stats.total_rain.toFixed(1) : '—'} <span className="text-xs text-gray-500">mm</span></div>
                 </div>
               </div>
-            );
-          })()}
+            </div>
+          )}
         </div>
       )}
       
@@ -1808,12 +1292,7 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
   );
 }
 
-/**
- * Finds columns related to temperature from a list of headers.
- * @param header - An array of header strings.
- * @returns An array of header strings that are identified as temperature metrics.
- * @private
- */
+// Hilfsfunktion zum Identifizieren von Temperaturmetriken in den Hauptsensoren
 function findTemperatureColumns(header: string[]): string[] {
   const tempColumns: string[] = [];
   
@@ -1831,13 +1310,7 @@ function findTemperatureColumns(header: string[]): string[] {
   return tempColumns;
 }
 
-/**
- * Finds columns related to rain from a list of headers.
- * It specifically looks for weekly, monthly, and yearly totals.
- * @param header - An array of header strings.
- * @returns An array of header strings identified as rain total metrics.
- * @private
- */
+// Hilfsfunktion zum Identifizieren von Regenmetriken in den Hauptsensoren
 function findRainColumns(header: string[]): string[] {
   const rainColumns: string[] = [];
   
@@ -1882,12 +1355,7 @@ function findRainColumns(header: string[]): string[] {
   return rainColumns;
 }
 
-/**
- * Finds columns for wind speed and wind gust from a list of headers.
- * @param header - An array of header strings.
- * @returns An object containing the identified wind and gust column names, or null if not found.
- * @private
- */
+// Hilfsfunktion zum Identifizieren von Wind/Böe-Spalten in den Hauptsensoren
 function findWindColumns(header: string[]): { windCol: string | null; gustCol: string | null } {
   let windCol: string | null = null;
   let gustCol: string | null = null;
@@ -1911,12 +1379,7 @@ function findWindColumns(header: string[]): { windCol: string | null; gustCol: s
   return { windCol, gustCol };
 }
 
-/**
- * Finds columns for solar radiation and UV index from a list of headers.
- * @param header - An array of header strings.
- * @returns An object containing the identified solar and UV column names, or null if not found.
- * @private
- */
+// Hilfsfunktion: Solarstrahlung und UV-Index identifizieren
 function findSolarUvColumns(header: string[]): { solarCol: string | null; uvCol: string | null } {
   let solarCol: string | null = null;
   let uvCol: string | null = null;
@@ -1934,13 +1397,6 @@ function findSolarUvColumns(header: string[]): { solarCol: string | null; uvCol:
   return { solarCol, uvCol };
 }
 
-/**
- * Parses a string into a Date object.
- * Handles multiple common date formats and provides a fallback.
- * @param s - The date string to parse.
- * @returns A Date object, or null if parsing fails.
- * @private
- */
 function toDate(s: string): Date | null {
   // try YYYY/M/D H:MM
   let m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{1,2})/);
@@ -1953,35 +1409,14 @@ function toDate(s: string): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-/**
- * Safely converts a value to a number, returning NaN for invalid inputs.
- * @param v - The value to convert.
- * @returns A number or NaN.
- * @private
- */
 function numOrNaN(v: any): number {
   if (v == null) return NaN;
   const n = typeof v === "number" ? v : Number(v);
   return isNaN(n) ? NaN : n;
 }
 
-/**
- * Clamps a number between a minimum and maximum value.
- * @param n - The number to clamp.
- * @param min - The minimum value.
- * @param max - The maximum value.
- * @returns The clamped number.
- * @private
- */
+// Helpers for time range controls
 function clamp(n: number, min: number, max: number) { return Math.max(min, Math.min(max, n)); }
-
-/**
- * Finds the index of the nearest time in an array of dates to a given timestamp.
- * @param times - A sorted array of Date objects.
- * @param ms - The timestamp in milliseconds to find the nearest match for.
- * @returns The index of the nearest time.
- * @private
- */
 function nearestIndex(times: Date[], ms: number) {
   if (!times.length) return 0;
   let lo = 0, hi = times.length - 1;
@@ -1997,13 +1432,6 @@ function nearestIndex(times: Date[], ms: number) {
   const d1 = Math.abs(times[i1].getTime() - ms);
   return d0 < d1 ? i0 : i1;
 }
-
-/**
- * Formats a Date object for display in `DD.MM.YYYY HH:MI` format.
- * @param d - The Date object.
- * @returns The formatted string.
- * @private
- */
 function formatDisplay(d: Date) {
   const dd = pad2(d.getDate());
   const mm = pad2(d.getMonth() + 1);
@@ -2012,13 +1440,6 @@ function formatDisplay(d: Date) {
   const mi = pad2(d.getMinutes());
   return `${dd}.${mm}.${yyyy} ${hh}:${mi}`;
 }
-
-/**
- * Formats a Date object into a string suitable for `datetime-local` input fields (`YYYY-MM-DDTHH:MI`).
- * @param d - The Date object.
- * @returns The formatted string.
- * @private
- */
 function formatLocal(d: Date) {
   const yyyy = d.getFullYear();
   const mm = pad2(d.getMonth() + 1);
@@ -2027,13 +1448,6 @@ function formatLocal(d: Date) {
   const mi = pad2(d.getMinutes());
   return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
 }
-
-/**
- * Formats a Date object into a string suitable for API requests (`YYYY-MM-DDTHH:MI`).
- * @param d - The Date object.
- * @returns The formatted string.
- * @private
- */
 function formatForApi(d: Date) {
   const yyyy = d.getFullYear();
   const mm = pad2(d.getMonth() + 1);
@@ -2043,13 +1457,6 @@ function formatForApi(d: Date) {
   return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
 }
 
-/**
- * Generates a pretty label for a sensor header, replacing 'CHx' with its configured name.
- * @param header - The raw header string (e.g., "CH1 Temperatur").
- * @param cfg - The channels configuration.
- * @returns A user-friendly label (e.g., "Living Room Temperatur").
- * @private
- */
 function prettyAllsensorsLabel(header: string, cfg: ChannelsConfig) {
   // Replace leading CHx with configured channel name if present
   const m = header.match(/^CH(\d+)\s+(.*)$/);
@@ -2061,41 +1468,18 @@ function prettyAllsensorsLabel(header: string, cfg: ChannelsConfig) {
   return header;
 }
 
-/**
- * Gets the configured name for a channel key.
- * @param key - The channel key (e.g., 'ch1').
- * @param cfg - The channels configuration.
- * @returns The configured name or the key itself as a fallback.
- * @private
- */
 function channelName(key: string, cfg: ChannelsConfig) {
   const c = cfg[key];
   if (!c) return key.toUpperCase();
   return c.name || key.toUpperCase();
 }
 
-/**
- * Gets a sorted list of channel keys from the configuration.
- * Provides a default list if the configuration is empty.
- * @param cfg - The channels configuration.
- * @returns A sorted array of channel keys.
- * @private
- */
 function getChannelKeys(cfg: ChannelsConfig): string[] {
   const keys = Object.keys(cfg);
   if (keys.length) return keys.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   return ["ch1","ch2","ch3","ch4","ch5","ch6","ch7","ch8"];
 }
 
-/**
- * Finds the correct header key for a given metric and channel number in the 'allsensors' dataset.
- * It handles synonyms for metric names.
- * @param header - The array of header strings from the data.
- * @param metric - The metric to find (e.g., "Temperatur").
- * @param chNum - The channel number as a string (e.g., "1").
- * @returns The matching header key, or a fallback.
- * @private
- */
 function headerKeyForAllsensors(header: string[], metric: string, chNum: string): string {
   // Prefer CHx <metric>
   const synonyms: Record<string, string[]> = {
@@ -2124,12 +1508,6 @@ function headerKeyForAllsensors(header: string[], metric: string, chNum: string)
   return header[1] || "";
 }
 
-/**
- * Infers which columns in a dataset are numeric based on a sample of rows.
- * @param data - The dataset to analyze.
- * @returns An array of header strings that are determined to be numeric.
- * @private
- */
 function inferNumericColumns(data: DataResp | null): string[] {
   if (!data) return [];
   const header = data.header || [];
@@ -2148,12 +1526,7 @@ function inferNumericColumns(data: DataResp | null): string[] {
   return numeric;
 }
 
-/**
- * Returns the appropriate unit for a given channel metric.
- * @param metric - The channel metric.
- * @returns The unit string (e.g., "°C", "%").
- * @private
- */
+// Units helpers
 function unitForMetric(metric: ChannelMetric): string {
   switch (metric) {
     case "Temperatur":
@@ -2167,12 +1540,6 @@ function unitForMetric(metric: ChannelMetric): string {
   }
 }
 
-/**
- * Infers the measurement unit from a header string.
- * @param header - The header string (e.g., "Temperatur Aussen").
- * @returns The inferred unit string (e.g., "°C", "mm", "km/h").
- * @private
- */
 function unitForHeader(header: string): string {
   const s = header.toLowerCase();
   // Rain
