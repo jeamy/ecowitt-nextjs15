@@ -22,28 +22,33 @@ export async function getDailyChartData(sensor: string, type: 'temperature' | 'h
       return [];
     }
     
-    // Map sensor names to likely column names in allsensors data
+    // Map sensor names to exact column names in allsensors data
+    // Note: allsensors data only contains CH1-CH8 sensors, no indoor/outdoor
     const getSensorColumn = (sensor: string, type: 'temperature' | 'humidity'): string[] => {
       const candidates: string[] = [];
       
       if (sensor === 'indoor') {
+        // Indoor sensors don't exist in allsensors data - map to CH1 as fallback
         if (type === 'temperature') {
-          candidates.push('Indoor Temperature', 'Innentemperatur', 'Indoor Temp', 'intemp');
+          candidates.push('CH1 Temperature(℃)');
         } else {
-          candidates.push('Indoor Humidity', 'Innenluftfeuchtigkeit', 'Indoor Hum', 'inhumi');
+          candidates.push('CH1 Luftfeuchtigkeit(%)');
         }
       } else if (sensor === 'outdoor') {
+        // Outdoor sensors don't exist in allsensors data - map to CH2 as fallback
         if (type === 'temperature') {
-          candidates.push('Outdoor Temperature', 'Außentemperatur', 'Outdoor Temp', 'outtemp', 'Temperatur');
+          candidates.push('CH2 Temperature(℃)');
         } else {
-          candidates.push('Outdoor Humidity', 'Außenluftfeuchtigkeit', 'Outdoor Hum', 'outhumi', 'Luftfeuchtigkeit');
+          candidates.push('CH2 Luftfeuchtigkeit(%)');
         }
       } else if (sensor.match(/temp_and_humidity_ch(\d+)/)) {
         const chNum = sensor.match(/temp_and_humidity_ch(\d+)/)?.[1];
         if (type === 'temperature') {
-          candidates.push(`CH${chNum} Temperature`, `CH${chNum} Temp`, `Kanal ${chNum} Temperatur`, `temp${chNum}f`);
+          // Exact German column names from the data
+          candidates.push(`CH${chNum} Temperature(℃)`);
         } else {
-          candidates.push(`CH${chNum} Humidity`, `CH${chNum} Hum`, `Kanal ${chNum} Luftfeuchtigkeit`, `humidity${chNum}`);
+          // Exact German column names from the data
+          candidates.push(`CH${chNum} Luftfeuchtigkeit(%)`);
         }
       }
       
@@ -140,28 +145,33 @@ export async function getDailyChartDataMinute(sensor: string, type: 'temperature
       return [];
     }
     
-    // Map sensor names to likely column names in allsensors data
+    // Map sensor names to exact column names in allsensors data
+    // Note: allsensors data only contains CH1-CH8 sensors, no indoor/outdoor
     const getSensorColumn = (sensor: string, type: 'temperature' | 'humidity'): string[] => {
       const candidates: string[] = [];
       
       if (sensor === 'indoor') {
+        // Indoor sensors don't exist in allsensors data - map to CH1 as fallback
         if (type === 'temperature') {
-          candidates.push('Indoor Temperature', 'Innentemperatur', 'Indoor Temp', 'intemp');
+          candidates.push('CH1 Temperature(℃)');
         } else {
-          candidates.push('Indoor Humidity', 'Innenluftfeuchtigkeit', 'Indoor Hum', 'inhumi');
+          candidates.push('CH1 Luftfeuchtigkeit(%)');
         }
       } else if (sensor === 'outdoor') {
+        // Outdoor sensors don't exist in allsensors data - map to CH2 as fallback
         if (type === 'temperature') {
-          candidates.push('Outdoor Temperature', 'Außentemperatur', 'Outdoor Temp', 'outtemp', 'Temperatur');
+          candidates.push('CH2 Temperature(℃)');
         } else {
-          candidates.push('Outdoor Humidity', 'Außenluftfeuchtigkeit', 'Outdoor Hum', 'outhumi', 'Luftfeuchtigkeit');
+          candidates.push('CH2 Luftfeuchtigkeit(%)');
         }
       } else if (sensor.match(/temp_and_humidity_ch(\d+)/)) {
         const chNum = sensor.match(/temp_and_humidity_ch(\d+)/)?.[1];
         if (type === 'temperature') {
-          candidates.push(`CH${chNum} Temperature`, `CH${chNum} Temp`, `Kanal ${chNum} Temperatur`, `temp${chNum}f`);
+          // Exact German column names from the data
+          candidates.push(`CH${chNum} Temperature(℃)`);
         } else {
-          candidates.push(`CH${chNum} Humidity`, `CH${chNum} Hum`, `Kanal ${chNum} Luftfeuchtigkeit`, `humidity${chNum}`);
+          // Exact German column names from the data
+          candidates.push(`CH${chNum} Luftfeuchtigkeit(%)`);
         }
       }
       
