@@ -67,6 +67,23 @@ export default function MiniChart({
     return { min, max };
   }, [data]);
 
+  // Calculate Y-axis range with extra padding to prevent clipping of labels
+  const yAxisRange = useMemo(() => {
+    if (!data.length) return { min: 0, max: 100 };
+    
+    const values = data.map(d => d.y);
+    const dataMin = Math.min(...values);
+    const dataMax = Math.max(...values);
+    const range = dataMax - dataMin;
+    // Increase padding to 15% to ensure labels don't get clipped
+    const padding = Math.max(range * 0.15, 2); // 15% padding or minimum 2 units
+    
+    return {
+      min: dataMin - padding,
+      max: dataMax + padding
+    };
+  }, [data]);
+
   const options = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
@@ -103,6 +120,8 @@ export default function MiniChart({
       y: {
         type: 'linear' as const,
         display: false,
+        min: yAxisRange.min,
+        max: yAxisRange.max,
       },
     },
     elements: {
@@ -113,7 +132,7 @@ export default function MiniChart({
       mode: 'nearest' as const,
       intersect: false,
     },
-  }), [unit]);
+  }), [unit, yAxisRange]);
 
   // Custom plugin to draw min/max annotations
   const annotationPlugin = useMemo(() => ({
@@ -165,13 +184,15 @@ export default function MiniChart({
         ctx.arc(maxX, maxY, 3, 0, 2 * Math.PI);
         ctx.fill();
         
-        // Max label
+        // Max label - ensure it's not clipped at top
         ctx.fillStyle = '#ef4444';
         ctx.font = '10px system-ui';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
         const maxText = `${minMaxData.max.y.toFixed(1)}${unit}`;
-        ctx.fillText(maxText, maxX, maxY - 5);
+        // Position label below the point if it would be clipped at top
+        const labelY = maxY - 5 < chartArea.top + 12 ? maxY + 15 : maxY - 5;
+        ctx.fillText(maxText, maxX, labelY);
         
         // Max time
         ctx.textBaseline = 'top';
