@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { computeAstro, formatTime } from "@/lib/astro";
 import { API_ENDPOINTS } from "@/constants";
 import { useRealtime } from "@/contexts/RealtimeContext";
+import MiniChart from "./MiniChart";
 
 import { useTranslation } from "react-i18next";
 
@@ -33,7 +34,29 @@ function TemperatureLabelValue({
   unit?: string;
   t: (key: string) => string;
 }) {
+  const [chartData, setChartData] = useState<Array<{x: number, y: number}>>([]);
   const sensorData = minMax?.sensors?.[field];
+  
+  // Fetch daily chart data for temperature
+  useEffect(() => {
+    const fetchChartData = async () => {
+      try {
+        const response = await fetch(`${API_ENDPOINTS.DATA_DAILY_CHART}?sensor=${field}&type=temperature&resolution=minute`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.ok && data.data) {
+            setChartData(data.data);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching temperature chart data:', error);
+      }
+    };
+    
+    if (currentTemp.value != null) {
+      fetchChartData();
+    }
+  }, [field, currentTemp.value]);
   
   const formatMinMax = (value: number, time: string, label: string, isMax: boolean) => {
     const timeStr = time ? new Date(time).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -60,6 +83,19 @@ function TemperatureLabelValue({
               {sensorData?.max != null && formatMinMax(sensorData.max, sensorData.maxTime, 'Max', true)}
             </div>
           )}
+          {chartData.length > 0 && (
+            <div className="mt-2">
+              <MiniChart
+                data={chartData}
+                type="temperature"
+                unit={unit}
+                minValue={sensorData?.min}
+                maxValue={sensorData?.max}
+                minTime={sensorData?.minTime}
+                maxTime={sensorData?.maxTime}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -81,7 +117,29 @@ function HumidityLabelValue({
   unit?: string;
   t: (key: string) => string;
 }) {
+  const [chartData, setChartData] = useState<Array<{x: number, y: number}>>([]);
   const sensorData = minMax?.humidity?.[field];
+  
+  // Fetch daily chart data for humidity
+  useEffect(() => {
+    const fetchChartData = async () => {
+      try {
+        const response = await fetch(`${API_ENDPOINTS.DATA_DAILY_CHART}?sensor=${field}&type=humidity&resolution=minute`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.ok && data.data) {
+            setChartData(data.data);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching humidity chart data:', error);
+      }
+    };
+    
+    if (currentHumidity.value != null) {
+      fetchChartData();
+    }
+  }, [field, currentHumidity.value]);
   
   const formatMinMax = (value: number, time: string, label: string, isMax: boolean) => {
     const timeStr = time ? new Date(time).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -106,6 +164,19 @@ function HumidityLabelValue({
             <div className="mt-1 space-y-0.5">
               {sensorData?.min != null && formatMinMax(sensorData.min, sensorData.minTime, 'Min', false)}
               {sensorData?.max != null && formatMinMax(sensorData.max, sensorData.maxTime, 'Max', true)}
+            </div>
+          )}
+          {chartData.length > 0 && (
+            <div className="mt-2">
+              <MiniChart
+                data={chartData}
+                type="humidity"
+                unit={unit}
+                minValue={sensorData?.min}
+                maxValue={sensorData?.max}
+                minTime={sensorData?.minTime}
+                maxTime={sensorData?.maxTime}
+              />
             </div>
           )}
         </div>
