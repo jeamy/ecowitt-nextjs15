@@ -8,6 +8,15 @@ import { useTranslation } from "react-i18next";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { RealtimeProvider } from "@/contexts/RealtimeContext";
 
+/**
+ * The main page component for the weather dashboard.
+ * It provides a tabbed interface to switch between different views:
+ * - Realtime: A list of current sensor readings.
+ * - Graphics: A set of gauges and visual displays for current data.
+ * - Saved: A dashboard for viewing historical data with charts.
+ *
+ * @returns The Home page component.
+ */
 export default function Home() {
   const { t } = useTranslation();
   const [tab, setTab] = useState<"rt" | "gfx" | "stored">("rt");

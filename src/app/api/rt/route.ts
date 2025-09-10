@@ -7,6 +7,22 @@ export const runtime = "nodejs"; // we need fs access
 
 // (archiving logic moved to shared module)
 
+/**
+ * API route to proxy real-time data requests to the Ecowitt API.
+ * This acts as a server-side proxy to hide API credentials from the client.
+ * It can fetch either all data or a subset based on the `all` query parameter.
+ *
+ * @param {Request} req - The incoming request object.
+ * @returns {Promise<NextResponse>} A JSON response containing the real-time data from the Ecowitt API.
+ *
+ * @example
+ * // Get all real-time data
+ * GET /api/rt?all=1
+ *
+ * @example
+ * // Get a subset of real-time data
+ * GET /api/rt
+ */
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
