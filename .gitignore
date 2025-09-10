@@ -42,8 +42,8 @@ next-env.d.ts
 
 # data artifacts (root-only)
 DNT/
-data/
-data/parquet/
-data/*.duckdb*
+/data/
+/data/parquet/
+/data/*.duckdb*
 eco.ts
-temp-minmax-data.json
+temp-minmax-data*
