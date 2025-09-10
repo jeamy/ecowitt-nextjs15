@@ -46,4 +46,5 @@ DNT/
 /data/parquet/
 /data/*.duckdb*
 eco.ts
-temp-minmax-data*
+/temp*
+temp-minmax-data.json
