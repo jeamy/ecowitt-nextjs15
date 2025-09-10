@@ -46,3 +46,4 @@ data/
 data/parquet/
 data/*.duckdb*
 eco.ts
+temp-minmax-data.json
