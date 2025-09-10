@@ -1,0 +1,16 @@
+{
+  "name": "Ecowitt Weather Station",
+  "short_name": "Ecowitt",
+  "description": "Weather station data visualization",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/vercel.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
