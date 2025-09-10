@@ -38,6 +38,13 @@ function loadData(): TempMinMax | null {
   try {
     if (fs.existsSync(DATA_FILE)) {
       const content = fs.readFileSync(DATA_FILE, 'utf8');
+      
+      // Check if file is empty or contains only whitespace
+      if (!content.trim()) {
+        console.warn('temp-minmax-data.json is empty, returning null');
+        return null;
+      }
+      
       const data = JSON.parse(content);
       const today = getTodayDate();
       

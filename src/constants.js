@@ -29,5 +29,5 @@ export const API_ENDPOINTS = {
   DATA_EXTENT: '/api/data/extent',
   DATA_ALLSENSORS: '/api/data/allsensors',
   DATA_MAIN: '/api/data/main',
-  DATA_DAILY_CHART: '/api/data/daily-chart',
+  DATA_DAILY_CHART: '/api/data/dailychart',
 };
