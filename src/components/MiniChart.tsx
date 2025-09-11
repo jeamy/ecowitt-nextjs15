@@ -52,10 +52,34 @@ export default function MiniChart({
 
   const chartColor = type === 'temperature' ? '#ef4444' : '#3b82f6';
   
-  // Find min/max values and their times for annotations
+  // Use provided min/max values from realtime sensor data, fallback to chart data
   const minMaxData = useMemo(() => {
     if (!data.length) return null;
     
+    // If we have provided min/max values from the realtime display, use those
+    if (minValue != null && maxValue != null && minTime && maxTime) {
+      // Find the closest data points to the provided times
+      const minTimeMs = new Date(minTime).getTime();
+      const maxTimeMs = new Date(maxTime).getTime();
+      
+      // Find closest data points or use the provided values with approximate times
+      let minPoint = { x: minTimeMs, y: minValue };
+      let maxPoint = { x: maxTimeMs, y: maxValue };
+      
+      // Try to find actual data points close to these times
+      for (const point of data) {
+        if (Math.abs(point.x - minTimeMs) < Math.abs(minPoint.x - minTimeMs)) {
+          minPoint = { x: point.x, y: minValue }; // Use real time but provided value
+        }
+        if (Math.abs(point.x - maxTimeMs) < Math.abs(maxPoint.x - maxTimeMs)) {
+          maxPoint = { x: point.x, y: maxValue }; // Use real time but provided value
+        }
+      }
+      
+      return { min: minPoint, max: maxPoint };
+    }
+    
+    // Fallback to finding min/max from chart data
     let min = data[0];
     let max = data[0];
     
@@ -65,7 +89,7 @@ export default function MiniChart({
     }
     
     return { min, max };
-  }, [data]);
+  }, [data, minValue, maxValue, minTime, maxTime]);
 
   // Calculate Y-axis range with extra padding to prevent clipping of labels
   const yAxisRange = useMemo(() => {
