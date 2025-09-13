@@ -4,20 +4,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import { computeAstro, formatTime } from "@/lib/astro";
 import { API_ENDPOINTS } from "@/constants";
 import { useRealtime } from "@/contexts/RealtimeContext";
-import MiniChart from "./MiniChart";
 
 import { useTranslation } from "react-i18next";
 
 type RTData = any;
 
-/**
- * A simple component to display a label and a value side-by-side.
- * @param props - The component props.
- * @param props.label - The label to display.
- * @param props.value - The value to display.
- * @returns A React component with a label and value.
- * @private
- */
 function LabelValue({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between py-1 text-sm">
@@ -27,12 +18,6 @@ function LabelValue({ label, value }: { label: string; value: React.ReactNode })
   );
 }
 
-/**
- * A component to display a temperature value along with its daily min/max values.
- * @param props - The component props.
- * @returns A React component for displaying temperature with min/max data.
- * @private
- */
 function TemperatureLabelValue({ 
   label, 
   currentTemp, 
@@ -48,29 +33,7 @@ function TemperatureLabelValue({
   unit?: string;
   t: (key: string) => string;
 }) {
-  const [chartData, setChartData] = useState<Array<{x: number, y: number}>>([]);
   const sensorData = minMax?.sensors?.[field];
-  
-  // Fetch daily chart data for temperature
-  useEffect(() => {
-    const fetchChartData = async () => {
-      try {
-        const response = await fetch(`${API_ENDPOINTS.DATA_DAILY_CHART}?sensor=${field}&type=temperature&resolution=minute`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.ok && data.data) {
-            setChartData(data.data);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching temperature chart data:', error);
-      }
-    };
-    
-    if (currentTemp.value != null) {
-      fetchChartData();
-    }
-  }, [field, currentTemp.value]);
   
   const formatMinMax = (value: number, time: string, label: string, isMax: boolean) => {
     const timeStr = time ? new Date(time).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -97,31 +60,12 @@ function TemperatureLabelValue({
               {sensorData?.max != null && formatMinMax(sensorData.max, sensorData.maxTime, 'Max', true)}
             </div>
           )}
-          {chartData.length > 0 && (
-            <div className="mt-2">
-              <MiniChart
-                data={chartData}
-                type="temperature"
-                unit={unit}
-                minValue={sensorData?.min}
-                maxValue={sensorData?.max}
-                minTime={sensorData?.minTime}
-                maxTime={sensorData?.maxTime}
-              />
-            </div>
-          )}
         </div>
       </div>
     </div>
   );
 }
 
-/**
- * A component to display a humidity value along with its daily min/max values.
- * @param props - The component props.
- * @returns A React component for displaying humidity with min/max data.
- * @private
- */
 function HumidityLabelValue({ 
   label, 
   currentHumidity, 
@@ -137,29 +81,7 @@ function HumidityLabelValue({
   unit?: string;
   t: (key: string) => string;
 }) {
-  const [chartData, setChartData] = useState<Array<{x: number, y: number}>>([]);
   const sensorData = minMax?.humidity?.[field];
-  
-  // Fetch daily chart data for humidity
-  useEffect(() => {
-    const fetchChartData = async () => {
-      try {
-        const response = await fetch(`${API_ENDPOINTS.DATA_DAILY_CHART}?sensor=${field}&type=humidity&resolution=minute`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.ok && data.data) {
-            setChartData(data.data);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching humidity chart data:', error);
-      }
-    };
-    
-    if (currentHumidity.value != null) {
-      fetchChartData();
-    }
-  }, [field, currentHumidity.value]);
   
   const formatMinMax = (value: number, time: string, label: string, isMax: boolean) => {
     const timeStr = time ? new Date(time).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -186,31 +108,12 @@ function HumidityLabelValue({
               {sensorData?.max != null && formatMinMax(sensorData.max, sensorData.maxTime, 'Max', true)}
             </div>
           )}
-          {chartData.length > 0 && (
-            <div className="mt-2">
-              <MiniChart
-                data={chartData}
-                type="humidity"
-                unit={unit}
-                minValue={sensorData?.min}
-                maxValue={sensorData?.max}
-                minTime={sensorData?.minTime}
-                maxTime={sensorData?.maxTime}
-              />
-            </div>
-          )}
         </div>
       </div>
     </div>
   );
 }
 
-/**
- * Displays the current value of a sensor along with its daily minimum and maximum.
- * @param props - The component props.
- * @returns A React component showing the current value and min/max stats.
- * @private
- */
 function MinMaxDisplay({ 
   current, 
   minMax, 
@@ -250,23 +153,10 @@ function MinMaxDisplay({
   );
 }
 
-/**
- * Safely reads a nested property from an object.
- * @param obj - The object to read from.
- * @param path - The dot-separated path to the property.
- * @returns The property value, or undefined if not found.
- * @private
- */
 function tryRead(obj: any, path: string): any {
   return path.split(".").reduce((acc, key) => (acc && key in acc ? acc[key] : undefined), obj);
 }
 
-/**
- * Safely extracts a numeric value from various possible data structures.
- * @param v - The value to parse.
- * @returns The numeric value, or null if parsing fails.
- * @private
- */
 function numVal(v: any): number | null {
   if (v == null) return null;
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
@@ -280,13 +170,6 @@ function numVal(v: any): number | null {
   return null;
 }
 
-/**
- * Calculates the dew point.
- * @param temperature - The temperature in Celsius.
- * @param humidity - The relative humidity in percent.
- * @returns The calculated dew point in Celsius.
- * @private
- */
 function calculateDewPoint(temperature: number, humidity: number): number {
   // Magnus-Formel für Taupunktberechnung
   const a = 17.27;
@@ -298,13 +181,6 @@ function calculateDewPoint(temperature: number, humidity: number): number {
   return Number.isFinite(dewPoint) ? Math.round(dewPoint * 10) / 10 : temperature;
 }
 
-/**
- * Calculates the heat index (apparent temperature).
- * @param temperature - The temperature in Celsius.
- * @param humidity - The relative humidity in percent.
- * @returns The calculated heat index in Celsius.
- * @private
- */
 function calculateHeatIndex(temperature: number, humidity: number): number {
   // Vereinfachte Formel für den Wärmeindex (Heat Index)
   if (temperature < 20) {
@@ -333,12 +209,6 @@ function calculateHeatIndex(temperature: number, humidity: number): number {
   return Number.isFinite(heatIndex) ? Math.round(heatIndex * 10) / 10 : temperature;
 }
 
-/**
- * Extracts a value and its unit from a potential value-unit object.
- * @param v - The value object.
- * @returns An object containing the value and an optional unit.
- * @private
- */
 function valueAndUnit(v: any): { value: string | number | null; unit?: string } {
   if (v == null) return { value: null };
   if (typeof v === "object" && ("value" in v)) {
@@ -347,26 +217,12 @@ function valueAndUnit(v: any): { value: string | number | null; unit?: string } 
   return { value: v };
 }
 
-/**
- * Formats a value-unit object into a display string.
- * @param vu - The value-unit object.
- * @param fallbackUnit - A fallback unit to use if the object doesn't specify one.
- * @returns A formatted string like "10 °C" or "—" if the value is null.
- * @private
- */
 function fmtVU(vu: { value: string | number | null; unit?: string }, fallbackUnit?: string) {
   if (vu.value == null || vu.value === "") return "—";
   const unit = vu.unit ?? fallbackUnit ?? "";
   return `${vu.value}${unit ? ` ${unit}` : ""}`;
 }
 
-/**
- * Formats a battery status value into a localized string ("OK" or "Low").
- * @param v - The battery status value.
- * @param t - The translation function.
- * @returns The localized battery status.
- * @private
- */
 function fmtBattery(v: any, t: (key: string) => string) {
   const vu = valueAndUnit(v);
   if (vu.value == null || vu.value === "") return "—";
@@ -375,13 +231,6 @@ function fmtBattery(v: any, t: (key: string) => string) {
   return n === 0 ? t('statuses.ok') : t('statuses.low');
 }
 
-/**
- * Gets a translated, human-readable label for a given data key.
- * @param key - The data key (e.g., "wind_speed").
- * @param t - The translation function.
- * @returns The internationalized label.
- * @private
- */
 function i18nLabel(key: string, t: (key: string) => string): string {
   const k = key.toLowerCase();
   const map: Record<string, string> = {
@@ -401,13 +250,6 @@ function i18nLabel(key: string, t: (key: string) => string): string {
   return map[k] || key.replace(/_/g, " ");
 }
 
-/**
- * The main component for displaying real-time weather data in a list format.
- * It fetches and displays current conditions, sensor data, astronomical information,
- * and battery statuses.
- *
- * @returns A React component that renders the real-time data view.
- */
 export default function Realtime() {
   const { t, i18n } = useTranslation();
   const { data, error, loading, lastUpdated } = useRealtime();
