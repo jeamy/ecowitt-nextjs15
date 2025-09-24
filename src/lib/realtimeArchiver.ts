@@ -273,7 +273,7 @@ export async function writeLiveToDNT(payload: any) {
     numVal(tryRead(payload, "pressure.relative") ?? tryRead(payload, "barometer.relative") ?? tryRead(payload, "barometer.rel")),
     numVal(tryRead(payload, "solar_and_uvi.solar")),
     numVal(tryRead(payload, "solar_and_uvi.uvi")),
-    numVal(tryRead(payload, "rainfall.hourly")),
+    numVal(tryRead(payload, "rainfall.1_hour") ?? tryRead(payload, "rainfall.hourly")),
     numVal(tryRead(payload, "rainfall.rain_event")),
     numVal(tryRead(payload, "rainfall.daily")),
     numVal(tryRead(payload, "rainfall.weekly")),

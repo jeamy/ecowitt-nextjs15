@@ -212,14 +212,26 @@ function calculateHeatIndex(temperature: number, humidity: number): number {
 function valueAndUnit(v: any): { value: string | number | null; unit?: string } {
   if (v == null) return { value: null };
   if (typeof v === "object" && ("value" in v)) {
-    return { value: (v as any).value, unit: (v as any).unit };
+    // Stelle sicher, dass "0" und 0 als gültige Werte behandelt werden
+    const value = (v as any).value;
+    return { value: value, unit: (v as any).unit };
   }
   return { value: v };
 }
 
 function fmtVU(vu: { value: string | number | null; unit?: string }, fallbackUnit?: string) {
+  // Prüfe explizit auf null und leere Strings, aber nicht auf 0
   if (vu.value == null || vu.value === "") return "—";
+  
+  // Stelle sicher, dass 0 und "0" korrekt angezeigt werden
   const unit = vu.unit ?? fallbackUnit ?? "";
+  
+  // Wenn der Wert 0 oder "0" oder "0.0" ist, zeige "0" mit der Einheit an
+  const numValue = Number(vu.value);
+  if (numValue === 0) {
+    return `0${unit ? ` ${unit}` : ""}`;
+  }
+  
   return `${vu.value}${unit ? ` ${unit}` : ""}`;
 }
 
@@ -351,7 +363,7 @@ export default function Realtime() {
   // Rainfall
   const rainRate = valueAndUnit(tryRead(payload, "rainfall.rain_rate") ?? tryRead(payload, "rain.rate"));
   const rainDaily = valueAndUnit(tryRead(payload, "rainfall.daily"));
-  const rainHourly = valueAndUnit(tryRead(payload, "rainfall.hourly"));
+  const rainHourly = valueAndUnit(tryRead(payload, "rainfall.1_hour") ?? tryRead(payload, "rainfall.hourly"));
   const rainWeekly = valueAndUnit(tryRead(payload, "rainfall.weekly"));
   const rainMonthly = valueAndUnit(tryRead(payload, "rainfall.monthly"));
   const rainYearly = valueAndUnit(tryRead(payload, "rainfall.yearly"));
