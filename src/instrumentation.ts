@@ -4,6 +4,8 @@ import "server-only";
 declare global {
   // eslint-disable-next-line no-var
   var __rtPoller: NodeJS.Timer | undefined;
+  // eslint-disable-next-line no-var
+  var __statsPoller: NodeJS.Timer | undefined;
 }
 
 /**
@@ -54,5 +56,31 @@ export async function register() {
         } catch {}
       }
     }, intervalMs);
+  }
+
+  // Schedule a daily statistics recompute and warm cache on startup
+  const statsIntervalMs = 24 * 60 * 60 * 1000; // 24h
+  if (!global.__statsPoller) {
+    console.log(`[stats] Daily statistics precompute enabled (every ${statsIntervalMs} ms)`);
+    // Warm on startup
+    (async () => {
+      try {
+        const { updateStatisticsIfNeeded } = await import("@/lib/statistics");
+        await updateStatisticsIfNeeded();
+        console.log("[stats] Warmed statistics cache on startup");
+      } catch (e) {
+        console.error("[stats] Warmup failed:", e);
+      }
+    })();
+
+    global.__statsPoller = setInterval(async () => {
+      try {
+        const { updateStatistics } = await import("@/lib/statistics");
+        await updateStatistics();
+        console.log("[stats] Recomputed statistics");
+      } catch (e) {
+        console.error("[stats] Background recompute failed:", e);
+      }
+    }, statsIntervalMs);
   }
 }

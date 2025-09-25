@@ -18,4 +18,8 @@ export const API_ENDPOINTS = {
   DATA_EXTENT: '/api/data/extent',
   DATA_ALLSENSORS: '/api/data/allsensors',
   DATA_MAIN: '/api/data/main',
+  
+  // Statistics endpoints
+  STATISTICS: '/api/statistics',
+  STATISTICS_UPDATE: '/api/statistics/update',
 };

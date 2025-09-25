@@ -2,7 +2,8 @@
   "tabs": {
     "realtime": "Realtime",
     "graphics": "Graphics",
-    "saved": "Saved Data"
+    "saved": "Saved Data",
+    "statistics": "Statistics"
   },
   "statuses": {
     "lastUpdate": "Last update:",
@@ -125,5 +126,17 @@
     "lowestSolar": "Lowest solar radiation",
     "highestUvi": "Highest UV index",
     "lowestUvi": "Lowest UV index"
+  },
+  "statistics": {
+    "temperature": "Temperature",
+    "precipitation": "Precipitation",
+    "wind": "Wind",
+    "windAvg": "Average wind",
+    "maxDay": "Max day",
+    "minDay": "Min day",
+    "daysOver25C": "Days > 25 °C",
+    "daysOver20C": "Days > 20 °C",
+    "daysOver20mm": "Days ≥ 20 mm",
+    "daysUnder10C": "Days < -10 °C"
   }
 }

@@ -47,4 +47,4 @@ DNT/
 /data/*.duckdb*
 eco.ts
 #/temp*
-#temp-minmax-data.json
+temp-minmax-data.json
