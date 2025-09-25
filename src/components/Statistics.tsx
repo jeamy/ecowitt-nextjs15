@@ -17,13 +17,23 @@ function fmtDate(d: string | null | undefined) {
   return new Intl.DateTimeFormat(undefined, { year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 }
 
-function ThresholdItem({ label, td }: { label: string; td?: ThresholdDates }) {
+function tempColorClass(v: number | null | undefined) {
+  if (v === null || v === undefined || !Number.isFinite(v)) return "";
+  if (v <= -10) return "text-blue-900"; // dunkelblau
+  if (v <= 0) return "text-blue-500";   // hellblau
+  if (v <= 20) return "text-green-600";  // grün
+  if (v <= 25) return "text-orange-500"; // orange
+  if (v < 30) return "text-orange-600";  // Richtung rot
+  return "text-red-600";                  // rot
+}
+
+function ThresholdItem({ label, td, className }: { label: string; td?: ThresholdDates; className?: string }) {
   const [open, setOpen] = useState(false);
   const safe = td ?? { count: 0, dates: [] as string[] };
   return (
     <div className="mb-2">
       <button
-        className="text-sm font-medium text-blue-600 hover:underline"
+        className={"text-sm font-medium hover:underline " + (className || "text-blue-600")}
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
@@ -47,16 +57,16 @@ function TemperatureBlock({ y }: { y: YearStats | MonthStats }) {
     <div className="p-3 rounded border border-gray-200 dark:border-neutral-800">
       <div className="font-semibold mb-2">{t("statistics.temperature", "Temperature")}</div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-        <div>{t("dashboard.highestTemperature")} : {fmtNum(temp.max)} °C ({fmtDate(temp.maxDate)})</div>
-        <div>{t("dashboard.lowestTemperature")} : {fmtNum(temp.min)} °C ({fmtDate(temp.minDate)})</div>
+        <div>{t("dashboard.highestTemperature")} : <span className={tempColorClass(temp.max)}>{fmtNum(temp.max)} °C</span> ({fmtDate(temp.maxDate)})</div>
+        <div>{t("dashboard.lowestTemperature")} : <span className={tempColorClass(temp.min)}>{fmtNum(temp.min)} °C</span> ({fmtDate(temp.minDate)})</div>
         <div>{t("dashboard.average")} : {fmtNum(temp.avg)} °C</div>
       </div>
       <div className="mt-2">
-        <ThresholdItem label={t("dashboard.daysOver30C")} td={temp.over30} />
-        <ThresholdItem label={t("statistics.daysOver25C", "Days > 25 °C")} td={temp.over25} />
-        <ThresholdItem label={t("statistics.daysOver20C", "Days > 20 °C")} td={temp.over20} />
-        <ThresholdItem label={t("dashboard.daysUnder0C")} td={temp.under0} />
-        <ThresholdItem label={t("statistics.daysUnder10C", "Days < -10 °C")} td={temp.under10} />
+        <ThresholdItem className="text-red-600" label={t("dashboard.daysOver30C")} td={temp.over30} />
+        <ThresholdItem className="text-orange-500" label={t("statistics.daysOver25C", "Days > 25 °C")} td={temp.over25} />
+        <ThresholdItem className="text-green-600" label={t("statistics.daysOver20C", "Days > 20 °C")} td={temp.over20} />
+        <ThresholdItem className="text-blue-500" label={t("dashboard.daysUnder0C")} td={temp.under0} />
+        <ThresholdItem className="text-blue-900" label={t("statistics.daysUnder10C", "Days < -10 °C")} td={temp.under10} />
       </div>
     </div>
   );
