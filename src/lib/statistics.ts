@@ -12,6 +12,12 @@ async function ensureDataDir() {
 }
 
 function normalizeName(s: string): string {
+  // Transliterate common German characters and strip degree symbol before normalizing
+  const map: Record<string, string> = { "ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss" };
+  s = s.replace(/[äöüÄÖÜß]/g, (ch) => map[ch] || ch);
+  s = s.replace(/°/g, "");
+  // Remove other diacritics
+  try { s = s.normalize("NFKD").replace(/[\u0300-\u036f]/g, ""); } catch {}
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
@@ -24,6 +30,9 @@ interface ColumnMap {
   dailyRainCandidates: string[];
   hourlyRainCandidates: string[];
   genericRainCandidates: string[];
+  tempCandidates: string[];
+  windCandidates: string[];
+  gustCandidates: string[];
   wind: string | null;
   gust: string | null;
 }
@@ -44,15 +53,29 @@ async function discoverMainColumns(parquets: string[]): Promise<ColumnMap> {
     return null;
   };
 
-  // Prefer outdoor temperature column
-  const temp = pick([
-    /temperatur[aä]uss(en)?/,
-    /outdoor.*temp/,
-    /outside.*temp/,
-    /^temp(erature)?a(o|u)ssen/,
-    /^temperatur.*a(o|u)ssen/,
-    /^temperatur/,
-  ]) || (names.includes("Temperatur Aussen(℃)") ? "Temperatur Aussen(℃)" : null);
+  // Prefer outdoor temperature columns (German/English variants) and collect candidates
+  // Use normalized keys so that 'Außen/Aussen' both match as 'aussen'
+  const tempCandidates: string[] = [];
+  let temp: string | null = null;
+  for (const { n, k } of normEntries) {
+    const isOutdoorTemp = (k.includes("temperatur") && (k.includes("aussen") || k.includes("draussen"))) ||
+                          (k.includes("outdoor") && k.includes("temp")) ||
+                          (k.includes("outside") && k.includes("temp"));
+    if (isOutdoorTemp) {
+      tempCandidates.push(n);
+      if (!temp) temp = n;
+    }
+  }
+  if (!temp) {
+    // Fallback: any 'temperatur' not tagged as indoor/inside
+    for (const { n, k } of normEntries) {
+      if (k.includes("temperatur") && !(k.includes("innen") || k.includes("indoor") || k.includes("inside"))) {
+        temp = n; tempCandidates.push(n); break;
+      }
+    }
+  }
+  if (!temp && names.includes("Temperatur Aussen(℃)")) { temp = "Temperatur Aussen(℃)"; tempCandidates.push(temp); }
+  if (names.includes("Outdoor Temperature(℃)") && !tempCandidates.includes("Outdoor Temperature(℃)")) tempCandidates.push("Outdoor Temperature(℃)");
 
   // Rain selection aligned with Dashboard pickRain():
   // Prefer daily cumulative ("tag"/"daily"/"24h"); then hourly; then generic (exclude rate/year/month/week)
@@ -95,17 +118,21 @@ async function discoverMainColumns(parquets: string[]): Promise<ColumnMap> {
     }
   }
 
-  const gust = pick([
-    /b[oö]e/, // Böe(km/h)
-    /gust/,
-  ]) || (names.includes("Böe(km/h)") ? "Böe(km/h)" : null);
+  // Wind/Gust candidates (exclude direction)
+  const windCandidates: string[] = [];
+  const gustCandidates: string[] = [];
+  let wind: string | null = null;
+  let gust: string | null = null;
+  for (const { n, k } of normEntries) {
+    const isGust = k.includes("gust") || k.includes("boe") || k.includes("b\u00f6e");
+    const isWind = k.includes("wind") && !k.includes("direction") && !k.includes("richtung") && !k.includes("dir") && !isGust;
+    if (isGust) { gustCandidates.push(n); if (!gust) gust = n; }
+    else if (isWind) { windCandidates.push(n); if (!wind) wind = n; }
+  }
+  if (!wind && names.includes("Wind(km/h)")) { wind = "Wind(km/h)"; windCandidates.push(wind); }
+  if (!gust && names.includes("Böe(km/h)")) { gust = "Böe(km/h)"; gustCandidates.push(gust); }
 
-  const wind = pick([
-    /^wind/,
-    /wind\(kmh\)/,
-  ]) || (names.includes("Wind(km/h)") ? "Wind(km/h)" : null);
-
-  return { temp, rainDay: rainCol, rainMode, dailyRainCandidates, hourlyRainCandidates, genericRainCandidates, wind, gust };
+  return { temp, rainDay: rainCol, rainMode, dailyRainCandidates, hourlyRainCandidates, genericRainCandidates, tempCandidates, windCandidates, gustCandidates, wind, gust };
 }
 
 function sqlNum(colId: string): string {
@@ -136,20 +163,33 @@ async function queryDailyAggregates(parquetFiles: string[]) {
   // Read all Parquets in one scan with union_by_name to avoid schema/order mismatches across months
   const arr = '[' + qp.map((p) => `'${p}'`).join(',') + ']';
 
-  const tId = '"' + String(cols.temp).replace(/"/g, '""') + '"';
-  // Build COALESCE over all candidate rain columns for robustness across months
-  const rainCandidates = cols.rainMode === "daily"
-    ? (cols.dailyRainCandidates.length ? cols.dailyRainCandidates : (cols.hourlyRainCandidates.length ? cols.hourlyRainCandidates : cols.genericRainCandidates))
-    : (cols.hourlyRainCandidates.length ? cols.hourlyRainCandidates : (cols.genericRainCandidates.length ? cols.genericRainCandidates : cols.dailyRainCandidates));
-  const rainExprList = rainCandidates.map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
-  const rainExpr = rainExprList.length ? `COALESCE(${rainExprList.join(', ')})` : "NULL";
-  const windId = cols.wind ? '"' + String(cols.wind).replace(/"/g, '""') + '"' : null;
-  const gustId = cols.gust ? '"' + String(cols.gust).replace(/"/g, '""') + '"' : null;
-
-  const tExpr = sqlNum(tId);
-  // rainExpr already set above
-  const windExpr = windId ? sqlNum(windId) : "NULL";
-  const gustExpr = gustId ? sqlNum(gustId) : "NULL";
+  // Build COALESCE over all candidate temperature columns for robustness across months
+  const tempExprList = (cols.tempCandidates && cols.tempCandidates.length ? cols.tempCandidates : (cols.temp ? [cols.temp] : []))
+    .map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
+  const tExpr = tempExprList.length ? `COALESCE(${tempExprList.join(', ')})` : 'NULL';
+  // Build rain expressions per family to support fallback (daily cumulative vs hourly/generic sums)
+  const rainDailyExprList = (cols.dailyRainCandidates.length ? cols.dailyRainCandidates : [])
+    .map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
+  const rainHourlyExprList = (cols.hourlyRainCandidates.length ? cols.hourlyRainCandidates : [])
+    .map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
+  const rainGenericExprList = (cols.genericRainCandidates.length ? cols.genericRainCandidates : [])
+    .map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
+  const rainDailyExpr = rainDailyExprList.length ? `COALESCE(${rainDailyExprList.join(', ')})` : 'NULL';
+  const rainHourlyExpr = rainHourlyExprList.length ? `COALESCE(${rainHourlyExprList.join(', ')})` : 'NULL';
+  const rainGenericExpr = rainGenericExprList.length ? `COALESCE(${rainGenericExprList.join(', ')})` : 'NULL';
+  // Wind/Gust with unit conversion (m/s -> km/h)
+  const needsMsFactor = (name: string) => /m\/?s/i.test(name) || normalizeName(name).includes("ms");
+  const speedExprFor = (name: string) => {
+    const q = '"' + String(name).replace(/"/g, '""') + '"';
+    const base = sqlNum(q);
+    return needsMsFactor(name) ? `(${base}) * 3.6` : base;
+  };
+  const windExprList = (cols.windCandidates && cols.windCandidates.length ? cols.windCandidates : (cols.wind ? [cols.wind] : []))
+    .map((c) => speedExprFor(c));
+  const gustExprList = (cols.gustCandidates && cols.gustCandidates.length ? cols.gustCandidates : (cols.gust ? [cols.gust] : []))
+    .map((c) => speedExprFor(c));
+  const windExpr = windExprList.length ? `COALESCE(${windExprList.join(', ')})` : 'NULL';
+  const gustExpr = gustExprList.length ? `COALESCE(${gustExprList.join(', ')})` : 'NULL';
   const rainAgg = cols.rainMode === "daily" ? "max(rain_day)" : "sum(rain_day)";
 
   const sql = `
@@ -159,7 +199,9 @@ async function queryDailyAggregates(parquetFiles: string[]) {
     casted AS (
       SELECT ts,
         ${tExpr} AS t,
-        ${rainExpr} AS rain_day,
+        ${rainDailyExpr} AS rain_d,
+        ${rainHourlyExpr} AS rain_h,
+        ${rainGenericExpr} AS rain_g,
         ${windExpr} AS wind,
         ${gustExpr} AS gust
       FROM src
@@ -171,7 +213,9 @@ async function queryDailyAggregates(parquetFiles: string[]) {
         max(t) AS tmax,
         min(t) AS tmin,
         avg(t) AS tavg,
-        ${rainAgg} AS rain_day,
+        max(rain_d) AS rdaily,
+        sum(rain_h) AS rhourly,
+        sum(rain_g) AS rgeneric,
         max(wind) AS wind_max,
         max(gust) AS gust_max,
         avg(wind) AS wind_avg
@@ -180,7 +224,7 @@ async function queryDailyAggregates(parquetFiles: string[]) {
     )
     SELECT strftime(d, '%Y-%m-%d') AS day,
       tmax, tmin, tavg,
-      rain_day,
+      COALESCE(NULLIF(rdaily, 0), NULLIF(rhourly, 0), rhourly, rgeneric) AS rain_day,
       wind_max, gust_max, wind_avg
     FROM daily
     ORDER BY day;
@@ -388,5 +432,35 @@ export async function getStatisticsMeta() {
       wind: cols.wind,
       gust: cols.gust,
     },
+  };
+}
+
+export async function getDailyDebug(year?: number) {
+  const parquetFiles = await ensureMainParquetsInRange();
+  const rows = await queryDailyAggregates(parquetFiles);
+  const list = year ? rows.filter((r: any) => typeof r.day === 'string' && r.day.startsWith(String(year))) : rows;
+  const totalDays = list.length;
+  let daysWithTemp = 0;
+  let daysWithRain = 0;
+  let tminOverall = Number.POSITIVE_INFINITY;
+  let tminDate: string | null = null;
+  for (const r of list) {
+    const tmin = Number.isFinite(r.tmin as any) ? Number(r.tmin) : null;
+    const tmax = Number.isFinite(r.tmax as any) ? Number(r.tmax) : null;
+    const rain = Number.isFinite(r.rain_day as any) ? Number(r.rain_day) : null;
+    if (tmin !== null || tmax !== null) daysWithTemp++;
+    if (rain !== null) daysWithRain++;
+    if (tmin !== null && tmin < tminOverall) { tminOverall = tmin; tminDate = r.day; }
+  }
+  const first = list.slice(0, 5);
+  const last = list.slice(Math.max(0, list.length - 5));
+  return {
+    year: year || null,
+    totalDays,
+    daysWithTemp,
+    daysWithRain,
+    tminOverall: Number.isFinite(tminOverall) ? tminOverall : null,
+    tminDate,
+    sample: { first, last },
   };
 }
