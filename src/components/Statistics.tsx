@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { API_ENDPOINTS } from "@/constants";
-import type { StatisticsPayload, YearStats, MonthStats, ThresholdDates } from "@/types/statistics";
+import type { StatisticsPayload, YearStats, MonthStats, ThresholdList } from "@/types/statistics";
 
 function fmtNum(n: number | null | undefined, fraction = 1) {
   if (n === null || n === undefined || !Number.isFinite(n)) return "–";
@@ -27,9 +27,16 @@ function tempColorClass(v: number | null | undefined) {
   return "text-red-600";                  // rot
 }
 
-function ThresholdItem({ label, td, className }: { label: string; td?: ThresholdDates; className?: string }) {
+function ThresholdItem({ label, td, className, unit }: { label: string; td?: ThresholdList; className?: string; unit?: string }) {
   const [open, setOpen] = useState(false);
-  const safe = td ?? { count: 0, dates: [] as string[] };
+  const items = useMemo(() => {
+    const anyTd: any = td as any;
+    if (!anyTd) return [] as { date: string; value: number }[];
+    if (Array.isArray(anyTd.items)) return anyTd.items as { date: string; value: number }[];
+    if (Array.isArray(anyTd.dates)) return (anyTd.dates as string[]).map((d) => ({ date: d, value: NaN }));
+    return [] as { date: string; value: number }[];
+  }, [td]);
+  const count = (td && typeof (td as any).count === "number") ? (td as any).count as number : items.length;
   return (
     <div className="mb-2">
       <button
@@ -37,13 +44,19 @@ function ThresholdItem({ label, td, className }: { label: string; td?: Threshold
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
-        {label}: {safe.count}
+        {label}: {count}
       </button>
-      {open && safe.dates.length > 0 && (
+      {open && items.length > 0 && (
         <ul className="mt-1 ml-4 list-disc text-sm text-gray-700 dark:text-gray-300">
-          {safe.dates.map((d) => (
-            <li key={d}>{fmtDate(d)}</li>
-          ))}
+          {items.map((it) => {
+            const badgeBase = "inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-neutral-800";
+            const colorCls = unit === "°C" ? tempColorClass(it.value) : "";
+            return (
+              <li key={it.date}>
+                {fmtDate(it.date)} — <span className={`${badgeBase} ${colorCls}`}>{fmtNum(it.value)}{unit ? ` ${unit}` : ""}</span>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
@@ -62,11 +75,11 @@ function TemperatureBlock({ y }: { y: YearStats | MonthStats }) {
         <div>{t("dashboard.average")} : {fmtNum(temp.avg)} °C</div>
       </div>
       <div className="mt-2">
-        <ThresholdItem className="text-red-600" label={t("dashboard.daysOver30C")} td={temp.over30} />
-        <ThresholdItem className="text-orange-500" label={t("statistics.daysOver25C", "Days > 25 °C")} td={temp.over25} />
-        <ThresholdItem className="text-green-600" label={t("statistics.daysOver20C", "Days > 20 °C")} td={temp.over20} />
-        <ThresholdItem className="text-blue-500" label={t("dashboard.daysUnder0C")} td={temp.under0} />
-        <ThresholdItem className="text-blue-900" label={t("statistics.daysUnder10C", "Days < -10 °C")} td={temp.under10} />
+        <ThresholdItem className="text-red-600" label={t("dashboard.daysOver30C")} td={temp.over30} unit="°C" />
+        <ThresholdItem className="text-orange-500" label={t("statistics.daysOver25C", "Days > 25 °C")} td={temp.over25} unit="°C" />
+        <ThresholdItem className="text-green-600" label={t("statistics.daysOver20C", "Days > 20 °C")} td={temp.over20} unit="°C" />
+        <ThresholdItem className="text-blue-500" label={t("dashboard.daysUnder0C")} td={temp.under0} unit="°C" />
+        <ThresholdItem className="text-blue-900" label={t("statistics.daysUnder10C", "Days < -10 °C")} td={temp.under10} unit="°C" />
       </div>
     </div>
   );
@@ -84,8 +97,8 @@ function PrecipitationBlock({ y }: { y: YearStats | MonthStats }) {
         <div>{t("statistics.minDay", "Min day")} : {fmtNum(p.minDay)} mm ({fmtDate(p.minDayDate)})</div>
       </div>
       <div className="mt-2">
-        <ThresholdItem label={t("statistics.daysOver20mm", "Days ≥ 20 mm")} td={p.over20mm} />
-        <ThresholdItem label={t("dashboard.daysOver30mm")} td={p.over30mm} />
+        <ThresholdItem label={t("statistics.daysOver20mm", "Days ≥ 20 mm")} td={p.over20mm} unit="mm" />
+        <ThresholdItem label={t("dashboard.daysOver30mm")} td={p.over30mm} unit="mm" />
       </div>
     </div>
   );

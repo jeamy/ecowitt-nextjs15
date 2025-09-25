@@ -1,6 +1,11 @@
-export interface ThresholdDates {
+export interface ThresholdItem {
+  date: string; // YYYY-MM-DD
+  value: number; // numeric value for the date (°C or mm depending on context)
+}
+
+export interface ThresholdList {
   count: number;
-  dates: string[]; // ISO dates YYYY-MM-DD
+  items: ThresholdItem[];
 }
 
 export interface TemperatureStats {
@@ -9,11 +14,11 @@ export interface TemperatureStats {
   min: number | null;
   minDate: string | null; // YYYY-MM-DD
   avg: number | null; // average temperature over the period
-  over30: ThresholdDates; // days with max temp > 30°C
-  over25: ThresholdDates; // days with max temp > 25°C
-  over20: ThresholdDates; // days with max temp > 20°C
-  under0: ThresholdDates; // days with min temp < 0°C
-  under10: ThresholdDates; // days with min temp < -10°C
+  over30: ThresholdList; // days with max temp > 30°C
+  over25: ThresholdList; // days with max temp > 25°C
+  over20: ThresholdList; // days with max temp > 20°C
+  under0: ThresholdList; // days with min temp < 0°C
+  under10: ThresholdList; // days with min temp <= -10°C
 }
 
 export interface PrecipitationStats {
@@ -22,8 +27,8 @@ export interface PrecipitationStats {
   maxDayDate: string | null; // YYYY-MM-DD
   minDay: number | null; // minimum daily total in the period (mm)
   minDayDate: string | null; // YYYY-MM-DD
-  over20mm: ThresholdDates; // days with daily total >= 20 mm
-  over30mm: ThresholdDates; // days with daily total >= 30 mm
+  over20mm: ThresholdList; // days with daily total >= 20 mm
+  over30mm: ThresholdList; // days with daily total >= 30 mm
 }
 
 export interface WindStats {

@@ -142,6 +142,101 @@ Names appear in the dashboard (labels/options). Undefined channels fall back to 
 
 All API routes run in the Node.js runtime and read from the local filesystem.
 
+### Statistics (precomputed)
+
+The Statistics feature computes daily aggregates from Main (A) minute/5‑minute data and exposes them via API.
+
+- `GET /api/statistics`
+  - Returns the latest precomputed statistics for all available years.
+  - Optional `?year=YYYY` to filter for a single year.
+  - Optional `?debug=1` to include column detection meta.
+  - Optional `?debugDaily=YYYY` to include a small daily aggregation debug summary for a specific year.
+
+- `POST /api/statistics/update` (also supports `GET`)
+  - Forces a recompute and writes cache to `data/statistics.json`.
+
+Background recompute
+
+- Implemented in `src/instrumentation.ts`.
+- On server startup, the cache is warmed once (`updateStatisticsIfNeeded()`).
+- A daily interval recomputes statistics and refreshes the cache.
+
+Payload (shape)
+
+```jsonc
+{
+  "ok": true,
+  "updatedAt": "2025-09-25T19:51:00.000Z",
+  "years": [
+    {
+      "year": 2025,
+      "temperature": {
+        "max": 37.4,
+        "maxDate": "2025-06-18",
+        "min": -10.3,
+        "minDate": "2025-01-14",
+        "avg": 12.3,
+        "over30": { "count": 38, "items": [{ "date": "2025-06-18", "value": 36.2 }] },
+        "over25": { "count": 85, "items": [] },
+        "over20": { "count": 123, "items": [] },
+        "under0": { "count": 61, "items": [{ "date": "2025-01-10", "value": -1.2 }] },
+        "under10": { "count": 1, "items": [{ "date": "2025-01-14", "value": -10.3 }] }
+      },
+      "precipitation": {
+        "total": 557.1,
+        "maxDay": 46.7,
+        "maxDayDate": "2025-07-08",
+        "minDay": 0,
+        "minDayDate": "2025-01-01",
+        "over20mm": { "count": 7, "items": [{ "date": "2025-07-08", "value": 46.7 }] },
+        "over30mm": { "count": 2, "items": [] }
+      },
+      "wind": {
+        "max": 65.0,
+        "maxDate": "2025-06-18",
+        "gustMax": 88.0,
+        "gustMaxDate": "2025-06-18",
+        "avg": 12.5
+      },
+      "months": [ { "year": 2025, "month": 6, "temperature": {}, "precipitation": {}, "wind": {} } ]
+    }
+  ],
+  // present only when requested with ?debug=1
+  "meta": {
+    "parquetCount": 60,
+    "columns": {
+      "temperature": "Outdoor Temperature(℃)",
+      "rain": "Daily Rain(mm)",
+      "rainMode": "daily",
+      "wind": "Wind(m/s)",
+      "gust": "Gust(m/s)"
+    }
+  },
+  // present only when requested with ?debugDaily=YYYY
+  "daily": { "year": 2025, "totalDays": 365, "daysWithTemp": 365, "daysWithRain": 260, "sample": { "first": [], "last": [] } }
+}
+```
+
+Notes
+
+- Daily totals for rain are computed as:
+  - max of daily‑cumulative columns (e.g., `Daily Rain(mm)`, `Regen/Tag(mm)`), otherwise
+  - sum of hourly/minute columns (e.g., `Regen/Stunde(mm)`), otherwise
+  - sum of generic rain columns (non‑rate, non‑month/year/week)
+- Temperature thresholds use daily max (for >20/25/30 °C) and daily min (for <0/≤‑10 °C). Values include per‑date items.
+- Units
+  - Temperature in °C; rain in mm; wind in km/h (m/s inputs are converted ×3.6).
+
+Examples
+
+```bash
+curl 'http://localhost:3000/api/statistics'
+curl 'http://localhost:3000/api/statistics?year=2025'
+curl -X POST 'http://localhost:3000/api/statistics/update'
+curl 'http://localhost:3000/api/statistics?debug=1'
+curl 'http://localhost:3000/api/statistics?debug=1&debugDaily=2025'
+```
+
 ## Data (Ecowitt API v3)
 
 The homepage is split into three tabs:

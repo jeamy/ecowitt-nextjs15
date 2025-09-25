@@ -308,18 +308,18 @@ function buildYearAndMonthStats(rows: any[]): StatisticsPayload {
     let tMinDate: string | null = null;
     let tAvgSum = 0;
     let tAvgCnt = 0;
-    const over30: string[] = [];
-    const over25: string[] = [];
-    const over20: string[] = [];
-    const under0: string[] = [];
-    const under10: string[] = [];
+    const over30: { date: string; value: number }[] = [];
+    const over25: { date: string; value: number }[] = [];
+    const over20: { date: string; value: number }[] = [];
+    const under0: { date: string; value: number }[] = [];
+    const under10: { date: string; value: number }[] = [];
 
     let rainTotal = 0;
     let rainCnt = 0;
     let rainMax = Number.NEGATIVE_INFINITY; let rainMaxDate: string | null = null;
     let rainMin = Number.POSITIVE_INFINITY; let rainMinDate: string | null = null;
-    const rainOver20: string[] = [];
-    const rainOver30: string[] = [];
+    const rainOver20: { date: string; value: number }[] = [];
+    const rainOver30: { date: string; value: number }[] = [];
 
     let windMax = Number.NEGATIVE_INFINITY; let windMaxDate: string | null = null;
     let gustMax = Number.NEGATIVE_INFINITY; let gustMaxDate: string | null = null;
@@ -333,14 +333,14 @@ function buildYearAndMonthStats(rows: any[]): StatisticsPayload {
 
       if (tx !== null) {
         if (tx > tMax) { tMax = tx; tMaxDate = d; }
-        if (tx > 30) over30.push(d);
-        if (tx > 25) over25.push(d);
-        if (tx > 20) over20.push(d);
+        if (tx > 30) over30.push({ date: d, value: tx });
+        if (tx > 25) over25.push({ date: d, value: tx });
+        if (tx > 20) over20.push({ date: d, value: tx });
       }
       if (tn !== null) {
         if (tn < tMin) { tMin = tn; tMinDate = d; }
-        if (tn < 0) under0.push(d);
-        if (tn <= -10) under10.push(d);
+        if (tn < 0) under0.push({ date: d, value: tn });
+        if (tn <= -10) under10.push({ date: d, value: tn });
       }
       if (ta !== null) { tAvgSum += ta; tAvgCnt++; }
 
@@ -350,8 +350,8 @@ function buildYearAndMonthStats(rows: any[]): StatisticsPayload {
         rainTotal += rd;
         if (rd > rainMax) { rainMax = rd; rainMaxDate = d; }
         if (rd < rainMin) { rainMin = rd; rainMinDate = d; }
-        if (rd >= 20) rainOver20.push(d);
-        if (rd >= 30) rainOver30.push(d);
+        if (rd >= 20) rainOver20.push({ date: d, value: rd });
+        if (rd >= 30) rainOver30.push({ date: d, value: rd });
       }
 
       const wmx = toNum(r.wind_max);
@@ -368,11 +368,11 @@ function buildYearAndMonthStats(rows: any[]): StatisticsPayload {
       min: Number.isFinite(tMin) ? tMin : null,
       minDate: tMinDate,
       avg: tAvgCnt > 0 ? tAvgSum / tAvgCnt : null,
-      over30: { count: over30.length, dates: over30 },
-      over25: { count: over25.length, dates: over25 },
-      over20: { count: over20.length, dates: over20 },
-      under0: { count: under0.length, dates: under0 },
-      under10: { count: under10.length, dates: under10 },
+      over30: { count: over30.length, items: over30 },
+      over25: { count: over25.length, items: over25 },
+      over20: { count: over20.length, items: over20 },
+      under0: { count: under0.length, items: under0 },
+      under10: { count: under10.length, items: under10 },
     } as YearStats["temperature"];
 
     const rain = {
@@ -381,8 +381,8 @@ function buildYearAndMonthStats(rows: any[]): StatisticsPayload {
       maxDayDate: rainCnt > 0 ? rainMaxDate : null,
       minDay: rainCnt > 0 && Number.isFinite(rainMin) ? rainMin : null,
       minDayDate: rainCnt > 0 ? rainMinDate : null,
-      over20mm: { count: rainOver20.length, dates: rainOver20 },
-      over30mm: { count: rainOver30.length, dates: rainOver30 },
+      over20mm: { count: rainOver20.length, items: rainOver20 },
+      over30mm: { count: rainOver30.length, items: rainOver30 },
     } as YearStats["precipitation"];
 
     const wind = {

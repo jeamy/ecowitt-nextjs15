@@ -26,9 +26,9 @@
       "maxTime": "2025-09-25T17:05:24.775Z"
     },
     "temp_and_humidity_ch3": {
-      "min": 18.7,
+      "min": 18.6,
       "max": 20.8,
-      "minTime": "2025-09-25T20:03:55.194Z",
+      "minTime": "2025-09-25T20:37:34.461Z",
       "maxTime": "2025-09-25T12:10:26.362Z"
     },
     "temp_and_humidity_ch5": {
@@ -44,9 +44,9 @@
       "maxTime": "2025-09-25T12:10:26.362Z"
     },
     "temp_and_humidity_ch7": {
-      "min": 13.3,
+      "min": 13.2,
       "max": 21.9,
-      "minTime": "2025-09-25T20:21:35.199Z",
+      "minTime": "2025-09-25T20:37:34.461Z",
       "maxTime": "2025-09-25T12:10:26.362Z"
     },
     "temp_and_humidity_ch8": {
@@ -77,9 +77,9 @@
     },
     "temp_and_humidity_ch2": {
       "min": 61,
-      "max": 65,
+      "max": 66,
       "minTime": "2025-09-25T12:10:26.362Z",
-      "maxTime": "2025-09-25T19:05:08.920Z"
+      "maxTime": "2025-09-25T20:37:34.461Z"
     },
     "temp_and_humidity_ch3": {
       "min": 65,
