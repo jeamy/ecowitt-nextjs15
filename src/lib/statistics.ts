@@ -75,7 +75,17 @@ async function discoverMainColumns(parquets: string[]): Promise<ColumnMap> {
     }
   }
   if (!temp && names.includes("Temperatur Aussen(℃)")) { temp = "Temperatur Aussen(℃)"; tempCandidates.push(temp); }
-  if (names.includes("Outdoor Temperature(℃)") && !tempCandidates.includes("Outdoor Temperature(℃)")) tempCandidates.push("Outdoor Temperature(℃)");
+  if (names.includes("Outdoor Temperature(℃)")) {
+    // Ensure it is first and preferred (remove duplicates, then unshift)
+    const ot = "Outdoor Temperature(℃)";
+    const filtered = tempCandidates.filter((c) => c !== ot);
+    filtered.unshift(ot);
+    tempCandidates.length = 0; tempCandidates.push(...filtered);
+    temp = ot;
+  } else if (!tempCandidates.includes("Outdoor Temperature(℃)")) {
+    // keep as potential if appears in other months
+    tempCandidates.push("Outdoor Temperature(℃)");
+  }
 
   // Rain selection aligned with Dashboard pickRain():
   // Prefer daily cumulative ("tag"/"daily"/"24h"); then hourly; then generic (exclude rate/year/month/week)
@@ -88,9 +98,21 @@ async function discoverMainColumns(parquets: string[]): Promise<ColumnMap> {
   const hasAny = (k: string, arr: string[]) => arr.some((tok) => k.includes(tok));
   const dailyTokens = ["daily", "tag", "24h", "24", "today", "heute", "tages", "tagesgesamt", "tagessumme"];
   const hourlyTokens = ["hour", "stunde", "hourly"];
+  const minuteTokens = ["min", "minute", "minuten", "5min", "5 min", "10min", "10 min", "1min", "1 min"];
   const excludeTokens = ["rate", "year", "jahr", "month", "monat", "week", "woche", "weekly", "monthly", "yearly"];
 
-  // daily
+  // daily (hard-pin Daily Rain(mm) if present)
+  if (names.includes("Daily Rain(mm)")) {
+    if (!dailyRainCandidates.includes("Daily Rain(mm)")) dailyRainCandidates.unshift("Daily Rain(mm)");
+    rainCol = rainCol ?? "Daily Rain(mm)";
+    rainMode = "daily";
+  }
+  // daily (hard-pin Regen/Tag(mm) if present)
+  if (names.includes("Regen/Tag(mm)")) {
+    if (!dailyRainCandidates.includes("Regen/Tag(mm)")) dailyRainCandidates.unshift("Regen/Tag(mm)");
+    if (!rainCol) { rainCol = "Regen/Tag(mm)"; rainMode = "daily"; }
+  }
+  // Heuristic daily detection across other variants
   for (const { n, k } of normEntries) {
     if (!isRainish(k)) continue;
     if (!hasAny(k, dailyTokens)) continue;
@@ -102,11 +124,16 @@ async function discoverMainColumns(parquets: string[]): Promise<ColumnMap> {
   if (!rainCol) {
     for (const { n, k } of normEntries) {
       if (!isRainish(k)) continue;
-      if (!hasAny(k, hourlyTokens)) continue;
+      if (!(hasAny(k, hourlyTokens) || hasAny(k, minuteTokens))) continue;
       if (k.includes("rate")) continue;
       hourlyRainCandidates.push(n);
       if (!rainCol) { rainCol = n; rainMode = "sum"; }
     }
+  }
+  // hourly (hard-pin Regen/Stunde(mm) if present)
+  if (!rainCol && names.includes("Regen/Stunde(mm)")) {
+    if (!hourlyRainCandidates.includes("Regen/Stunde(mm)")) hourlyRainCandidates.unshift("Regen/Stunde(mm)");
+    rainCol = "Regen/Stunde(mm)"; rainMode = "sum";
   }
   // generic
   if (!rainCol) {
@@ -145,7 +172,7 @@ function sqlNum(colId: string): string {
     WHEN lower(trim(CAST(${colId} AS VARCHAR))) IN ('--','-','n/a','', 'null', 'nan') THEN NULL
     ELSE TRY_CAST(
       REGEXP_REPLACE(
-        REPLACE(TRIM(CAST(${colId} AS VARCHAR)), ',', '.'),
+        REPLACE(REPLACE(TRIM(CAST(${colId} AS VARCHAR)), ',', '.'), '−', '-'),
         '[^0-9\-\.]+',
         ''
       ) AS DOUBLE
@@ -224,7 +251,7 @@ async function queryDailyAggregates(parquetFiles: string[]) {
     )
     SELECT strftime(d, '%Y-%m-%d') AS day,
       tmax, tmin, tavg,
-      COALESCE(NULLIF(rdaily, 0), NULLIF(rhourly, 0), rhourly, rgeneric) AS rain_day,
+      COALESCE(rdaily, rhourly, rgeneric) AS rain_day,
       wind_max, gust_max, wind_avg
     FROM daily
     ORDER BY day;
@@ -266,6 +293,14 @@ function buildYearAndMonthStats(rows: any[]): StatisticsPayload {
 
   const years: YearStats[] = [];
 
+  const toNum = (v: any): number | null => {
+    if (v == null) return null;
+    if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+    const s = String(v).trim().replace('−', '-').replace(',', '.').replace(/[^0-9+\-\.]/g, '');
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  };
+
   const computeBlock = (rows: DayRow[]): { temp: YearStats["temperature"], rain: YearStats["precipitation"], wind: YearStats["wind"] } => {
     let tMax = Number.NEGATIVE_INFINITY;
     let tMaxDate: string | null = null;
@@ -292,9 +327,9 @@ function buildYearAndMonthStats(rows: any[]): StatisticsPayload {
 
     for (const r of rows) {
       const d = r.day;
-      const tx = Number.isFinite(r.tmax as any) ? Number(r.tmax) : null;
-      const tn = Number.isFinite(r.tmin as any) ? Number(r.tmin) : null;
-      const ta = Number.isFinite(r.tavg as any) ? Number(r.tavg) : null;
+      const tx = toNum(r.tmax);
+      const tn = toNum(r.tmin);
+      const ta = toNum(r.tavg);
 
       if (tx !== null) {
         if (tx > tMax) { tMax = tx; tMaxDate = d; }
@@ -305,11 +340,11 @@ function buildYearAndMonthStats(rows: any[]): StatisticsPayload {
       if (tn !== null) {
         if (tn < tMin) { tMin = tn; tMinDate = d; }
         if (tn < 0) under0.push(d);
-        if (tn < -10) under10.push(d);
+        if (tn <= -10) under10.push(d);
       }
       if (ta !== null) { tAvgSum += ta; tAvgCnt++; }
 
-      const rd = Number.isFinite(r.rain_day as any) ? Number(r.rain_day) : null;
+      const rd = toNum(r.rain_day);
       if (rd !== null && Number.isFinite(rd)) {
         rainCnt++;
         rainTotal += rd;
@@ -319,9 +354,9 @@ function buildYearAndMonthStats(rows: any[]): StatisticsPayload {
         if (rd >= 30) rainOver30.push(d);
       }
 
-      const wmx = Number.isFinite(r.wind_max as any) ? Number(r.wind_max) : null;
-      const gmx = Number.isFinite(r.gust_max as any) ? Number(r.gust_max) : null;
-      const wav = Number.isFinite(r.wind_avg as any) ? Number(r.wind_avg) : null;
+      const wmx = toNum(r.wind_max);
+      const gmx = toNum(r.gust_max);
+      const wav = toNum(r.wind_avg);
       if (wmx !== null && wmx > windMax) { windMax = wmx; windMaxDate = d; }
       if (gmx !== null && gmx > gustMax) { gustMax = gmx; gustMaxDate = d; }
       if (wav !== null) { windAvgSum += wav; windAvgCnt++; }
