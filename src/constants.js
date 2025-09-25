@@ -22,4 +22,5 @@ export const API_ENDPOINTS = {
   // Statistics endpoints
   STATISTICS: '/api/statistics',
   STATISTICS_UPDATE: '/api/statistics/update',
+  STATISTICS_DAILY: '/api/statistics/daily',
 };

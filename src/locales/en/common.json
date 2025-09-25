@@ -137,6 +137,20 @@
     "daysOver25C": "Days > 25 °C",
     "daysOver20C": "Days > 20 °C",
     "daysOver20mm": "Days ≥ 20 mm",
-    "daysUnder10C": "Days < -10 °C"
+    "daysUnder10C": "Days < -10 °C",
+    "legend": {
+      "title": "Temperature color scale (°C)"
+    },
+    "heatmap": "Calendar heatmap (daily Tmax)",
+    "kpis": "Yearly KPIs",
+    "topHotDays": "Top 5 hot days",
+    "coldestDays": "Top 5 coldest days",
+    "wettestDays": "Top 5 wettest days",
+    "strongestGusts": "Top 5 strongest gusts",
+    "sort": "Sort",
+    "sortByDate": "Date",
+    "sortByValue": "Value",
+    "sortAsc": "ASC",
+    "sortDesc": "DESC"
   }
 }

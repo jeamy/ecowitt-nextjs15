@@ -11,6 +11,14 @@ async function ensureDataDir() {
   await fs.mkdir(DATA_DIR, { recursive: true });
 }
 
+export async function getDailySeries(year?: number) {
+  const parquetFiles = await ensureMainParquetsInRange();
+  const rows = await queryDailyAggregates(parquetFiles);
+  if (!year) return rows;
+  const y = String(year);
+  return rows.filter((r: any) => typeof r.day === 'string' && r.day.startsWith(y));
+}
+
 function normalizeName(s: string): string {
   // Transliterate common German characters and strip degree symbol before normalizing
   const map: Record<string, string> = { "ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss" };
