@@ -23,8 +23,4 @@ export const API_ENDPOINTS = {
   STATISTICS: '/api/statistics',
   STATISTICS_UPDATE: '/api/statistics/update',
   STATISTICS_DAILY: '/api/statistics/daily',
-
-  // Series endpoints (Saved data)
-  SERIES: '/api/series',
-  SERIES_RANGE_STATS: '/api/series/range-stats',
 };

@@ -6,8 +6,6 @@ declare global {
   var __rtPoller: NodeJS.Timer | undefined;
   // eslint-disable-next-line no-var
   var __statsPoller: NodeJS.Timer | undefined;
-  // eslint-disable-next-line no-var
-  var __seriesPoller: NodeJS.Timer | undefined;
 }
 
 /**
@@ -84,39 +82,5 @@ export async function register() {
         console.error("[stats] Background recompute failed:", e);
       }
     }, statsIntervalMs);
-  }
-
-  // Warm caches for new aggregated series endpoints (default ranges, main sensors)
-  const seriesIntervalMs = 2 * 60 * 60 * 1000; // every 2h
-  if (!global.__seriesPoller) {
-    console.log(`[series] Series cache warmup enabled (every ${seriesIntervalMs} ms)`);
-    const warmSeries = async () => {
-      try {
-        const { querySeries, queryRangeStats } = await import("@/lib/aggregation");
-        const now = new Date();
-        const ranges = [
-          { start: new Date(now.getTime() - 24 * 60 * 60 * 1000), end: now, resolution: "hour" as const },
-          { start: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), end: now, resolution: "day" as const },
-          { start: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), end: now, resolution: "day" as const },
-        ];
-        // Core field set covers all main sensors; channels will be fetched on demand in UI
-        const fieldSets: string[][] = [
-          ["temp_outdoor", "humidity_outdoor", "wind", "gust", "rain_daily", "pressure_rel", "solar", "uv"],
-        ];
-        for (const r of ranges) {
-          for (const fields of fieldSets) {
-            await querySeries({ start: r.start, end: r.end, resolution: r.resolution, fields });
-            await queryRangeStats({ start: r.start, end: r.end, fields });
-          }
-        }
-        console.log("[series] Warmed series caches for default ranges");
-      } catch (e) {
-        console.error("[series] Warmup failed:", e);
-      }
-    };
-    // Immediate warmup on startup
-    warmSeries();
-    // Periodic warmup
-    global.__seriesPoller = setInterval(warmSeries, seriesIntervalMs);
   }
 }
