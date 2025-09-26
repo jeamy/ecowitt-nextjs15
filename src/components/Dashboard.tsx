@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { API_ENDPOINTS } from "@/constants";
 import LineChart, { type LineSeries } from "@/components/LineChartChartJS";
 import { CheckIcon } from "@heroicons/react/24/outline";
+import styles from "./StoredDataLayout.module.css";
 
 /**
  * Represents the response from the months API endpoint.
@@ -27,6 +28,11 @@ type DataResp = {
  * @private
  */
 type ChannelsConfig = Record<string, { name: string }>; // { ch1: { name: "Living" }, ... }
+
+function StatusCard({ message, tone }: { message: string; tone: "info" | "error" }) {
+  const className = `${styles.card} ${styles.statusMessage} ${tone === "info" ? styles.statusInfo : styles.statusError}`;
+  return <div className={className}>{message}</div>;
+}
 
 /**
  * Renders the charts for a single channel card.
@@ -787,13 +793,16 @@ const COLORS = [
 export default function Dashboard() {
   const { t, i18n } = useTranslation();
   const locale = i18n.language || 'de';
+  const subtitle = t('dashboard.subtitle', { defaultValue: 'Auswertung gespeicherter Wetterdaten' });
+  const controlsHeading = t('dashboard.controlsHeading', { defaultValue: 'Zeitraum & Anzeige' });
+  const viewLabel = t('dashboard.view');
+  const channelLabel = t('dashboard.channel');
   const [months, setMonths] = useState<string[]>([]);
   const [year, setYear] = useState<string>("");
   const [mon, setMon] = useState<string>(""); // MM
   const [resolution, setResolution] = useState<Resolution>("day");
   const [mode, setMode] = useState<"main" | "channel">("channel");
   const [selectedChannel, setSelectedChannel] = useState<string>("all");
-  const [metric, setMetric] = useState<ChannelMetric>("Temperatur");
   const [dataAll, setDataAll] = useState<DataResp | null>(null);
   const [dataMain, setDataMain] = useState<DataResp | null>(null);
   // Minutendaten für Statistikberechnung
@@ -1020,6 +1029,26 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, [useGlobalRange, startParam, endParam, year, mon, resolution, mode, selectedChannel]);
 
+  const handleModeSwitch = useCallback((nextMode: "main" | "channel") => {
+    setMode(nextMode);
+    if (useGlobalRange) {
+      setDateRangeChanged(true);
+      setConfirmButtonActive(true);
+    } else {
+      fetchData();
+    }
+  }, [useGlobalRange, fetchData]);
+
+  const handleChannelSwitch = useCallback((nextChannel: string) => {
+    setSelectedChannel(nextChannel);
+    if (useGlobalRange) {
+      setDateRangeChanged(true);
+      setConfirmButtonActive(true);
+    } else {
+      fetchData();
+    }
+  }, [useGlobalRange, fetchData]);
+
   // Function to handle date range confirmation
   const handleConfirmDateRange = () => {
     if (confirmButtonActive && useGlobalRange) {
@@ -1062,62 +1091,125 @@ export default function Dashboard() {
   }, [year, mon, startParam, endParam, useGlobalRange, dataMain, dataAll, fetchData]);
 
   return (
-    <div className="w-full max-w-screen-lg mx-auto flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">{t('dashboard.title')}</h1>
-      {/* Steuerung: Zeitraum, Jahr/Monat (optional), Auflösung, Ansicht, Kanal/Metrik */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        <div className="flex items-center gap-2">
-          <input 
-            id="global-range" 
-            type="checkbox" 
-            checked={useGlobalRange} 
-            onChange={(e) => {
-              setUseGlobalRange(e.target.checked);
-              setDateRangeChanged(true);
-              setConfirmButtonActive(true);
-            }} 
-          />
-          <label htmlFor="global-range" className="text-sm">{t('dashboard.useGlobalRange')}</label>
+    <div className={styles.container}>
+      <header className={styles.header}>
+        <h1 className={styles.title}>{t('dashboard.title')}</h1>
+        {subtitle ? <p className={styles.subtitle}>{subtitle}</p> : null}
+      </header>
+
+      <section className={styles.card}>
+        <span className={styles.sectionTitle}>{controlsHeading}</span>
+        <div className={styles.controlGrid}>
+          <label className={styles.toggleRow}>
+            <input
+              id="global-range"
+              type="checkbox"
+              className={styles.checkbox}
+              checked={useGlobalRange}
+              onChange={(e) => {
+                setUseGlobalRange(e.target.checked);
+                setDateRangeChanged(true);
+                setConfirmButtonActive(true);
+              }}
+            />
+            <span>{t('dashboard.useGlobalRange')}</span>
+          </label>
+
+          {!useGlobalRange && (
+            <>
+              <div className={styles.inputField}>
+                <label className={styles.inputLabel} htmlFor="dashboard-year">{t('dashboard.year')}</label>
+                <select
+                  id="dashboard-year"
+                  className={styles.select}
+                  value={year}
+                  onChange={(e) => {
+                    setYear(e.target.value);
+                    setDateRangeChanged(true);
+                    setConfirmButtonActive(true);
+                  }}
+                >
+                  {years.map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.inputField}>
+                <label className={styles.inputLabel} htmlFor="dashboard-month">{t('dashboard.month')}</label>
+                <select
+                  id="dashboard-month"
+                  className={styles.select}
+                  value={mon}
+                  onChange={(e) => {
+                    setMon(e.target.value);
+                    setDateRangeChanged(true);
+                    setConfirmButtonActive(true);
+                  }}
+                >
+                  {(monthsByYear[year] || []).map((m) => (
+                    <option key={m} value={m}>{getMonthName(Number(m), i18n.language || 'de') || m}</option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+
+          <div className={styles.inputField}>
+            <label className={styles.inputLabel} htmlFor="dashboard-resolution">{t('dashboard.resolution')}</label>
+            <select
+              id="dashboard-resolution"
+              className={styles.select}
+              value={resolution}
+              onChange={(e) => {
+                setResolution(e.target.value as Resolution);
+                if (useGlobalRange) {
+                  setDateRangeChanged(true);
+                  setConfirmButtonActive(true);
+                } else {
+                  fetchData();
+                }
+              }}
+            >
+              <option value="minute">{t('dashboard.minutes')}</option>
+              <option value="hour">{t('dashboard.hours')}</option>
+              <option value="day">{t('dashboard.days')}</option>
+            </select>
+          </div>
+
+          <div className={styles.inputField}>
+            <label className={styles.inputLabel} htmlFor="dashboard-view">{viewLabel}</label>
+            <select
+              id="dashboard-view"
+              className={styles.select}
+              value={mode}
+              onChange={(e) => handleModeSwitch(e.target.value as "main" | "channel")}
+            >
+              <option value="main">{t('dashboard.mainSensors')}</option>
+              <option value="channel">{t('dashboard.channelSensorsOption')}</option>
+            </select>
+          </div>
+
+          {mode === "channel" && (
+            <div className={styles.inputField}>
+              <label className={styles.inputLabel} htmlFor="dashboard-channel">{channelLabel}</label>
+              <select
+                id="dashboard-channel"
+                className={styles.select}
+                value={selectedChannel}
+                onChange={(e) => handleChannelSwitch(e.target.value)}
+              >
+                <option value="all">{t('dashboard.allChannels')}</option>
+                {getChannelKeys(channelsCfg).map((k) => (
+                  <option key={k} value={k}>{channelName(k, channelsCfg)}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
-        {!useGlobalRange && (
-          <>
-            <div className="flex flex-col gap-1">
-              <label className="text-sm">{t('dashboard.year')}</label>
-              <select 
-                className="border rounded p-2" 
-                value={year} 
-                onChange={(e) => {
-                  setYear(e.target.value);
-                  setDateRangeChanged(true);
-                  setConfirmButtonActive(true);
-                }}
-              >
-                {years.map((y) => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-sm">{t('dashboard.month')}</label>
-              <select 
-                className="border rounded p-2" 
-                value={mon} 
-                onChange={(e) => {
-                  setMon(e.target.value);
-                  setDateRangeChanged(true);
-                  setConfirmButtonActive(true);
-                }}
-              >
-                {(monthsByYear[year] || []).map((m) => (
-                  <option key={m} value={m}>{getMonthName(Number(m), i18n.language || 'de') || m}</option>
-                ))}
-              </select>
-            </div>
-          </>
-        )}
+
         {useGlobalRange && (
-          <div className="sm:col-span-2 lg:col-span-3 flex items-end gap-2">
-            <div className="flex-grow">
+          <div className={styles.rangeRow}>
+            <div className={styles.rangeControls}>
               <GlobalRangeControls
                 min={extentMin}
                 max={extentMax}
@@ -1129,109 +1221,105 @@ export default function Dashboard() {
                 setConfirmButtonActive={setConfirmButtonActive}
               />
             </div>
-            <button 
+            <button
+              type="button"
               onClick={handleConfirmDateRange}
               disabled={!confirmButtonActive}
-              className={`p-2 rounded-full ${confirmButtonActive ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 cursor-not-allowed'} transition-colors`}
+              className={styles.confirmButton}
               title={t('statuses.ok')}
               aria-label={t('statuses.ok')}
             >
-              <CheckIcon className="h-5 w-5 text-white" />
+              <CheckIcon className="h-5 w-5" />
             </button>
           </div>
         )}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm">{t('dashboard.resolution')}</label>
-          <select 
-            className="border rounded p-2" 
-            value={resolution} 
-            onChange={(e) => {
-              setResolution(e.target.value as Resolution);
-              if (useGlobalRange) {
-                // In global range mode, just update button state
-                setDateRangeChanged(true);
-                setConfirmButtonActive(true);
-              } else {
-                // In month/year mode, fetch data automatically
-                fetchData();
-              }
-            }}
-          >
-            <option value="minute">{t('dashboard.minutes')}</option>
-            <option value="hour">{t('dashboard.hours')}</option>
-            <option value="day">{t('dashboard.days')}</option>
-          </select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm">{t('dashboard.view')}</label>
-          <select 
-            className="border rounded p-2" 
-            value={mode} 
-            onChange={(e) => {
-              setMode(e.target.value as any);
-              if (useGlobalRange) {
-                // In global range mode, just update button state
-                setDateRangeChanged(true);
-                setConfirmButtonActive(true);
-              } else {
-                // In month/year mode, fetch data automatically
-                fetchData();
-              }
-            }}
-          >
-            <option value="main">{t('dashboard.mainSensors')}</option>
-            <option value="channel">{t('dashboard.channelSensorsOption')}</option>
-          </select>
-        </div>
-        {mode === "channel" && (
-          <div className="flex flex-col gap-1">
-            <label className="text-sm">{t('dashboard.channel')}</label>
-            <select
-              className="border rounded p-2"
-              value={selectedChannel}
-              onChange={(e) => {
-                setSelectedChannel(e.target.value);
-                if (useGlobalRange) {
-                  // In global range mode, just update button state
-                  setDateRangeChanged(true);
-                  setConfirmButtonActive(true);
-                } else {
-                  // In month/year mode, fetch data automatically
-                  fetchData();
-                }
-              }}
-            >
-              <option value="all">{t('dashboard.allChannels')}</option>
-              {getChannelKeys(channelsCfg).map((k) => (
-                <option key={k} value={k}>{channelName(k, channelsCfg)}</option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
+      </section>
 
       {loading && (
-        <div className="rounded border border-yellow-300 bg-yellow-50 text-yellow-800 p-3 text-sm">{t('statuses.loading')}</div>
+        <div className={`${styles.card} ${styles.statusMessage} ${styles.statusInfo}`}>
+          {t('statuses.loading')}
+        </div>
       )}
       {errMain && (
-        <div className="rounded border border-red-300 bg-red-50 text-red-800 p-3 text-sm">{errMain}</div>
+        <div className={`${styles.card} ${styles.statusMessage} ${styles.statusError}`}>
+          {errMain}
+        </div>
       )}
       {errAll && (
-        <div className="rounded border border-red-300 bg-red-50 text-red-800 p-3 text-sm">{errAll}</div>
-      )}
-      {/* Charts */}
-      {!loading && (
-        <div className="flex flex-col gap-4">
-          {mode === 'main' && dataMain && (
-            <>{renderMainCharts(dataMain, xBaseMain, minuteDataMain, t, locale)}</>
-          )}
-          {mode === 'channel' && selectedChannel === 'all' && dataAll && (
-            <>{renderAllChannelsCharts(dataAll, channelsCfg, xBaseAll, minuteDataAll, t, locale)}</>
-          )}
-          {mode === 'channel' && selectedChannel !== 'all' && dataAll && (
-            <>{renderChannelCardCharts(dataAll, channelsCfg, xBaseAll, selectedChannel, minuteDataAll, t, locale)}</>
-          )}
+        <div className={`${styles.card} ${styles.statusMessage} ${styles.statusError}`}>
+          {errAll}
         </div>
+      )}
+
+      {!loading && (
+        <section className={`${styles.card} ${styles.tabsWrapper}`}>
+          <div className={styles.tabList} role="tablist" aria-label={viewLabel}>
+            <button
+              type="button"
+              className={`${styles.tabButton} ${mode === "main" ? styles.tabButtonActive : ""}`}
+              role="tab"
+              aria-selected={mode === "main"}
+              onClick={() => handleModeSwitch("main")}
+            >
+              {t('dashboard.mainSensors')}
+            </button>
+            <button
+              type="button"
+              className={`${styles.tabButton} ${mode === "channel" ? styles.tabButtonActive : ""}`}
+              role="tab"
+              aria-selected={mode === "channel"}
+              onClick={() => handleModeSwitch("channel")}
+            >
+              {t('dashboard.channelSensorsOption')}
+            </button>
+          </div>
+
+          <div className={styles.contentSections}>
+            {mode === "main" && (
+              <div className={styles.sectionCard}>
+                {dataMain
+                  ? renderMainCharts(dataMain, xBaseMain, minuteDataMain, t, locale)
+                  : <div className={styles.emptyState}>{t('statuses.noData')}</div>}
+              </div>
+            )}
+
+            {mode === "channel" && (
+              <div className={styles.tabsWrapper}>
+                <div className={styles.secondaryTabList} role="tablist" aria-label={channelLabel}>
+                  <button
+                    type="button"
+                    className={`${styles.secondaryTabButton} ${selectedChannel === "all" ? styles.secondaryTabButtonActive : ""}`}
+                    role="tab"
+                    aria-selected={selectedChannel === "all"}
+                    onClick={() => handleChannelSwitch("all")}
+                  >
+                    {t('dashboard.allChannels')}
+                  </button>
+                  {getChannelKeys(channelsCfg).map((chKey) => (
+                    <button
+                      key={chKey}
+                      type="button"
+                      className={`${styles.secondaryTabButton} ${selectedChannel === chKey ? styles.secondaryTabButtonActive : ""}`}
+                      role="tab"
+                      aria-selected={selectedChannel === chKey}
+                      onClick={() => handleChannelSwitch(chKey)}
+                    >
+                      {channelName(chKey, channelsCfg)}
+                    </button>
+                  ))}
+                </div>
+
+                <div className={styles.sectionCard}>
+                  {dataAll
+                    ? (selectedChannel === "all"
+                      ? renderAllChannelsCharts(dataAll, channelsCfg, xBaseAll, minuteDataAll, t, locale)
+                      : renderChannelCardCharts(dataAll, channelsCfg, xBaseAll, selectedChannel, minuteDataAll, t, locale))
+                    : <div className={styles.emptyState}>{t('statuses.noData')}</div>}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
       )}
     </div>
   );
