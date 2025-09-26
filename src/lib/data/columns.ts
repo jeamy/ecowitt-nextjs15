@@ -113,14 +113,16 @@ export async function discoverMainColumns(parquets: string[]): Promise<ColumnMap
     dew = "Taupunkt(℃)";
     dewCandidates.push(dew);
   }
-  if (!dewCandidates.includes("Taupunkt(℃)")) {
+  // Only add to candidates if it actually exists in the data
+  if (names.includes("Taupunkt(℃)") && !dewCandidates.includes("Taupunkt(℃)")) {
     dewCandidates.push("Taupunkt(℃)");
   }
   if (!dew && names.includes("Dew Point(℃)")) {
     dew = "Dew Point(℃)";
     dewCandidates.push(dew);
   }
-  if (!dewCandidates.includes("Dew Point(℃)")) {
+  // Only add to candidates if it actually exists in the data
+  if (names.includes("Dew Point(℃)") && !dewCandidates.includes("Dew Point(℃)")) {
     dewCandidates.push("Dew Point(℃)");
   }
 
@@ -135,21 +137,33 @@ export async function discoverMainColumns(parquets: string[]): Promise<ColumnMap
     feelsLike = "Gefühlte Temperatur(℃)";
     feelsLikeCandidates.push(feelsLike);
   }
-  if (!feelsLikeCandidates.includes("Gefühlte Temperatur(℃)")) {
+  // Only add to candidates if it actually exists in the data
+  if (names.includes("Gefühlte Temperatur(℃)") && !feelsLikeCandidates.includes("Gefühlte Temperatur(℃)")) {
     feelsLikeCandidates.push("Gefühlte Temperatur(℃)");
+  }
+  // Check spaced version first since that's what exists in the data
+  if (!feelsLike && names.includes("Feels Like (℃)")) {
+    feelsLike = "Feels Like (℃)";
+    feelsLikeCandidates.push(feelsLike);
+  }
+  // Only add to candidates if it actually exists in the data
+  if (names.includes("Feels Like (℃)") && !feelsLikeCandidates.includes("Feels Like (℃)")) {
+    feelsLikeCandidates.push("Feels Like (℃)");
   }
   if (!feelsLike && names.includes("Feels Like(℃)")) {
     feelsLike = "Feels Like(℃)";
     feelsLikeCandidates.push(feelsLike);
   }
-  if (!feelsLikeCandidates.includes("Feels Like(℃)")) {
+  // Only add to candidates if it actually exists in the data
+  if (names.includes("Feels Like(℃)") && !feelsLikeCandidates.includes("Feels Like(℃)")) {
     feelsLikeCandidates.push("Feels Like(℃)");
   }
   if (!feelsLike && names.includes("Heat Index(℃)")) {
     feelsLike = "Heat Index(℃)";
     feelsLikeCandidates.push(feelsLike);
   }
-  if (!feelsLikeCandidates.includes("Heat Index(℃)")) {
+  // Only add to candidates if it actually exists in the data
+  if (names.includes("Heat Index(℃)") && !feelsLikeCandidates.includes("Heat Index(℃)")) {
     feelsLikeCandidates.push("Heat Index(℃)");
   }
 
@@ -243,6 +257,7 @@ export async function discoverMainColumns(parquets: string[]): Promise<ColumnMap
     gust = "Böe(km/h)";
     gustCandidates.push(gust);
   }
+
 
   return {
     temp,
