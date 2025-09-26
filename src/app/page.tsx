@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import Dashboard from "@/components/Dashboard";
+import SavedSeries from "@/components/SavedSeries";
 import Realtime from "@/components/Realtime";
 import Gauges from "@/components/Gauges";
 import Statistics from "@/components/Statistics";
@@ -56,7 +56,7 @@ export default function Home() {
           <div className="rounded-b border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4">
             {tab === "rt" && <Realtime />}
             {tab === "gfx" && <Gauges />}
-            {tab === "stored" && <Dashboard />}
+            {tab === "stored" && <SavedSeries />}
             {tab === "stats" && <Statistics />}
           </div>
         </div>
