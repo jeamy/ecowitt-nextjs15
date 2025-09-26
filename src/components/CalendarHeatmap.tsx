@@ -17,14 +17,26 @@ function parseISO(d: string): Date {
   return new Date(y, (m || 1) - 1, dd || 1);
 }
 
+const TEMP_BUCKETS: { max: number; cls: string }[] = [
+  { max: -15, cls: "bg-temp-neg-15" },
+  { max: -10, cls: "bg-temp-neg-10" },
+  { max: -5, cls: "bg-temp-neg-5" },
+  { max: 0, cls: "bg-temp-0" },
+  { max: 5, cls: "bg-temp-5" },
+  { max: 10, cls: "bg-temp-10" },
+  { max: 15, cls: "bg-temp-15" },
+  { max: 20, cls: "bg-temp-20" },
+  { max: 25, cls: "bg-temp-25" },
+  { max: 30, cls: "bg-temp-30" },
+  { max: 35, cls: "bg-temp-35" },
+];
+
 function tempBgClass(v: number | null | undefined): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return "bg-temp-none";
-  if (v <= -10) return "bg-temp-very-cold";
-  if (v <= 0) return "bg-temp-cold";
-  if (v <= 20) return "bg-temp-mild";
-  if (v <= 25) return "bg-temp-warm";
-  if (v < 30) return "bg-temp-hot";
-  return "bg-temp-very-hot";
+  for (const bucket of TEMP_BUCKETS) {
+    if (v <= bucket.max) return bucket.cls;
+  }
+  return "bg-temp-40";
 }
 
 export default function CalendarHeatmap({ year }: { year: number }) {
