@@ -12,6 +12,8 @@ interface DayRec {
   rain_day: number | null;
 }
 
+type HeatmapMetric = "tmax" | "tmin" | "tavg";
+
 function parseISO(d: string): Date {
   const [y, m, dd] = d.split("-").map(Number);
   return new Date(y, (m || 1) - 1, dd || 1);
@@ -39,10 +41,43 @@ function tempBgClass(v: number | null | undefined): string {
   return "bg-temp-40";
 }
 
-export default function CalendarHeatmap({ year }: { year: number }) {
+interface CalendarHeatmapProps {
+  year: number;
+  metric?: HeatmapMetric;
+  title?: string;
+  metricLabel?: string;
+}
+
+function formatTemperature(value: number): string {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 0 }).format(value);
+}
+
+export default function CalendarHeatmap({ year, metric = "tmax", title, metricLabel }: CalendarHeatmapProps) {
   const { t } = useTranslation();
   const [days, setDays] = useState<DayRec[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const resolvedTitle = useMemo(() => {
+    if (title) return title;
+    if (metric === "tmin") {
+      return t("statistics.heatmapTmin", "Kalender-Heatmap (Tages-Tmin)");
+    }
+    if (metric === "tavg") {
+      return t("statistics.heatmapTavg", "Kalender-Heatmap (Tages-Tavg)");
+    }
+    return t("statistics.heatmapTmax", t("statistics.heatmap", "Kalender-Heatmap (Tages-Tmax)"));
+  }, [metric, t, title]);
+
+  const resolvedMetricLabel = useMemo(() => {
+    if (metricLabel) return metricLabel;
+    if (metric === "tmin") {
+      return t("statistics.dayMinLabel", "Tmin");
+    }
+    if (metric === "tavg") {
+      return t("statistics.dayAvgLabel", "Tavg");
+    }
+    return t("statistics.dayMaxLabel", "Tmax");
+  }, [metric, metricLabel, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,25 +112,26 @@ export default function CalendarHeatmap({ year }: { year: number }) {
       const row = ((d.getDay() + 6) % 7); // Monday=0
       const col = Math.floor((i + firstWeekdayMon0) / 7);
       const rec = byDate.get(ymd);
-      const tmax = (rec && Number.isFinite((rec as any).tmax)) ? Number((rec as any).tmax) : null;
+      const rawValue = rec ? (rec as any)[metric] : null;
+      const value = Number.isFinite(rawValue) ? Number(rawValue) : null;
       const rain = (rec && Number.isFinite((rec as any).rain_day)) ? Number((rec as any).rain_day) : 0;
-      const cls = `${tempBgClass(tmax)}${rain > 0 ? " cal-cell--rain" : ""}`;
-      const title = `${ymd}${tmax !== null ? ` | Tmax ${tmax} °C` : ""}${rain > 0 ? ` | Rain ${rain} mm` : ""}`;
+      const cls = `${tempBgClass(value)}${rain > 0 ? " cal-cell--rain" : ""}`;
+      const title = `${ymd}${value !== null ? ` | ${resolvedMetricLabel} ${formatTemperature(value)} °C` : ""}${rain > 0 ? ` | Rain ${rain} mm` : ""}`;
       list.push({ key: ymd, col, row, cls, rain: rain>0, title });
     }
     const cols = list.reduce((m, c) => Math.max(m, c.col), 0) + 1;
     return { list, cols };
-  }, [days, year]);
+  }, [days, metric, resolvedMetricLabel, year]);
 
   if (loading) return (
     <div className="cal-wrap" aria-hidden>
-      <div className="cal-title">{t("statistics.heatmap", "Kalender-Heatmap (Tages-Tmax)")}</div>
+      <div className="cal-title">{resolvedTitle}</div>
       <div className="skeleton skeleton-heatmap" />
     </div>
   );
   return (
-    <div className="cal-wrap" role="region" aria-label={t("statistics.heatmap", "Kalender-Heatmap (Tages-Tmax)")}>
-      <div className="cal-title">{t("statistics.heatmap", "Kalender-Heatmap (Tages-Tmax)")}</div>
+    <div className="cal-wrap" role="region" aria-label={resolvedTitle}>
+      <div className="cal-title">{resolvedTitle}</div>
       <div className="cal-scroll">
         <div
           className="cal-grid"

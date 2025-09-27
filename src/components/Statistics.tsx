@@ -340,6 +340,10 @@ export default function Statistics() {
           <StatisticsKpis y={currentYearStats} />
           <StatisticsLegend />
           <CalendarHeatmap year={currentYearStats.year} />
+          <CalendarHeatmap
+            year={currentYearStats.year}
+            metric="tmin"
+          />
           <TopExtremes year={currentYearStats.year} />
         </div>
       )}
