@@ -97,8 +97,6 @@ export async function discoverMainColumns(parquets: string[]): Promise<ColumnMap
     tempCandidates.length = 0;
     tempCandidates.push(...filtered);
     temp = ot;
-  } else if (!tempCandidates.includes("Outdoor Temperature(℃)")) {
-    tempCandidates.push("Outdoor Temperature(℃)");
   }
 
   // Dew point detection (Taupunkt / Dew Point)
