@@ -140,16 +140,11 @@ function PrecipitationBlock({ y, stacked }: { y: YearStats | MonthStats; stacked
             {t("statistics.maxDay", "Max day")} : {fmtNum(p.maxDay)} mm<br />
             <span className="text-xs text-gray-600">({fmtDate(p.maxDayDate)})</span>
           </div>
-          <div>
-            {t("statistics.minDay", "Min day")} : {fmtNum(p.minDay)} mm<br />
-            <span className="text-xs text-gray-600">({fmtDate(p.minDayDate)})</span>
-          </div>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
           <div>{t("dashboard.total")} : {fmtNum(p.total)} mm</div>
           <div>{t("statistics.maxDay", "Max day")} : {fmtNum(p.maxDay)} mm ({fmtDate(p.maxDayDate)})</div>
-          <div>{t("statistics.minDay", "Min day")} : {fmtNum(p.minDay)} mm ({fmtDate(p.minDayDate)})</div>
         </div>
       )}
       <div className="mt-2">

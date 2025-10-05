@@ -25,8 +25,6 @@ export interface PrecipitationStats {
   total: number | null; // sum of daily totals over the period (mm)
   maxDay: number | null; // maximum daily total in the period (mm)
   maxDayDate: string | null; // YYYY-MM-DD
-  minDay: number | null; // minimum daily total in the period (mm)
-  minDayDate: string | null; // YYYY-MM-DD
   over20mm: ThresholdList; // days with daily total >= 20 mm
   over30mm: ThresholdList; // days with daily total >= 30 mm
 }

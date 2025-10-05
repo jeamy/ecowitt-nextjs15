@@ -111,7 +111,7 @@ async function queryDailyAggregates(parquetFiles: string[]) {
       FROM casted
       GROUP BY 1
     )
-    SELECT strftime(d, '%Y-%m-%d %H:%M:%S') AS day,
+    SELECT strftime(d, '%Y-%m-%d') AS day,
       tmax, tmin, tavg,
       tfmax, tfmin,
       COALESCE(rdaily, rhourly, rgeneric) AS rain_day,
@@ -251,7 +251,6 @@ export function computeStatsFromDaily(rows: DailyAggregateRow[]): {
   const under10: { date: string; value: number }[] = [];
 
   let rainTotal = 0; let rainCnt = 0; let rainMax = Number.NEGATIVE_INFINITY; let rainMaxDate: string | null = null;
-  let rainMin = Number.POSITIVE_INFINITY; let rainMinDate: string | null = null;
   const rainOver20: { date: string; value: number }[] = [];
   const rainOver30: { date: string; value: number }[] = [];
   let rainDays = 0;
@@ -287,7 +286,6 @@ export function computeStatsFromDaily(rows: DailyAggregateRow[]): {
       if (rd > 0) rainDays++;
       rainTotal += rd;
       if (rd > rainMax) { rainMax = rd; rainMaxDate = d; }
-      if (rd < rainMin) { rainMin = rd; rainMinDate = d; }
       if (rd >= 20) rainOver20.push({ date: d, value: rd });
       if (rd >= 30) rainOver30.push({ date: d, value: rd });
     }
@@ -322,8 +320,6 @@ export function computeStatsFromDaily(rows: DailyAggregateRow[]): {
     total: rainCnt > 0 && Number.isFinite(rainTotal) ? rainTotal : null,
     maxDay: rainCnt > 0 && Number.isFinite(rainMax) ? rainMax : null,
     maxDayDate: rainCnt > 0 ? rainMaxDate : null,
-    minDay: rainCnt > 0 && Number.isFinite(rainMin) ? rainMin : null,
-    minDayDate: rainCnt > 0 ? rainMinDate : null,
     over20mm: { count: rainOver20.length, items: rainOver20 },
     over30mm: { count: rainOver30.length, items: rainOver30 },
   } as YearStats["precipitation"];
