@@ -23,4 +23,7 @@ export const API_ENDPOINTS = {
   STATISTICS: '/api/statistics',
   STATISTICS_UPDATE: '/api/statistics/update',
   STATISTICS_DAILY: '/api/statistics/daily',
+  // Dashboard/server-side range statistics
+  STATISTICS_RANGE: '/api/statistics/range',
+  STATISTICS_CHANNELS: '/api/statistics/channels',
 };

@@ -20,6 +20,18 @@ export async function getDailySeries(year?: number) {
   return rows.filter((r: any) => typeof r.day === 'string' && r.day.startsWith(y));
 }
 
+/** Daily aggregate row shape returned by range queries */
+export interface DailyAggregateRow {
+  day: string; // YYYY-MM-DD
+  tmax: number | null;
+  tmin: number | null;
+  tavg: number | null;
+  rain_day: number | null;
+  wind_max: number | null;
+  gust_max: number | null;
+  wind_avg: number | null;
+}
+
 async function queryDailyAggregates(parquetFiles: string[]) {
   if (!parquetFiles.length) return [] as any[];
   const conn = await getDuckConn();
@@ -100,6 +112,204 @@ async function queryDailyAggregates(parquetFiles: string[]) {
 
   const reader = await conn.runAndReadAll(sql);
   return reader.getRowObjects();
+}
+
+/** Query daily aggregates for a specific time range (inclusive) */
+export async function queryDailyAggregatesInRange(
+  parquetFiles: string[],
+  start?: Date,
+  end?: Date
+): Promise<DailyAggregateRow[]> {
+  if (!parquetFiles.length) return [] as any[];
+  const conn = await getDuckConn();
+  const qp = parquetFiles.map((p) => p.replace(/\\/g, "/"));
+  const cols = await discoverMainColumns(qp);
+  if (!cols.temp) throw new Error("Could not detect outdoor temperature column in main dataset");
+
+  const arr = '[' + qp.map((p) => `'${p}'`).join(',') + ']';
+
+  const mergedTempCandidates = [
+    ...(cols.tempCandidates || []),
+    ...(cols.dewCandidates || []),
+    ...(cols.feelsLikeCandidates || []),
+  ];
+  if (cols.temp && !mergedTempCandidates.includes(cols.temp)) mergedTempCandidates.unshift(cols.temp);
+  if (cols.dew && !mergedTempCandidates.includes(cols.dew)) mergedTempCandidates.push(cols.dew);
+  if (cols.feelsLike && !mergedTempCandidates.includes(cols.feelsLike)) mergedTempCandidates.push(cols.feelsLike);
+  const tempExprList = (mergedTempCandidates.length ? mergedTempCandidates : (cols.temp ? [cols.temp] : []))
+    .map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
+  const tExpr = tempExprList.length ? `COALESCE(${tempExprList.join(', ')})` : 'NULL';
+
+  const rainDailyExprList = (cols.dailyRainCandidates.length ? cols.dailyRainCandidates : [])
+    .map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
+  const rainHourlyExprList = (cols.hourlyRainCandidates.length ? cols.hourlyRainCandidates : [])
+    .map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
+  const rainGenericExprList = (cols.genericRainCandidates.length ? cols.genericRainCandidates : [])
+    .map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
+  const rainDailyExpr = rainDailyExprList.length ? `COALESCE(${rainDailyExprList.join(', ')})` : 'NULL';
+  const rainHourlyExpr = rainHourlyExprList.length ? `COALESCE(${rainHourlyExprList.join(', ')})` : 'NULL';
+  const rainGenericExpr = rainGenericExprList.length ? `COALESCE(${rainGenericExprList.join(', ')})` : 'NULL';
+  const windExprList = (cols.windCandidates && cols.windCandidates.length ? cols.windCandidates : (cols.wind ? [cols.wind] : []))
+    .map((c) => speedExprFor(c));
+  const gustExprList = (cols.gustCandidates && cols.gustCandidates.length ? cols.gustCandidates : (cols.gust ? [cols.gust] : []))
+    .map((c) => speedExprFor(c));
+  const windExpr = windExprList.length ? `COALESCE(${windExprList.join(', ')})` : 'NULL';
+  const gustExpr = gustExprList.length ? `COALESCE(${gustExprList.join(', ')})` : 'NULL';
+
+  const whereStart = start ? `ts >= strptime('${formatDuck(start)}', ['%Y-%m-%d %H:%M'])` : '1=1';
+  const whereEnd = end ? `ts <= strptime('${formatDuck(end)}', ['%Y-%m-%d %H:%M'])` : '1=1';
+
+  const sql = `
+    WITH src AS (
+      SELECT * FROM read_parquet(${arr}, union_by_name=true)
+    ),
+    casted AS (
+      SELECT ts,
+        ${tExpr} AS t,
+        ${rainDailyExpr} AS rain_d,
+        ${rainHourlyExpr} AS rain_h,
+        ${rainGenericExpr} AS rain_g,
+        ${windExpr} AS wind,
+        ${gustExpr} AS gust
+      FROM src
+      WHERE ts IS NOT NULL AND ${whereStart} AND ${whereEnd}
+    ),
+    daily AS (
+      SELECT
+        date_trunc('day', ts) AS d,
+        max(t) AS tmax,
+        min(t) AS tmin,
+        avg(t) AS tavg,
+        max(rain_d) AS rdaily,
+        sum(rain_h) AS rhourly,
+        sum(rain_g) AS rgeneric,
+        max(wind) AS wind_max,
+        max(gust) AS gust_max,
+        avg(wind) AS wind_avg
+      FROM casted
+      GROUP BY 1
+    )
+    SELECT strftime(d, '%Y-%m-%d') AS day,
+      tmax, tmin, tavg,
+      COALESCE(rdaily, rhourly, rgeneric) AS rain_day,
+      wind_max, gust_max, wind_avg
+    FROM daily
+    ORDER BY day;
+  `;
+
+  const reader = await conn.runAndReadAll(sql);
+  return reader.getRowObjects() as unknown as DailyAggregateRow[];
+}
+
+function formatDuck(d: Date) {
+  const pad2 = (n: number) => (n < 10 ? `0${n}` : String(n));
+  const yyyy = d.getFullYear();
+  const mm = pad2(d.getMonth() + 1);
+  const dd = pad2(d.getDate());
+  const hh = pad2(d.getHours());
+  const mi = pad2(d.getMinutes());
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+}
+
+export function computeStatsFromDaily(rows: DailyAggregateRow[]): {
+  temp: YearStats["temperature"]; rain: YearStats["precipitation"]; wind: YearStats["wind"]; rainDays: number;
+} {
+  const toNum = (v: any): number | null => {
+    if (v == null) return null;
+    if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+    const s = String(v).trim().replace('−', '-').replace(',', '.').replace(/[^0-9+\-\.]/g, '');
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  let tMax = Number.NEGATIVE_INFINITY; let tMaxDate: string | null = null;
+  let tMin = Number.POSITIVE_INFINITY; let tMinDate: string | null = null;
+  let tAvgSum = 0; let tAvgCnt = 0;
+  const over30: { date: string; value: number }[] = [];
+  const over25: { date: string; value: number }[] = [];
+  const over20: { date: string; value: number }[] = [];
+  const under0: { date: string; value: number }[] = [];
+  const under10: { date: string; value: number }[] = [];
+
+  let rainTotal = 0; let rainCnt = 0; let rainMax = Number.NEGATIVE_INFINITY; let rainMaxDate: string | null = null;
+  let rainMin = Number.POSITIVE_INFINITY; let rainMinDate: string | null = null;
+  const rainOver20: { date: string; value: number }[] = [];
+  const rainOver30: { date: string; value: number }[] = [];
+  let rainDays = 0;
+
+  let windMax = Number.NEGATIVE_INFINITY; let windMaxDate: string | null = null;
+  let gustMax = Number.NEGATIVE_INFINITY; let gustMaxDate: string | null = null;
+  let windAvgSum = 0; let windAvgCnt = 0;
+
+  for (const r of rows) {
+    const d = r.day;
+    const tx = toNum(r.tmax);
+    const tn = toNum(r.tmin);
+    const ta = toNum(r.tavg);
+    if (tx !== null) {
+      if (tx > tMax) { tMax = tx; tMaxDate = d; }
+      if (tx > 30) over30.push({ date: d, value: tx });
+      if (tx > 25) over25.push({ date: d, value: tx });
+      if (tx > 20) over20.push({ date: d, value: tx });
+    }
+    if (tn !== null) {
+      if (tn < tMin) { tMin = tn; tMinDate = d; }
+      if (tn < 0) under0.push({ date: d, value: tn });
+      if (tn <= -10) under10.push({ date: d, value: tn });
+    }
+    if (ta !== null) { tAvgSum += ta; tAvgCnt++; }
+
+    const rd = toNum(r.rain_day);
+    if (rd !== null && Number.isFinite(rd)) {
+      rainCnt++;
+      if (rd > 0) rainDays++;
+      rainTotal += rd;
+      if (rd > rainMax) { rainMax = rd; rainMaxDate = d; }
+      if (rd < rainMin) { rainMin = rd; rainMinDate = d; }
+      if (rd >= 20) rainOver20.push({ date: d, value: rd });
+      if (rd >= 30) rainOver30.push({ date: d, value: rd });
+    }
+
+    const wmx = toNum(r.wind_max);
+    const gmx = toNum(r.gust_max);
+    const wav = toNum(r.wind_avg);
+    if (wmx !== null && wmx > windMax) { windMax = wmx; windMaxDate = d; }
+    if (gmx !== null && gmx > gustMax) { gustMax = gmx; gustMaxDate = d; }
+    if (wav !== null) { windAvgSum += wav; windAvgCnt++; }
+  }
+
+  const temp = {
+    max: Number.isFinite(tMax) ? tMax : null,
+    maxDate: tMaxDate,
+    min: Number.isFinite(tMin) ? tMin : null,
+    minDate: tMinDate,
+    avg: tAvgCnt > 0 ? tAvgSum / tAvgCnt : null,
+    over30: { count: over30.length, items: over30 },
+    over25: { count: over25.length, items: over25 },
+    over20: { count: over20.length, items: over20 },
+    under0: { count: under0.length, items: under0 },
+    under10: { count: under10.length, items: under10 },
+  } as YearStats["temperature"];
+
+  const rain = {
+    total: rainCnt > 0 && Number.isFinite(rainTotal) ? rainTotal : null,
+    maxDay: rainCnt > 0 && Number.isFinite(rainMax) ? rainMax : null,
+    maxDayDate: rainCnt > 0 ? rainMaxDate : null,
+    minDay: rainCnt > 0 && Number.isFinite(rainMin) ? rainMin : null,
+    minDayDate: rainCnt > 0 ? rainMinDate : null,
+    over20mm: { count: rainOver20.length, items: rainOver20 },
+    over30mm: { count: rainOver30.length, items: rainOver30 },
+  } as YearStats["precipitation"];
+
+  const wind = {
+    max: Number.isFinite(windMax) ? windMax : null,
+    maxDate: windMaxDate,
+    gustMax: Number.isFinite(gustMax) ? gustMax : null,
+    gustMaxDate: gustMaxDate,
+    avg: windAvgCnt > 0 ? windAvgSum / windAvgCnt : null,
+  } as YearStats["wind"];
+
+  return { temp, rain, wind, rainDays };
 }
 
 function buildYearAndMonthStats(rows: any[]): StatisticsPayload {

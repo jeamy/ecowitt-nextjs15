@@ -45,7 +45,8 @@ function renderChannelCardCharts(
   chKey: string,
   minuteDataAll: DataResp | null,
   t: (key: string) => string,
-  locale: string
+  locale: string,
+  serverChannelStats?: any
 ) {
   const rows = data.rows || [];
   if (!rows.length || !xBase) return <div className="text-xs text-gray-500">{t('statuses.noData')}</div>;
@@ -807,6 +808,10 @@ export default function Dashboard() {
   const [dataMain, setDataMain] = useState<DataResp | null>(null);
   // Minutendaten für Statistikberechnung
   const [minuteDataMain, setMinuteDataMain] = useState<DataResp | null>(null);
+  // Serverseitig berechnete Statistiken für den gewählten Zeitraum (Main-Sensoren)
+  const [rangeStats, setRangeStats] = useState<any | null>(null);
+  // Serverseitig berechnete Statistiken für den ausgewählten Kanal (im Single-Channel-Modus)
+  const [channelStats, setChannelStats] = useState<any | null>(null);
   const [minuteDataAll, setMinuteDataAll] = useState<DataResp | null>(null);
   const [channelsCfg, setChannelsCfg] = useState<ChannelsConfig>({});
   const [loading, setLoading] = useState<boolean>(false);
@@ -953,50 +958,61 @@ export default function Dashboard() {
     setErrMain(null);
     const uAll = new URL(API_ENDPOINTS.DATA_ALLSENSORS, window.location.origin);
     const uMain = new URL(API_ENDPOINTS.DATA_MAIN, window.location.origin);
-    const uMinuteMain = new URL(API_ENDPOINTS.DATA_MAIN, window.location.origin);
-    const uMinuteAll = new URL(API_ENDPOINTS.DATA_ALLSENSORS, window.location.origin);
+    // Serverseitige Statistik-Endpoints
+    const uRange = new URL(API_ENDPOINTS.STATISTICS_RANGE, window.location.origin);
+    // Kanal-Statistiken nur im Single-Channel-Modus abrufen
+    const needsChannelStats = (mode === "channel" && selectedChannel !== "all");
+    const uChannel = new URL(API_ENDPOINTS.STATISTICS_CHANNELS, window.location.origin);
     
     if (useGlobalRange) {
       uAll.searchParams.set("resolution", resolution);
       uMain.searchParams.set("resolution", resolution);
-      // Minutendaten immer mit Auflösung "minute" laden
-      uMinuteMain.searchParams.set("resolution", "minute");
-      uMinuteAll.searchParams.set("resolution", "minute");
       
       if (startParam) {
         uAll.searchParams.set("start", startParam);
         uMain.searchParams.set("start", startParam);
-        uMinuteMain.searchParams.set("start", startParam);
-        uMinuteAll.searchParams.set("start", startParam);
+        uRange.searchParams.set("start", startParam);
+        if (needsChannelStats) {
+          uChannel.searchParams.set("start", startParam);
+        }
       }
       
       if (endParam) {
         uAll.searchParams.set("end", endParam);
         uMain.searchParams.set("end", endParam);
-        uMinuteMain.searchParams.set("end", endParam);
-        uMinuteAll.searchParams.set("end", endParam);
+        uRange.searchParams.set("end", endParam);
+        if (needsChannelStats) {
+          uChannel.searchParams.set("end", endParam);
+        }
+      }
+      if (needsChannelStats) {
+        uChannel.searchParams.set("ch", selectedChannel);
       }
     } else {
       const monthStr = `${year}${mon}`;
       uAll.searchParams.set("month", monthStr);
       uMain.searchParams.set("month", monthStr);
-      uMinuteMain.searchParams.set("month", monthStr);
-      uMinuteAll.searchParams.set("month", monthStr);
+      uRange.searchParams.set("month", monthStr);
+      if (needsChannelStats) {
+        uChannel.searchParams.set("month", monthStr);
+        uChannel.searchParams.set("ch", selectedChannel);
+      }
       
       uAll.searchParams.set("resolution", resolution);
       uMain.searchParams.set("resolution", resolution);
-      // Minutendaten immer mit Auflösung "minute" laden
-      uMinuteMain.searchParams.set("resolution", "minute");
-      uMinuteAll.searchParams.set("resolution", "minute");
     }
     
-    Promise.all([
+    const promises: Promise<{ ok: boolean; body: any }>[] = [
       fetch(uAll.toString()).then(async (r) => ({ ok: r.ok, body: await r.json() })).catch(() => ({ ok: false, body: null })),
       fetch(uMain.toString()).then(async (r) => ({ ok: r.ok, body: await r.json() })).catch(() => ({ ok: false, body: null })),
-      fetch(uMinuteMain.toString()).then(async (r) => ({ ok: r.ok, body: await r.json() })).catch(() => ({ ok: false, body: null })),
-      fetch(uMinuteAll.toString()).then(async (r) => ({ ok: r.ok, body: await r.json() })).catch(() => ({ ok: false, body: null })),
-    ])
-      .then(([a, m, mm, mma]) => {
+      fetch(uRange.toString()).then(async (r) => ({ ok: r.ok, body: await r.json() })).catch(() => ({ ok: false, body: null })),
+      needsChannelStats
+        ? fetch(uChannel.toString()).then(async (r) => ({ ok: r.ok, body: await r.json() })).catch(() => ({ ok: false, body: null }))
+        : Promise.resolve({ ok: true, body: null }),
+    ];
+
+    Promise.all(promises)
+      .then(([a, m, rs, cs]) => {
         if (!a.ok || !a.body || a.body.error) {
           setErrAll(a.body?.error || t('statuses.loadErrorAllsensors'));
           setDataAll(null);
@@ -1010,21 +1026,21 @@ export default function Dashboard() {
         } else {
           setDataMain(m.body);
         }
-        
-        // Minutendaten für Statistikberechnung setzen
-        if (!mm.ok || !mm.body || mm.body.error) {
-          // Minute-data load error (non-critical, used only for statistics)
-          console.warn(t('statuses.minuteDataWarning'), mm.body?.error);
-          setMinuteDataMain(null);
+        // Serverseitige Bereichs-Statistiken
+        if (!rs.ok || !rs.body || rs.body.ok === false) {
+          setRangeStats(null);
         } else {
-          setMinuteDataMain(mm.body);
+          setRangeStats(rs.body);
         }
-        if (!mma.ok || !mma.body || mma.body.error) {
-          console.warn(t('statuses.minuteDataWarningAllsensors'), mma.body?.error);
-          setMinuteDataAll(null);
+        // Kanal-Statistik optional
+        if (!needsChannelStats || !cs.ok || !cs.body || cs.body.ok === false) {
+          setChannelStats(null);
         } else {
-          setMinuteDataAll(mma.body);
+          setChannelStats(cs.body);
         }
+        // Minutendaten nicht mehr clientseitig laden
+        setMinuteDataMain(null);
+        setMinuteDataAll(null);
       })
       .finally(() => setLoading(false));
   }, [useGlobalRange, startParam, endParam, year, mon, resolution, mode, selectedChannel]);
@@ -1278,7 +1294,7 @@ export default function Dashboard() {
             {mode === "main" && (
               <div className={styles.sectionCard}>
                 {dataMain
-                  ? renderMainCharts(dataMain, xBaseMain, minuteDataMain, t, locale)
+                  ? renderMainCharts(dataMain, xBaseMain, minuteDataMain, t, locale, rangeStats)
                   : <div className={styles.emptyState}>{t('statuses.noData')}</div>}
               </div>
             )}
@@ -1313,7 +1329,7 @@ export default function Dashboard() {
                   {dataAll
                     ? (selectedChannel === "all"
                       ? renderAllChannelsCharts(dataAll, channelsCfg, xBaseAll, minuteDataAll, t, locale)
-                      : renderChannelCardCharts(dataAll, channelsCfg, xBaseAll, selectedChannel, minuteDataAll, t, locale))
+                      : renderChannelCardCharts(dataAll, channelsCfg, xBaseAll, selectedChannel, minuteDataAll, t, locale, channelStats))
                     : <div className={styles.emptyState}>{t('statuses.noData')}</div>}
                 </div>
               </div>
@@ -1372,7 +1388,7 @@ function renderChannelChart(data: DataResp, chKey: string, metric: ChannelMetric
  * @returns A React fragment containing all the charts for the main sensors.
  * @private
  */
-function renderMainCharts(data: DataResp, xBase: number | null, minuteData: DataResp | null, t: (key: string) => string, locale: string) {
+function renderMainCharts(data: DataResp, xBase: number | null, minuteData: DataResp | null, t: (key: string) => string, locale: string, serverRangeStats?: any) {
   const rows = data.rows || [];
   if (!rows.length || !xBase) return <div className="text-xs text-gray-500">{t('statuses.noData')}</div>;
   const times = rows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
@@ -1610,7 +1626,34 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
               );
             })()}
             <div className="mt-2 text-sm border-t border-gray-100 pt-2">
-              {statsOutside && (
+              {/* Prefer server-side statistics for the range if available */}
+              {serverRangeStats?.stats?.temp ? (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
+                  <div className="bg-amber-50 p-2 rounded">
+                    <div className="font-medium text-amber-700">{t('dashboard.daysOver30C')}</div>
+                    <div className="text-lg">{serverRangeStats.stats.temp.over30?.count ?? '—'} <span className="text-xs text-gray-500">{t('dashboard.of')} {serverRangeStats.totalPeriodDays ?? '—'}</span></div>
+                  </div>
+                  <div className="bg-blue-50 p-2 rounded">
+                    <div className="font-medium text-blue-700">{t('dashboard.daysUnder0C')}</div>
+                    <div className="text-lg">{serverRangeStats.stats.temp.under0?.count ?? '—'} <span className="text-xs text-gray-500">{t('dashboard.of')} {serverRangeStats.totalPeriodDays ?? '—'}</span></div>
+                  </div>
+                  <div className="bg-rose-50 p-2 rounded">
+                    <div className="font-medium text-rose-700">{t('dashboard.highestTemperature')}</div>
+                    <div className="text-lg">{Number.isFinite(serverRangeStats.stats.temp.max) ? `${serverRangeStats.stats.temp.max.toFixed(1)} °C` : '—'}</div>
+                    {serverRangeStats.stats.temp.maxDate && (<div className="text-xs text-gray-500">{formatDisplayLocale(new Date(String(serverRangeStats.stats.temp.maxDate) + 'T12:00'), locale)}</div>)}
+                  </div>
+                  <div className="bg-indigo-50 p-2 rounded">
+                    <div className="font-medium text-indigo-700">{t('dashboard.lowestTemperature')}</div>
+                    <div className="text-lg">{Number.isFinite(serverRangeStats.stats.temp.min) ? `${serverRangeStats.stats.temp.min.toFixed(1)} °C` : '—'}</div>
+                    {serverRangeStats.stats.temp.minDate && (<div className="text-xs text-gray-500">{formatDisplayLocale(new Date(String(serverRangeStats.stats.temp.minDate) + 'T12:00'), locale)}</div>)}
+                  </div>
+                  <div className="bg-teal-50 p-2 rounded">
+                    <div className="font-medium text-teal-700">{t('dashboard.average')}</div>
+                    <div className="text-lg">{Number.isFinite(serverRangeStats.stats.temp.avg) ? `${serverRangeStats.stats.temp.avg.toFixed(1)} °C` : '—'}</div>
+                  </div>
+                </div>
+              ) : (
+              statsOutside && (
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
                   <div className="bg-amber-50 p-2 rounded">
                     <div className="font-medium text-amber-700">{t('dashboard.daysOver30C')}</div>
@@ -1635,7 +1678,7 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
                     <div className="text-lg">{Number.isFinite(avgTempOutside) ? `${avgTempOutside.toFixed(1)} °C` : "—"}</div>
                   </div>
                 </div>
-              )}
+              ))}
               {statsFelt && (
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-orange-50 p-2 rounded">
@@ -1783,6 +1826,16 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
             statsTimes = statsRows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
           }
           stats = calculateMinMaxForColumn(statsRows, statsTimes, resolvedCol);
+          // Prefer server-side wind/gust statistics if available
+          if (serverRangeStats?.stats?.wind && (isWind || isGust)) {
+            const w = serverRangeStats.stats.wind;
+            if (isWind && Number.isFinite(w.max)) {
+              stats = { max: w.max, min: NaN as any, maxTime: w.maxDate ? new Date(String(w.maxDate) + 'T12:00') : null, minTime: null };
+            }
+            if (isGust && Number.isFinite(w.gustMax)) {
+              stats = { max: w.gustMax, min: NaN as any, maxTime: w.gustMaxDate ? new Date(String(w.gustMaxDate) + 'T12:00') : null, minTime: null };
+            }
+          }
         }
         const unit = unitForHeader(col) || "";
 
@@ -1845,29 +1898,24 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
           
           {/* Regenstatistik */}
           {(() => {
-            // Verwende die Tageswerte für die Regenstatistik
-            // Bei Tagesauflösung sind die Werte bereits korrekt aggregiert
-            let statsRainCol = hourlyRainCol || null;
-            let statsRows = rows;
-            let statsTimes = times;
-            
-            // Berechne die Regenstatistik
-            const rainStats = calculateRainStats(statsRows, statsTimes, statsRainCol);
+            // Bevorzugt serverseitige Regenstatistik
+            const rainStats = serverRangeStats?.stats?.rain;
+            const rainDays = serverRangeStats?.stats?.rainDays;
             
             return (
               <div className="mt-2 text-sm border-t border-gray-100 pt-2">
                 <div className="grid grid-cols-3 gap-2">
                   <div className="bg-blue-50 p-2 rounded">
                     <div className="font-medium text-blue-700">{t('dashboard.daysOver30mm')}</div>
-                    <div className="text-lg">{rainStats.daysOver30mm} <span className="text-xs text-gray-500">{t('dashboard.of')} {rainStats.totalPeriodDays}</span></div>
+                    <div className="text-lg">{rainStats?.over30mm?.count ?? '—'} <span className="text-xs text-gray-500">{t('dashboard.of')} {serverRangeStats?.totalPeriodDays ?? '—'}</span></div>
                   </div>
                   <div className="bg-gray-50 p-2 rounded">
                     <div className="font-medium text-gray-700">{t('dashboard.rainDays')}</div>
-                    <div className="text-lg">{rainStats.totalDays} <span className="text-xs text-gray-500">{t('dashboard.of')} {rainStats.totalPeriodDays}</span></div>
+                    <div className="text-lg">{rainDays ?? '—'} <span className="text-xs text-gray-500">{t('dashboard.of')} {serverRangeStats?.totalPeriodDays ?? '—'}</span></div>
                   </div>
                   <div className="bg-emerald-50 p-2 rounded">
                     <div className="font-medium text-emerald-700">{t('dashboard.total')}</div>
-                    <div className="text-lg">{totalRain.toFixed(1)} <span className="text-xs text-gray-500">mm</span></div>
+                    <div className="text-lg">{Number.isFinite(serverRangeStats?.stats?.rain?.total) ? `${serverRangeStats.stats.rain.total.toFixed(1)} ` : `${totalRain.toFixed(1)} `}<span className="text-xs text-gray-500">mm</span></div>
                   </div>
                 </div>
               </div>
