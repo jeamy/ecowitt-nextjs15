@@ -30,6 +30,8 @@ export interface DailyAggregateRow {
   wind_max: number | null;
   gust_max: number | null;
   wind_avg: number | null;
+  tfmax?: number | null;
+  tfmin?: number | null;
 }
 
 async function queryDailyAggregates(parquetFiles: string[]) {
@@ -54,6 +56,10 @@ async function queryDailyAggregates(parquetFiles: string[]) {
   const tempExprList = (mergedTempCandidates.length ? mergedTempCandidates : (cols.temp ? [cols.temp] : []))
     .map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
   const tExpr = tempExprList.length ? `COALESCE(${tempExprList.join(', ')})` : 'NULL';
+  // Feels-like expression (optional)
+  const feelsList = (cols.feelsLikeCandidates && cols.feelsLikeCandidates.length ? cols.feelsLikeCandidates : (cols.feelsLike ? [cols.feelsLike] : []))
+    .map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
+  const feelsExpr = feelsList.length ? `COALESCE(${feelsList.join(', ')})` : 'NULL';
   // Build rain expressions per family to support fallback (daily cumulative vs hourly/generic sums)
   const rainDailyExprList = (cols.dailyRainCandidates.length ? cols.dailyRainCandidates : [])
     .map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
@@ -79,6 +85,7 @@ async function queryDailyAggregates(parquetFiles: string[]) {
     casted AS (
       SELECT ts,
         ${tExpr} AS t,
+        ${feelsExpr} AS tf,
         ${rainDailyExpr} AS rain_d,
         ${rainHourlyExpr} AS rain_h,
         ${rainGenericExpr} AS rain_g,
@@ -93,6 +100,8 @@ async function queryDailyAggregates(parquetFiles: string[]) {
         max(t) AS tmax,
         min(t) AS tmin,
         avg(t) AS tavg,
+        max(tf) AS tfmax,
+        min(tf) AS tfmin,
         max(rain_d) AS rdaily,
         sum(rain_h) AS rhourly,
         sum(rain_g) AS rgeneric,
@@ -104,6 +113,7 @@ async function queryDailyAggregates(parquetFiles: string[]) {
     )
     SELECT strftime(d, '%Y-%m-%d') AS day,
       tmax, tmin, tavg,
+      tfmax, tfmin,
       COALESCE(rdaily, rhourly, rgeneric) AS rain_day,
       wind_max, gust_max, wind_avg
     FROM daily
@@ -212,7 +222,7 @@ function formatDuck(d: Date) {
 }
 
 export function computeStatsFromDaily(rows: DailyAggregateRow[]): {
-  temp: YearStats["temperature"]; rain: YearStats["precipitation"]; wind: YearStats["wind"]; rainDays: number;
+  temp: YearStats["temperature"]; rain: YearStats["precipitation"]; wind: YearStats["wind"]; feels?: { max: number | null; maxDate: string | null; min: number | null; minDate: string | null }; rainDays: number;
 } {
   const toNum = (v: any): number | null => {
     if (v == null) return null;
@@ -240,6 +250,9 @@ export function computeStatsFromDaily(rows: DailyAggregateRow[]): {
   let windMax = Number.NEGATIVE_INFINITY; let windMaxDate: string | null = null;
   let gustMax = Number.NEGATIVE_INFINITY; let gustMaxDate: string | null = null;
   let windAvgSum = 0; let windAvgCnt = 0;
+
+  let feltMax = Number.NEGATIVE_INFINITY; let feltMaxDate: string | null = null;
+  let feltMin = Number.POSITIVE_INFINITY; let feltMinDate: string | null = null;
 
   for (const r of rows) {
     const d = r.day;
@@ -276,6 +289,11 @@ export function computeStatsFromDaily(rows: DailyAggregateRow[]): {
     if (wmx !== null && wmx > windMax) { windMax = wmx; windMaxDate = d; }
     if (gmx !== null && gmx > gustMax) { gustMax = gmx; gustMaxDate = d; }
     if (wav !== null) { windAvgSum += wav; windAvgCnt++; }
+
+    const fmx = toNum((r as any).tfmax);
+    const fmn = toNum((r as any).tfmin);
+    if (fmx !== null && fmx > feltMax) { feltMax = fmx; feltMaxDate = d; }
+    if (fmn !== null && fmn < feltMin) { feltMin = fmn; feltMinDate = d; }
   }
 
   const temp = {
@@ -309,7 +327,14 @@ export function computeStatsFromDaily(rows: DailyAggregateRow[]): {
     avg: windAvgCnt > 0 ? windAvgSum / windAvgCnt : null,
   } as YearStats["wind"];
 
-  return { temp, rain, wind, rainDays };
+  const feels = (Number.isFinite(feltMax) || Number.isFinite(feltMin)) ? {
+    max: Number.isFinite(feltMax) ? feltMax : null,
+    maxDate: feltMaxDate,
+    min: Number.isFinite(feltMin) ? feltMin : null,
+    minDate: feltMinDate,
+  } : undefined;
+
+  return { temp, rain, wind, feels, rainDays };
 }
 
 function buildYearAndMonthStats(rows: any[]): StatisticsPayload {

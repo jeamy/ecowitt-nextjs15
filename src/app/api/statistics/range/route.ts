@@ -67,13 +67,13 @@ export async function GET(req: NextRequest) {
     if (!parquets.length) return NextResponse.json({ ok: false, error: "No data in range" }, { status: 404 });
 
     const days: DailyAggregateRow[] = await queryDailyAggregatesInRange(parquets, start, end);
-    const { temp, rain, wind, rainDays } = computeStatsFromDaily(days);
+    const { temp, rain, wind, feels, rainDays } = computeStatsFromDaily(days);
 
     const startIso = toIsoMinute(start!);
     const endIso = toIsoMinute(end!);
     const totalPeriodDays = daysInclusive(start!, end!);
 
-    return NextResponse.json({ ok: true, start: startIso, end: endIso, totalPeriodDays, days, stats: { temp, rain, wind, rainDays } });
+    return NextResponse.json({ ok: true, start: startIso, end: endIso, totalPeriodDays, days, stats: { temp, feels, rain, wind, rainDays } });
   } catch (e: any) {
     console.error("[statistics/range] GET error:", e?.message || e);
     return NextResponse.json({ ok: false, error: String(e?.message || e) }, { status: 500 });

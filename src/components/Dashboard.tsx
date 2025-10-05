@@ -151,19 +151,35 @@ function renderChannelCardCharts(
                   </div>
                 </div>
               )}
-              {statsFelt && (
+              {/* Feels-like statistics: prefer server-side channel stats */}
+              {serverChannelStats?.stats?.feels ? (
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-orange-50 p-2 rounded">
                     <div className="font-medium text-orange-700">{t('dashboard.feelsLikeMax')}</div>
-                    <div className="text-lg">{Number.isFinite(statsFelt.maxTemp) ? `${statsFelt.maxTemp.toFixed(1)} °C` : "—"}</div>
-                    {statsFelt.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.maxTime, locale)}</div>)}
+                    <div className="text-lg">{Number.isFinite(serverChannelStats.stats.feels.max) ? `${serverChannelStats.stats.feels.max.toFixed(1)} °C` : '—'}</div>
+                    {serverChannelStats.stats.feels.maxDate && (<div className="text-xs text-gray-500">{formatDisplayLocale(new Date(String(serverChannelStats.stats.feels.maxDate) + 'T12:00'), locale)}</div>)}
                   </div>
                   <div className="bg-cyan-50 p-2 rounded">
                     <div className="font-medium text-cyan-700">{t('dashboard.feelsLikeMin')}</div>
-                    <div className="text-lg">{Number.isFinite(statsFelt.minTemp) ? `${statsFelt.minTemp.toFixed(1)} °C` : "—"}</div>
-                    {statsFelt.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.minTime, locale)}</div>)}
+                    <div className="text-lg">{Number.isFinite(serverChannelStats.stats.feels.min) ? `${serverChannelStats.stats.feels.min.toFixed(1)} °C` : '—'}</div>
+                    {serverChannelStats.stats.feels.minDate && (<div className="text-xs text-gray-500">{formatDisplayLocale(new Date(String(serverChannelStats.stats.feels.minDate) + 'T12:00'), locale)}</div>)}
                   </div>
                 </div>
+              ) : (
+                statsFelt && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-orange-50 p-2 rounded">
+                      <div className="font-medium text-orange-700">{t('dashboard.feelsLikeMax')}</div>
+                      <div className="text-lg">{Number.isFinite(statsFelt.maxTemp) ? `${statsFelt.maxTemp.toFixed(1)} °C` : "—"}</div>
+                      {statsFelt.maxTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.maxTime, locale)}</div>)}
+                    </div>
+                    <div className="bg-cyan-50 p-2 rounded">
+                      <div className="font-medium text-cyan-700">{t('dashboard.feelsLikeMin')}</div>
+                      <div className="text-lg">{Number.isFinite(statsFelt.minTemp) ? `${statsFelt.minTemp.toFixed(1)} °C` : "—"}</div>
+                      {statsFelt.minTime && (<div className="text-xs text-gray-500">{formatDisplayLocale(statsFelt.minTime, locale)}</div>)}
+                    </div>
+                  </div>
+                )
               )}
             </div>
           );
