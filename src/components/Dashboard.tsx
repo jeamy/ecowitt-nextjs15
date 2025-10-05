@@ -1662,12 +1662,18 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
                   <div className="bg-rose-50 p-2 rounded">
                     <div className="font-medium text-rose-700">{t('dashboard.highestTemperature')}</div>
                     <div className="text-lg">{Number.isFinite(serverRangeStats.stats.temp.max) ? `${serverRangeStats.stats.temp.max.toFixed(1)} °C` : '—'}</div>
-                    {serverRangeStats.stats.temp.maxDate && (<div className="text-xs text-gray-500">{formatDisplayLocale(new Date(String(serverRangeStats.stats.temp.maxDate) + 'T12:00'), locale)}</div>)}
+                    {serverRangeStats.stats.temp.maxDate && (() => {
+                      const d = new Date(String(serverRangeStats.stats.temp.maxDate).replace(' ', 'T'));
+                      return !isNaN(d.getTime()) ? <div className="text-xs text-gray-500">{formatDisplayLocale(d, locale)}</div> : null;
+                    })()}
                   </div>
                   <div className="bg-indigo-50 p-2 rounded">
                     <div className="font-medium text-indigo-700">{t('dashboard.lowestTemperature')}</div>
                     <div className="text-lg">{Number.isFinite(serverRangeStats.stats.temp.min) ? `${serverRangeStats.stats.temp.min.toFixed(1)} °C` : '—'}</div>
-                    {serverRangeStats.stats.temp.minDate && (<div className="text-xs text-gray-500">{formatDisplayLocale(new Date(String(serverRangeStats.stats.temp.minDate) + 'T12:00'), locale)}</div>)}
+                    {serverRangeStats.stats.temp.minDate && (() => {
+                      const d = new Date(String(serverRangeStats.stats.temp.minDate).replace(' ', 'T'));
+                      return !isNaN(d.getTime()) ? <div className="text-xs text-gray-500">{formatDisplayLocale(d, locale)}</div> : null;
+                    })()}
                   </div>
                   <div className="bg-teal-50 p-2 rounded">
                     <div className="font-medium text-teal-700">{t('dashboard.average')}</div>
@@ -1874,10 +1880,12 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
           if (serverRangeStats?.stats?.wind && (isWind || isGust)) {
             const w = serverRangeStats.stats.wind;
             if (isWind && Number.isFinite(w.max)) {
-              stats = { max: w.max, min: NaN as any, maxTime: w.maxDate ? new Date(String(w.maxDate) + 'T12:00') : null, minTime: null };
+              const maxTime = w.maxDate ? (() => { const d = new Date(String(w.maxDate).replace(' ', 'T')); return !isNaN(d.getTime()) ? d : null; })() : null;
+              stats = { max: w.max, min: NaN as any, maxTime, minTime: null };
             }
             if (isGust && Number.isFinite(w.gustMax)) {
-              stats = { max: w.gustMax, min: NaN as any, maxTime: w.gustMaxDate ? new Date(String(w.gustMaxDate) + 'T12:00') : null, minTime: null };
+              const gustMaxTime = w.gustMaxDate ? (() => { const d = new Date(String(w.gustMaxDate).replace(' ', 'T')); return !isNaN(d.getTime()) ? d : null; })() : null;
+              stats = { max: w.gustMax, min: NaN as any, maxTime: gustMaxTime, minTime: null };
             }
           }
         }
