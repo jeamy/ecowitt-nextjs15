@@ -149,6 +149,11 @@ export async function queryDailyAggregatesInRange(
   const tempExprList = (mergedTempCandidates.length ? mergedTempCandidates : (cols.temp ? [cols.temp] : []))
     .map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
   const tExpr = tempExprList.length ? `COALESCE(${tempExprList.join(', ')})` : 'NULL';
+  
+  // Feels-like expression (optional)
+  const feelsList = (cols.feelsLikeCandidates && cols.feelsLikeCandidates.length ? cols.feelsLikeCandidates : (cols.feelsLike ? [cols.feelsLike] : []))
+    .map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
+  const feelsExpr = feelsList.length ? `COALESCE(${feelsList.join(', ')})` : 'NULL';
 
   const rainDailyExprList = (cols.dailyRainCandidates.length ? cols.dailyRainCandidates : [])
     .map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
@@ -176,6 +181,7 @@ export async function queryDailyAggregatesInRange(
     casted AS (
       SELECT ts,
         ${tExpr} AS t,
+        ${feelsExpr} AS tf,
         ${rainDailyExpr} AS rain_d,
         ${rainHourlyExpr} AS rain_h,
         ${rainGenericExpr} AS rain_g,
@@ -190,6 +196,8 @@ export async function queryDailyAggregatesInRange(
         max(t) AS tmax,
         min(t) AS tmin,
         avg(t) AS tavg,
+        max(tf) AS tfmax,
+        min(tf) AS tfmin,
         max(rain_d) AS rdaily,
         sum(rain_h) AS rhourly,
         sum(rain_g) AS rgeneric,
@@ -201,6 +209,7 @@ export async function queryDailyAggregatesInRange(
     )
     SELECT strftime(d, '%Y-%m-%d') AS day,
       tmax, tmin, tavg,
+      tfmax, tfmin,
       COALESCE(rdaily, rhourly, rgeneric) AS rain_day,
       wind_max, gust_max, wind_avg
     FROM daily
