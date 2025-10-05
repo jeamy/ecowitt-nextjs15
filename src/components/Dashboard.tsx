@@ -1044,8 +1044,10 @@ export default function Dashboard() {
         }
         // Serverseitige Bereichs-Statistiken
         if (!rs.ok || !rs.body || rs.body.ok === false) {
+          console.warn('[Dashboard] Range stats failed:', rs.body?.error);
           setRangeStats(null);
         } else {
+          console.log('[Dashboard] Range stats loaded:', rs.body);
           setRangeStats(rs.body);
         }
         // Kanal-Statistik optional
