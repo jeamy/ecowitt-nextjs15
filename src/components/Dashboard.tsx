@@ -157,12 +157,18 @@ function renderChannelCardCharts(
                   <div className="bg-orange-50 p-2 rounded">
                     <div className="font-medium text-orange-700">{t('dashboard.feelsLikeMax')}</div>
                     <div className="text-lg">{Number.isFinite(serverChannelStats.stats.feels.max) ? `${serverChannelStats.stats.feels.max.toFixed(1)} °C` : '—'}</div>
-                    {serverChannelStats.stats.feels.maxDate && (<div className="text-xs text-gray-500">{formatDisplayLocale(new Date(String(serverChannelStats.stats.feels.maxDate) + 'T12:00'), locale)}</div>)}
+                    {serverChannelStats.stats.feels.maxDate && (() => {
+                      const d = new Date(String(serverChannelStats.stats.feels.maxDate).replace(' ', 'T'));
+                      return !isNaN(d.getTime()) ? <div className="text-xs text-gray-500">{formatDisplayLocale(d, locale)}</div> : null;
+                    })()}
                   </div>
                   <div className="bg-cyan-50 p-2 rounded">
                     <div className="font-medium text-cyan-700">{t('dashboard.feelsLikeMin')}</div>
                     <div className="text-lg">{Number.isFinite(serverChannelStats.stats.feels.min) ? `${serverChannelStats.stats.feels.min.toFixed(1)} °C` : '—'}</div>
-                    {serverChannelStats.stats.feels.minDate && (<div className="text-xs text-gray-500">{formatDisplayLocale(new Date(String(serverChannelStats.stats.feels.minDate) + 'T12:00'), locale)}</div>)}
+                    {serverChannelStats.stats.feels.minDate && (() => {
+                      const d = new Date(String(serverChannelStats.stats.feels.minDate).replace(' ', 'T'));
+                      return !isNaN(d.getTime()) ? <div className="text-xs text-gray-500">{formatDisplayLocale(d, locale)}</div> : null;
+                    })()}
                   </div>
                 </div>
               ) : (
@@ -1701,12 +1707,18 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
                   <div className="bg-orange-50 p-2 rounded">
                     <div className="font-medium text-orange-700">{t('dashboard.feelsLikeMax')}</div>
                     <div className="text-lg">{Number.isFinite(serverRangeStats.stats.feels.max) ? `${serverRangeStats.stats.feels.max.toFixed(1)} °C` : '—'}</div>
-                    {serverRangeStats.stats.feels.maxDate && (<div className="text-xs text-gray-500">{formatDisplayLocale(new Date(String(serverRangeStats.stats.feels.maxDate) + 'T12:00'), locale)}</div>)}
+                    {serverRangeStats.stats.feels.maxDate && (() => {
+                      const d = new Date(String(serverRangeStats.stats.feels.maxDate).replace(' ', 'T'));
+                      return !isNaN(d.getTime()) ? <div className="text-xs text-gray-500">{formatDisplayLocale(d, locale)}</div> : null;
+                    })()}
                   </div>
                   <div className="bg-cyan-50 p-2 rounded">
                     <div className="font-medium text-cyan-700">{t('dashboard.feelsLikeMin')}</div>
                     <div className="text-lg">{Number.isFinite(serverRangeStats.stats.feels.min) ? `${serverRangeStats.stats.feels.min.toFixed(1)} °C` : '—'}</div>
-                    {serverRangeStats.stats.feels.minDate && (<div className="text-xs text-gray-500">{formatDisplayLocale(new Date(String(serverRangeStats.stats.feels.minDate) + 'T12:00'), locale)}</div>)}
+                    {serverRangeStats.stats.feels.minDate && (() => {
+                      const d = new Date(String(serverRangeStats.stats.feels.minDate).replace(' ', 'T'));
+                      return !isNaN(d.getTime()) ? <div className="text-xs text-gray-500">{formatDisplayLocale(d, locale)}</div> : null;
+                    })()}
                   </div>
                 </div>
               ) : (
