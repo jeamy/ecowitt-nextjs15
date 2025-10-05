@@ -111,7 +111,7 @@ async function queryDailyAggregates(parquetFiles: string[]) {
       FROM casted
       GROUP BY 1
     )
-    SELECT strftime(d, '%Y-%m-%d') AS day,
+    SELECT strftime(d, '%Y-%m-%d %H:%M:%S') AS day,
       tmax, tmin, tavg,
       tfmax, tfmin,
       COALESCE(rdaily, rhourly, rgeneric) AS rain_day,
@@ -207,7 +207,7 @@ export async function queryDailyAggregatesInRange(
       FROM casted
       GROUP BY 1
     )
-    SELECT strftime(d, '%Y-%m-%d') AS day,
+    SELECT strftime(d, '%Y-%m-%d %H:%M:%S') AS day,
       tmax, tmin, tavg,
       tfmax, tfmin,
       COALESCE(rdaily, rhourly, rgeneric) AS rain_day,

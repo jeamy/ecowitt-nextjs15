@@ -6,6 +6,7 @@ import { parseTimestamp, type Resolution } from "@/lib/time";
 import { getDuckConn } from "@/lib/db/duckdb";
 import { ensureMainParquetForMonth, ensureMainParquetsInRange } from "@/lib/db/ingest";
 import { discoverMainColumns, sqlNum, speedExprFor } from "@/lib/data/columns";
+import { queryDailyAggregatesInRange } from "@/lib/statistics";
 
 export const runtime = "nodejs";
 
@@ -38,17 +39,44 @@ export async function GET(req: Request) {
     try {
       let parquetFiles: string[] = [];
       let fileLabel = "";
+      let start: Date | undefined;
+      let end: Date | undefined;
+      
       if (month) {
         const pq = await ensureMainParquetForMonth(month);
         if (!pq) throw new Error("No Main (A) file found");
         parquetFiles = [pq];
         fileLabel = path.basename(pq);
+        // Parse month to date range for daily aggregation
+        if (resolution === "day") {
+          const y = parseInt(month.slice(0, 4));
+          const m = parseInt(month.slice(4, 6));
+          start = new Date(y, m - 1, 1, 0, 0, 0);
+          end = new Date(y, m, 0, 23, 59, 59);
+        }
       } else {
-        const start = startStr ? (parseTimestamp(startStr) || new Date(startStr)) : undefined;
-        const end = endStr ? (parseTimestamp(endStr) || new Date(endStr)) : undefined;
+        start = startStr ? (parseTimestamp(startStr) || new Date(startStr)) : undefined;
+        end = endStr ? (parseTimestamp(endStr) || new Date(endStr)) : undefined;
         parquetFiles = await ensureMainParquetsInRange(start, end);
         if (!parquetFiles.length) throw new Error("No Main (A) files in range");
         fileLabel = parquetFiles.map((p) => path.basename(p)).join(",");
+      }
+      
+      // For daily resolution, use properly aggregated daily data
+      if (resolution === "day") {
+        const dailyRows = await queryDailyAggregatesInRange(parquetFiles, start, end);
+        const header = ["time", "Temperatur Aussen(°C)", "Taupunkt(°C)", "Gefühlte Temperatur", "Niederschlag Tag(mm)", "Windgeschwindigkeit(km/h)", "Böengeschwindigkeit(km/h)"];
+        const rows = dailyRows.map((r: any) => ({
+          key: r.day,
+          time: r.day,
+          "Temperatur Aussen(°C)": r.tmax,
+          "Taupunkt(°C)": r.tmin, // Using tmin for dewpoint approximation
+          "Gefühlte Temperatur": r.tfmax,
+          "Niederschlag Tag(mm)": r.rain_day,
+          "Windgeschwindigkeit(km/h)": r.wind_max,
+          "Böengeschwindigkeit(km/h)": r.gust_max,
+        }));
+        return NextResponse.json({ file: fileLabel, header, rows }, { status: 200 });
       }
 
       const parquetPaths = parquetFiles.map((p) => p.replace(/\\/g, "/"));
@@ -97,9 +125,8 @@ export async function GET(req: Request) {
       ];
       for (const c of candidateGroups) pushCol(c);
 
-      // Build aggregation over bucket
+      // Build aggregation over bucket (day resolution already handled above)
       const bucketExpr =
-        resolution === "day" ? "date_trunc('day', ts)" :
         resolution === "hour" ? "date_trunc('hour', ts)" :
         "date_trunc('minute', ts)";
       const avgList = orderedCols.map((c) => {
