@@ -96,7 +96,7 @@ async function queryDailyAggregates(parquetFiles: string[]) {
     ),
     daily AS (
       SELECT
-        date_trunc('day', ts) AS d,
+        date_trunc('day', ts) + INTERVAL '12 hours' AS d,
         max(t) AS tmax,
         min(t) AS tmin,
         avg(t) AS tavg,
@@ -192,7 +192,7 @@ export async function queryDailyAggregatesInRange(
     ),
     daily AS (
       SELECT
-        date_trunc('day', ts) AS d,
+        date_trunc('day', ts) + INTERVAL '12 hours' AS d,
         max(t) AS tmax,
         min(t) AS tmin,
         avg(t) AS tavg,
