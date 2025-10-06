@@ -72,13 +72,17 @@ export async function GET(req: Request) {
         const descReader = await conn.runAndReadAll(describeSql);
         const cols: any[] = descReader.getRowObjects();
         const allNames = cols.map((r: any) => String(r.column_name || r.ColumnName || r.column || ""));
+        // Include both numeric columns AND varchar columns that look like sensor data
         const typedNumericCols = cols
           .filter((r: any) => {
             const t = String(r.column_type || r.Type || r.type || "").toUpperCase();
-            return t && !t.includes("VARCHAR") && !t.includes("BOOLEAN") && t !== "";
+            const name = String(r.column_name || r.ColumnName || r.column || "");
+            const isNumericType = t && !t.includes("BOOLEAN") && t !== "" && !t.includes("VARCHAR");
+            // Include VARCHAR columns if they look like sensor data (have units in parentheses)
+            const looksLikeSensor = name.includes("(") && name.includes(")") && name !== "Zeit" && name !== "Time";
+            return (isNumericType || looksLikeSensor) && name && name !== "ts" && name !== "Time" && name !== "Zeit";
           })
-          .map((r: any) => String(r.column_name || r.ColumnName || r.column || ""))
-          .filter((c) => c && c !== "ts" && c !== "Time" && c !== "Zeit");
+          .map((r: any) => String(r.column_name || r.ColumnName || r.column || ""));
 
         const seen = new Set<string>();
         const orderedCols: string[] = [];
@@ -89,9 +93,6 @@ export async function GET(req: Request) {
           seen.add(name);
           orderedCols.push(name);
         };
-
-        console.log(`[/api/data/main] Month: ${month}, All columns:`, allNames);
-        console.log(`[/api/data/main] Numeric columns:`, typedNumericCols);
 
         pushCol(colsHints.temp);
         for (const c of typedNumericCols) pushCol(c);
@@ -112,8 +113,6 @@ export async function GET(req: Request) {
           ...colsHints.gustCandidates,
         ];
         for (const c of candidateGroups) pushCol(c);
-
-        console.log(`[/api/data/main] Final orderedCols:`, orderedCols);
 
         // Use max for temperatures and wind/gust, avg for others
         const aggList = orderedCols.map((c) => {
@@ -163,13 +162,17 @@ export async function GET(req: Request) {
       const descReader = await conn.runAndReadAll(describeSql);
       const cols: any[] = descReader.getRowObjects();
       const allNames = cols.map((r: any) => String(r.column_name || r.ColumnName || r.column || ""));
+      // Include both numeric columns AND varchar columns that look like sensor data
       const typedNumericCols = cols
         .filter((r: any) => {
           const t = String(r.column_type || r.Type || r.type || "").toUpperCase();
-          return t && !t.includes("VARCHAR") && !t.includes("BOOLEAN") && t !== "";
+          const name = String(r.column_name || r.ColumnName || r.column || "");
+          const isNumericType = t && !t.includes("BOOLEAN") && t !== "" && !t.includes("VARCHAR");
+          // Include VARCHAR columns if they look like sensor data (have units in parentheses)
+          const looksLikeSensor = name.includes("(") && name.includes(")") && name !== "Zeit" && name !== "Time";
+          return (isNumericType || looksLikeSensor) && name && name !== "ts" && name !== "Time" && name !== "Zeit";
         })
-        .map((r: any) => String(r.column_name || r.ColumnName || r.column || ""))
-        .filter((c) => c && c !== "ts" && c !== "Time" && c !== "Zeit");
+        .map((r: any) => String(r.column_name || r.ColumnName || r.column || ""));
 
       const seen = new Set<string>();
       const orderedCols: string[] = [];
