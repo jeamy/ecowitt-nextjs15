@@ -90,6 +90,9 @@ export async function GET(req: Request) {
           orderedCols.push(name);
         };
 
+        console.log(`[/api/data/main] Month: ${month}, All columns:`, allNames);
+        console.log(`[/api/data/main] Numeric columns:`, typedNumericCols);
+
         pushCol(colsHints.temp);
         for (const c of typedNumericCols) pushCol(c);
         const candidateGroups: (string | null)[] = [
@@ -109,6 +112,8 @@ export async function GET(req: Request) {
           ...colsHints.gustCandidates,
         ];
         for (const c of candidateGroups) pushCol(c);
+
+        console.log(`[/api/data/main] Final orderedCols:`, orderedCols);
 
         // Use max for temperatures and wind/gust, avg for others
         const aggList = orderedCols.map((c) => {
