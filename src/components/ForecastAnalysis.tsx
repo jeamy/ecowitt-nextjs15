@@ -11,6 +11,7 @@ interface ForecastAccuracyData {
     accuracyStats: AccuracyStats;
   };
   generated: string;
+  isDemo?: boolean;
 }
 
 interface DailyComparison {
@@ -50,7 +51,7 @@ export default function ForecastAnalysis() {
   const [stationId, setStationId] = useState("");
   const [days, setDays] = useState(30);
   const [data, setData] = useState<ForecastAccuracyData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start with loading true
   const [error, setError] = useState<string | null>(null);
   const [stations, setStations] = useState<Record<string, any[]>>({});
 
@@ -64,10 +65,14 @@ export default function ForecastAnalysis() {
       const response = await fetch("/api/config/forecast-station");
       if (response.ok) {
         const data = await response.json();
+        console.log('[ForecastAnalysis] Loaded default station:', data.stationId);
         setStationId(data.stationId);
+      } else {
+        console.log('[ForecastAnalysis] Failed to load default station, using fallback');
+        setStationId("11035"); // Fallback: Wien Hohe Warte
       }
     } catch (err) {
-      console.error("Failed to load default station:", err);
+      console.error("[ForecastAnalysis] Failed to load default station:", err);
       setStationId("11035"); // Fallback: Wien Hohe Warte
     }
   };
@@ -89,21 +94,156 @@ export default function ForecastAnalysis() {
   };
 
   const fetchAnalysis = async () => {
+    console.log(`[ForecastAnalysis] Fetching analysis for station ${stationId}, days ${days}`);
     setLoading(true);
     setError(null);
     
     try {
-      const response = await fetch(`/api/forecast/compare?stationId=${stationId}&days=${days}`);
+      // Try to fetch stored analysis first
+      const response = await fetch(`/api/forecast/analysis?stationId=${stationId}&days=${days}`);
+      console.log(`[ForecastAnalysis] API response status: ${response.status}`);
+      
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`[ForecastAnalysis] API error: ${response.status}`, errorText);
+        // Show demo data on error
+        setData(generateDemoData(stationId, days));
+        setLoading(false);
+        return;
       }
+      
       const analysisData = await response.json();
-      setData(analysisData);
+      console.log(`[ForecastAnalysis] Received data:`, analysisData);
+      
+      // Check if we have any data
+      if (!analysisData.dailyAnalysis || analysisData.dailyAnalysis.length === 0 || !analysisData.hasData) {
+        console.log('[ForecastAnalysis] No analysis data available, showing demo data');
+        // Show demo data if no real data available
+        setData(generateDemoData(stationId, days));
+        setLoading(false);
+        return;
+      }
+      
+      // Transform to match existing data structure
+      setData({
+        stationId: analysisData.stationId,
+        days: analysisData.days,
+        data: {
+          dailyComparisons: analysisData.dailyAnalysis.map((day: any) => ({
+            date: day.date,
+            actual: day.forecasts[0]?.actual || {},
+            forecasts: day.forecasts.reduce((acc: any, f: any) => {
+              acc[f.source] = f.forecast;
+              return acc;
+            }, {}),
+            errors: day.forecasts.reduce((acc: any, f: any) => {
+              acc[f.source] = {
+                tempMinError: f.errors.tempMin,
+                tempMaxError: f.errors.tempMax,
+                precipitationError: f.errors.precipitation,
+                windSpeedError: f.errors.windSpeed
+              };
+              return acc;
+            }, {})
+          })),
+          accuracyStats: analysisData.accuracyStats
+        },
+        generated: analysisData.generated,
+        isDemo: false
+      });
     } catch (err: any) {
-      setError(err.message);
+      console.error('[ForecastAnalysis] Fetch error:', err);
+      // On error, show demo data
+      setData(generateDemoData(stationId || "11035", days));
+      setLoading(false);
     } finally {
       setLoading(false);
     }
+  };
+
+  const generateDemoData = (stationId: string, days: number) => {
+    const dailyComparisons = [];
+    const sources = ['geosphere', 'openweather', 'meteoblue', 'openmeteo'];
+    
+    // Generate demo data for the last 7 days
+    for (let i = 1; i <= Math.min(days, 7); i++) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      
+      const actual = {
+        tempMin: 8 + Math.random() * 5,
+        tempMax: 18 + Math.random() * 5,
+        precipitation: Math.random() > 0.7 ? Math.random() * 10 : 0,
+        windSpeed: 10 + Math.random() * 15
+      };
+      
+      const forecasts: any = {};
+      const errors: any = {};
+      
+      sources.forEach(source => {
+        const tempMinError = Math.random() * 3;
+        const tempMaxError = Math.random() * 3;
+        const precipError = Math.random() * 5;
+        const windError = Math.random() * 8;
+        
+        forecasts[source] = {
+          tempMin: actual.tempMin + (Math.random() > 0.5 ? tempMinError : -tempMinError),
+          tempMax: actual.tempMax + (Math.random() > 0.5 ? tempMaxError : -tempMaxError),
+          precipitation: Math.max(0, actual.precipitation + (Math.random() > 0.5 ? precipError : -precipError)),
+          windSpeed: actual.windSpeed + (Math.random() > 0.5 ? windError : -windError)
+        };
+        
+        errors[source] = {
+          tempMinError,
+          tempMaxError,
+          precipitationError: precipError,
+          windSpeedError: windError
+        };
+      });
+      
+      dailyComparisons.push({
+        date: dateStr,
+        actual,
+        forecasts,
+        errors
+      });
+    }
+    
+    // Calculate demo accuracy stats
+    const accuracyStats: any = {};
+    sources.forEach(source => {
+      accuracyStats[source] = {
+        sampleSize: dailyComparisons.length,
+        tempMin: {
+          mae: 1.5 + Math.random() * 1.5,
+          rmse: 2.0 + Math.random() * 2.0
+        },
+        tempMax: {
+          mae: 1.8 + Math.random() * 1.5,
+          rmse: 2.3 + Math.random() * 2.0
+        },
+        precipitation: {
+          mae: 2.5 + Math.random() * 2.0,
+          rmse: 3.5 + Math.random() * 2.5
+        },
+        windSpeed: {
+          mae: 4.0 + Math.random() * 3.0,
+          rmse: 5.5 + Math.random() * 3.5
+        }
+      };
+    });
+    
+    return {
+      stationId,
+      days,
+      data: {
+        dailyComparisons,
+        accuracyStats
+      },
+      generated: new Date().toISOString(),
+      isDemo: true
+    };
   };
 
   const getSourceName = (source: string) => {
@@ -127,6 +267,22 @@ export default function ForecastAnalysis() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Demo Data Warning */}
+      {data.isDemo && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">ℹ️</span>
+            <div>
+              <h3 className="font-semibold text-yellow-800">Demo-Daten</h3>
+              <p className="text-sm text-yellow-700">
+                Es sind noch keine echten Analyse-Daten verfügbar. Die angezeigten Daten sind Beispieldaten.
+                Echte Analysen werden täglich um Mitternacht berechnet und hier angezeigt.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Controls */}
       <div className="flex flex-wrap gap-4 items-end bg-white p-4 rounded-lg shadow">
         <div>
@@ -204,13 +360,15 @@ export default function ForecastAnalysis() {
 
       {/* Detailed Daily Comparisons */}
       <div className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-xl font-bold mb-4">Tägliche Vergleiche (letzten 10 Tage)</h2>
-        <div className="space-y-4 max-h-96 overflow-y-auto">
-          {data.data.dailyComparisons.slice(0, 10).map((comparison, index) => (
-            <div key={index} className="border rounded p-4">
-              <h3 className="font-semibold mb-2">{new Date(comparison.date).toLocaleDateString('de-DE')}</h3>
+        <h2 className="text-xl font-bold mb-4">Tägliche Vergleiche</h2>
+        <div className="space-y-2">
+          {data.data.dailyComparisons.map((comparison, index) => (
+            <details key={index} className="border rounded">
+              <summary className="cursor-pointer p-4 hover:bg-gray-50 font-semibold">
+                {new Date(comparison.date).toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              </summary>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-4 pt-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {Object.entries(comparison.forecasts).map(([source, forecast]) => {
                   const errors = comparison.errors[source];
                   return (
@@ -254,7 +412,7 @@ export default function ForecastAnalysis() {
                   );
                 })}
               </div>
-            </div>
+            </details>
           ))}
         </div>
       </div>

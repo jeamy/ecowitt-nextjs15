@@ -299,11 +299,13 @@ The homepage is split into four tabs:
   - Uses `FORECAST_STATION_ID` as default station if no station selected
   - Last selected station is saved in localStorage
 - **Analyse (Analysis)**: Forecast accuracy analysis comparing predictions with actual weather data.
-  - Compares stored forecasts from all 4 sources with real-time measurements
+  - **Automatic daily analysis at midnight (00:00)**: Compares yesterday's forecasts with actual weather data
+  - **Persistent storage**: Analysis results stored in DuckDB `forecast_analysis` table
   - Shows Mean Absolute Error (MAE) and Root Mean Square Error (RMSE) for temperature, precipitation, and wind
-  - Daily comparison details with error highlighting
+  - Daily comparison details with error highlighting for all 4 forecast sources
   - Configurable time range (7-60 days) and station selection
-  - Automatically stores forecasts daily via server background poller (runs on startup + every 24h)
+  - **Demo data shown if no real analysis available yet** (first analysis runs after midnight)
+  - Automatically stores forecasts daily via server background poller (runs at midnight, not every 24h)
   - Station ID configured via `FORECAST_STATION_ID` environment variable (default: 11035 - Wien)
   - Same station ID is used for all forecast sources (Geosphere, Meteoblue, Open-Meteo, OpenWeatherMap)
   - Color-coded display: red for max temperature, blue for min temperature and precipitation
@@ -500,7 +502,13 @@ const rt = await fetch('/api/rt/last').then(r => r.json());
 
 ### Forecast Storage & Analysis
 
-Forecasts are automatically stored daily by the server background poller (configured via `FORECAST_STATION_ID` in `.env`).
+Forecasts are automatically stored **daily at midnight (00:00)** by the server background poller (configured via `FORECAST_STATION_ID` in `.env`). Analysis is calculated automatically after storage.
+
+- Get stored analysis results (GET) **[Recommended]**
+
+```bash
+curl 'http://localhost:3000/api/forecast/analysis?stationId=11035&days=30'
+```
 
 - Manually store forecasts for a station (POST)
 
@@ -510,11 +518,10 @@ curl -X POST 'http://localhost:3000/api/forecast/store' \
   -d '{"stationId": "11035"}'
 ```
 
-- Compare forecasts with actual data (GET)
+- Compare forecasts with actual data on-demand (GET) **[Legacy]**
 
 ```bash
 curl 'http://localhost:3000/api/forecast/compare?stationId=11035&days=30'
-curl 'http://localhost:3000/api/forecast/compare?stationId=11230&days=7'
 ```
 
 Response format for comparison:

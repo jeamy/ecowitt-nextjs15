@@ -36,7 +36,6 @@ export async function POST(req: Request) {
     // Create forecast table if not exists
     await conn.run(`
       CREATE TABLE IF NOT EXISTS forecasts (
-        id INTEGER PRIMARY KEY,
         storage_date DATE NOT NULL,
         station_id VARCHAR(50) NOT NULL,
         forecast_date DATE NOT NULL,
@@ -47,7 +46,7 @@ export async function POST(req: Request) {
         wind_speed DOUBLE,
         wind_gust DOUBLE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(storage_date, station_id, forecast_date, source)
+        PRIMARY KEY(storage_date, station_id, forecast_date, source)
       )
     `);
 
@@ -60,9 +59,12 @@ export async function POST(req: Request) {
       for (const day of dailyData) {
         insertPromises.push(
           conn.run(`
-            INSERT OR REPLACE INTO forecasts 
+            INSERT INTO forecasts 
             (storage_date, station_id, forecast_date, source, temp_min, temp_max, precipitation, wind_speed)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (storage_date, station_id, forecast_date, source)
+            DO UPDATE SET temp_min = EXCLUDED.temp_min, temp_max = EXCLUDED.temp_max, 
+                          precipitation = EXCLUDED.precipitation, wind_speed = EXCLUDED.wind_speed
           `, [storageDate, stationId, day.date, 'geosphere', day.tempMin, day.tempMax, day.precipitation, day.windSpeed])
         );
       }
@@ -73,9 +75,13 @@ export async function POST(req: Request) {
       for (const day of openweatherData.value.forecast) {
         insertPromises.push(
           conn.run(`
-            INSERT OR REPLACE INTO forecasts 
+            INSERT INTO forecasts 
             (storage_date, station_id, forecast_date, source, temp_min, temp_max, precipitation, wind_speed, wind_gust)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (storage_date, station_id, forecast_date, source)
+            DO UPDATE SET temp_min = EXCLUDED.temp_min, temp_max = EXCLUDED.temp_max, 
+                          precipitation = EXCLUDED.precipitation, wind_speed = EXCLUDED.wind_speed,
+                          wind_gust = EXCLUDED.wind_gust
           `, [storageDate, stationId, day.date, 'openweather', day.tempMin, day.tempMax, day.precipitation, day.windSpeed, day.windGust])
         );
       }
@@ -86,9 +92,13 @@ export async function POST(req: Request) {
       for (const day of meteoblueData.value.forecast) {
         insertPromises.push(
           conn.run(`
-            INSERT OR REPLACE INTO forecasts 
+            INSERT INTO forecasts 
             (storage_date, station_id, forecast_date, source, temp_min, temp_max, precipitation, wind_speed, wind_gust)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (storage_date, station_id, forecast_date, source)
+            DO UPDATE SET temp_min = EXCLUDED.temp_min, temp_max = EXCLUDED.temp_max, 
+                          precipitation = EXCLUDED.precipitation, wind_speed = EXCLUDED.wind_speed,
+                          wind_gust = EXCLUDED.wind_gust
           `, [storageDate, stationId, day.date, 'meteoblue', day.tempMin, day.tempMax, day.precipitation, day.windSpeed, day.windGust])
         );
       }
@@ -99,9 +109,13 @@ export async function POST(req: Request) {
       for (const day of openmeteoData.value.forecast) {
         insertPromises.push(
           conn.run(`
-            INSERT OR REPLACE INTO forecasts 
+            INSERT INTO forecasts 
             (storage_date, station_id, forecast_date, source, temp_min, temp_max, precipitation, wind_speed, wind_gust)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (storage_date, station_id, forecast_date, source)
+            DO UPDATE SET temp_min = EXCLUDED.temp_min, temp_max = EXCLUDED.temp_max, 
+                          precipitation = EXCLUDED.precipitation, wind_speed = EXCLUDED.wind_speed,
+                          wind_gust = EXCLUDED.wind_gust
           `, [storageDate, stationId, day.date, 'openmeteo', day.tempMin, day.tempMax, day.precipitation, day.windSpeed, day.windGust])
         );
       }
