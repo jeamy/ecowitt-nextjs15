@@ -3,6 +3,7 @@ import { getDuckConn } from "@/lib/db/duckdb";
 
 interface TableInfo {
   tableName: string;
+  tableType: string;
   rowCount: number;
   sampleData: Record<string, any>[];
 }
@@ -31,14 +32,20 @@ export async function GET() {
   try {
     const conn = await getDuckConn();
     
-    // Get all tables (DuckDB uses INFORMATION_SCHEMA)
-    const tablesResult = await conn.runAndReadAll("SELECT table_name as name FROM information_schema.tables WHERE table_schema = 'main';");
+    // Get all tables and views (DuckDB uses INFORMATION_SCHEMA)
+    const tablesResult = await conn.runAndReadAll(`
+      SELECT table_name as name, table_type 
+      FROM information_schema.tables 
+      WHERE table_schema = 'main'
+      ORDER BY table_name
+    `);
     const tables = tablesResult.getRowObjects();
     
     const tableInfo: TableInfo[] = [];
     
     for (const table of tables) {
       const name = String(table.name);
+      const type = String(table.table_type);
       
       // Get row count
       const countResult = await conn.runAndReadAll(`SELECT COUNT(*) as count FROM ${name}`);
@@ -47,6 +54,7 @@ export async function GET() {
       
       const info: TableInfo = {
         tableName: name,
+        tableType: type,
         rowCount: count,
         sampleData: []
       };
