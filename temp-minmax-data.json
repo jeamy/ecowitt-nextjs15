@@ -8,9 +8,9 @@
       "maxTime": "2025-11-02T13:19:45.681Z"
     },
     "outdoor": {
-      "min": 14.8,
+      "min": 14.7,
       "max": 17.3,
-      "minTime": "2025-11-02T15:06:36.784Z",
+      "minTime": "2025-11-02T15:11:36.657Z",
       "maxTime": "2025-11-02T13:19:45.681Z"
     },
     "temp_and_humidity_ch1": {
@@ -20,9 +20,9 @@
       "maxTime": "2025-11-02T13:28:28.497Z"
     },
     "temp_and_humidity_ch2": {
-      "min": 20.6,
+      "min": 20.5,
       "max": 20.8,
-      "minTime": "2025-11-02T13:43:27.628Z",
+      "minTime": "2025-11-02T15:11:36.657Z",
       "maxTime": "2025-11-02T14:21:49.969Z"
     },
     "temp_and_humidity_ch3": {

@@ -1,5 +1,9 @@
 // Note: avoid strict typing here so we can use keys supported by the current Next version
 const nextConfig = {
+  // Turbopack configuration (Next.js 16+)
+  // Empty config to acknowledge Turbopack usage and silence migration warning
+  turbopack: {},
+  
   // Ensure native DuckDB modules are treated as externals in the server runtime
   // Note: experimental.serverComponentsExternalPackages was moved in Next.js
   // Use serverExternalPackages instead (see below).
