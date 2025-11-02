@@ -4,7 +4,8 @@
     "graphics": "Graphics",
     "saved": "Saved Data",
     "statistics": "Statistics",
-    "forecast": "Forecast"
+    "forecast": "Forecast",
+    "analysis": "Analysis"
   },
   "statuses": {
     "lastUpdate": "Last update:",

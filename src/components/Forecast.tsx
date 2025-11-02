@@ -156,19 +156,34 @@ export default function Forecast() {
         const data = await response.json();
         setStations(data.stations);
         
-        // Load last selected station from localStorage
+        // Load last selected station from localStorage, or use default from env
         const lastSelected = localStorage.getItem("forecastStation");
-        if (lastSelected && data.stations) {
-          // Verify the station still exists
+        let stationToUse = lastSelected;
+        
+        // If no station in localStorage, fetch default from server
+        if (!stationToUse) {
+          try {
+            const configResponse = await fetch("/api/config/forecast-station");
+            if (configResponse.ok) {
+              const configData = await configResponse.json();
+              stationToUse = configData.stationId;
+            }
+          } catch (err) {
+            console.error("Error loading default station:", err);
+          }
+        }
+        
+        if (stationToUse && data.stations) {
+          // Verify the station exists
           let stationExists = false;
           for (const state in data.stations) {
-            if (data.stations[state].some((station: Station) => station.id === lastSelected)) {
+            if (data.stations[state].some((station: Station) => station.id === stationToUse)) {
               stationExists = true;
               break;
             }
           }
           if (stationExists) {
-            setSelectedStation(lastSelected);
+            setSelectedStation(stationToUse);
           }
         }
       } catch (err) {

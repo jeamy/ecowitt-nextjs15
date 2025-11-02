@@ -296,7 +296,16 @@ The homepage is split into four tabs:
     - Uses free 5 Day / 3 Hour Forecast API (aggregated to daily)
     - Requires `OPENWEATHER_API_KEY` in `.env` (free API key from openweathermap.org)
   - Station selection dropdown grouped by Austrian states (Bundesländer)
+  - Uses `FORECAST_STATION_ID` as default station if no station selected
   - Last selected station is saved in localStorage
+- **Analyse (Analysis)**: Forecast accuracy analysis comparing predictions with actual weather data.
+  - Compares stored forecasts from all 4 sources with real-time measurements
+  - Shows Mean Absolute Error (MAE) and Root Mean Square Error (RMSE) for temperature, precipitation, and wind
+  - Daily comparison details with error highlighting
+  - Configurable time range (7-60 days) and station selection
+  - Automatically stores forecasts daily via server background poller (runs on startup + every 24h)
+  - Station ID configured via `FORECAST_STATION_ID` environment variable (default: 11035 - Wien)
+  - Same station ID is used for all forecast sources (Geosphere, Meteoblue, Open-Meteo, OpenWeatherMap)
   - Color-coded display: red for max temperature, blue for min temperature and precipitation
 
 ### Backend Realtime Processing
@@ -487,6 +496,92 @@ curl 'http://localhost:3000/api/rt?all=1'
 
 ```ts
 const rt = await fetch('/api/rt/last').then(r => r.json());
+```
+
+### Forecast Storage & Analysis
+
+Forecasts are automatically stored daily by the server background poller (configured via `FORECAST_STATION_ID` in `.env`).
+
+- Manually store forecasts for a station (POST)
+
+```bash
+curl -X POST 'http://localhost:3000/api/forecast/store' \
+  -H 'Content-Type: application/json' \
+  -d '{"stationId": "11035"}'
+```
+
+- Compare forecasts with actual data (GET)
+
+```bash
+curl 'http://localhost:3000/api/forecast/compare?stationId=11035&days=30'
+curl 'http://localhost:3000/api/forecast/compare?stationId=11230&days=7'
+```
+
+Response format for comparison:
+
+```json
+{
+  "stationId": "11035",
+  "days": 30,
+  "data": {
+    "dailyComparisons": [
+      {
+        "date": "2025-01-15",
+        "actual": {
+          "tempMin": -2.3,
+          "tempMax": 4.1,
+          "precipitation": 0.0,
+          "windSpeed": 12.5
+        },
+        "forecasts": {
+          "geosphere": {
+            "tempMin": -1.8,
+            "tempMax": 3.9,
+            "precipitation": 0.2,
+            "windSpeed": 11.2
+          },
+          "openweather": {
+            "tempMin": -2.1,
+            "tempMax": 4.3,
+            "precipitation": 0.0,
+            "windSpeed": 13.1
+          }
+        },
+        "errors": {
+          "geosphere": {
+            "tempMinError": 0.5,
+            "tempMaxError": 0.2,
+            "precipitationError": 0.2,
+            "windSpeedError": 1.3
+          },
+          "openweather": {
+            "tempMinError": 0.2,
+            "tempMaxError": 0.2,
+            "precipitationError": 0.0,
+            "windSpeedError": 0.6
+          }
+        }
+      }
+    ],
+    "accuracyStats": {
+      "geosphere": {
+        "sampleSize": 25,
+        "tempMin": { "mae": 0.8, "rmse": 1.1 },
+        "tempMax": { "mae": 0.7, "rmse": 0.9 },
+        "precipitation": { "mae": 0.3, "rmse": 0.5 },
+        "windSpeed": { "mae": 2.1, "rmse": 2.8 }
+      },
+      "openweather": {
+        "sampleSize": 25,
+        "tempMin": { "mae": 0.6, "rmse": 0.8 },
+        "tempMax": { "mae": 0.5, "rmse": 0.7 },
+        "precipitation": { "mae": 0.2, "rmse": 0.4 },
+        "windSpeed": { "mae": 1.8, "rmse": 2.3 }
+      }
+    }
+  },
+  "generated": "2025-01-16T10:30:00.000Z"
+}
 ```
 
 ### Data (CSV/DuckDB-backed)

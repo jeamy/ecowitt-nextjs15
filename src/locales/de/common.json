@@ -4,7 +4,8 @@
     "graphics": "Grafik",
     "saved": "Gespeicherte Daten",
     "statistics": "Statistik",
-    "forecast": "Prognose"
+    "forecast": "Prognose",
+    "analysis": "Analyse"
   },
   "statuses": {
     "lastUpdate": "Letzte Aktualisierung:",
