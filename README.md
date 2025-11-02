@@ -140,17 +140,12 @@ Names appear in the dashboard (labels/options). Undefined channels fall back to 
 - `GET /api/config/channels`
   - Returns `channels.json`.
 
-- Forecast (Geosphere API + OpenWeatherMap + Meteoblue)
+- Forecast (Geosphere API + Meteoblue + Open-Meteo + OpenWeatherMap)
   - `GET /api/forecast?action=stations`
     - Returns TAWES weather stations grouped by Austrian states.
   - `GET /api/forecast?action=forecast&stationId=<ID>`
     - Returns temperature, precipitation, and wind forecast for the specified station (next ~60 hours).
     - Data source: Geosphere Austria ensemble forecast API (C-LAEF model).
-  - `GET /api/forecast?action=openweather&stationId=<ID>`
-    - Returns 5-day daily forecast for the specified station location.
-    - Data source: OpenWeatherMap 5 Day / 3 Hour Forecast API (FREE).
-    - Aggregates 3-hour forecasts into daily summaries.
-    - Requires `OPENWEATHER_API_KEY` environment variable.
   - `GET /api/forecast?action=meteoblue&stationId=<ID>`
     - Returns 7-day daily forecast for the specified station location.
     - Data source: Meteoblue basic-day package (FREE for non-commercial use).
@@ -160,8 +155,18 @@ Names appear in the dashboard (labels/options). Undefined channels fall back to 
     - Data source: Meteoblue meteogram image API (FREE for non-commercial use).
     - Returns WebP image format.
     - Requires `METEOBLUE_API_KEY` environment variable.
+  - `GET /api/forecast?action=openmeteo&stationId=<ID>`
+    - Returns 7-day daily forecast for the specified station location.
+    - Data source: Open-Meteo DWD ICON API (FREE, no API key required).
+    - Uses DWD ICON model for Central Europe with high accuracy.
+    - No registration or API key needed.
+  - `GET /api/forecast?action=openweather&stationId=<ID>`
+    - Returns 5-day daily forecast for the specified station location.
+    - Data source: OpenWeatherMap 5 Day / 3 Hour Forecast API (FREE).
+    - Aggregates 3-hour forecasts into daily summaries.
+    - Requires `OPENWEATHER_API_KEY` environment variable.
 
-All API routes run in the Node.js runtime and read from the local filesystem (except forecast, which fetches from external Geosphere API).
+All API routes run in the Node.js runtime and read from the local filesystem (except forecast, which fetches from external APIs: Geosphere, Meteoblue, Open-Meteo, and OpenWeatherMap).
 
 ### Statistics (precomputed)
 
@@ -270,21 +275,26 @@ The homepage is split into four tabs:
   - Optional global time range: enable “Ausgewählten Zeitraum verwenden” to pick start/end and query across months.
   - Charts are interactive (zoom/pan/reset) and labels are localized.
   - Channel names are configurable via `src/config/channels.json`.
-- **Prognose (Forecast)**: Triple weather forecast display from three independent sources.
+- **Prognose (Forecast)**: Quad weather forecast display from four independent sources.
   - **Geosphere Austria** 🇦🇹: Short-term forecast (~2.5 days / 60 hours)
     - Temperature (min/max/avg), precipitation, and wind speed
     - Data source: Geosphere API ensemble forecast (C-LAEF model) with 1-hour resolution
-  - **OpenWeatherMap** 🌍: Extended 5-day forecast (FREE API)
-    - Temperature (min/max/day), precipitation with probability, wind speed and gusts
-    - Weather icons and descriptions
-    - Uses free 5 Day / 3 Hour Forecast API (aggregated to daily)
-    - Requires `OPENWEATHER_API_KEY` in `.env` (free API key from openweathermap.org)
   - **Meteoblue** 🇨🇭: Extended 7-day forecast + 14-day meteogram (FREE API for non-commercial use)
     - Temperature (min/max/mean), precipitation, wind speed and gusts
     - Weather pictograms from Meteoblue
     - Detailed 14-day meteogram visualization with hourly data
     - Uses free basic-day package and meteogram image API
     - Requires `METEOBLUE_API_KEY` in `.env` (free API key from meteoblue.com)
+  - **Open-Meteo DWD** 🌍: Extended 7-day forecast (FREE, no API key required)
+    - Temperature (min/max/mean), precipitation, wind speed and gusts
+    - WMO weather codes with emoji representation
+    - Uses DWD ICON model for Central Europe with high accuracy
+    - No registration or API key needed - completely free
+  - **OpenWeatherMap** 🌍: Extended 5-day forecast (FREE API)
+    - Temperature (min/max/day), precipitation with probability, wind speed and gusts
+    - Weather icons and descriptions
+    - Uses free 5 Day / 3 Hour Forecast API (aggregated to daily)
+    - Requires `OPENWEATHER_API_KEY` in `.env` (free API key from openweathermap.org)
   - Station selection dropdown grouped by Austrian states (Bundesländer)
   - Last selected station is saved in localStorage
   - Color-coded display: red for max temperature, blue for min temperature and precipitation
@@ -515,15 +525,16 @@ const json = await res.json();
 curl 'http://localhost:3000/api/config/channels'
 ```
 
-- Forecast (Geosphere API + OpenWeatherMap + Meteoblue)
+- Forecast (Geosphere API + Meteoblue + Open-Meteo + OpenWeatherMap)
 
 ```bash
 curl 'http://localhost:3000/api/forecast?action=stations'
 curl 'http://localhost:3000/api/forecast?action=forecast&stationId=11035'
-curl 'http://localhost:3000/api/forecast?action=openweather&stationId=11035'
 curl 'http://localhost:3000/api/forecast?action=meteoblue&stationId=11035'
 # Get meteogram image (returns WebP image)
 curl 'http://localhost:3000/api/forecast?action=meteogram&stationId=11035' > meteogram.webp
+curl 'http://localhost:3000/api/forecast?action=openmeteo&stationId=11035'
+curl 'http://localhost:3000/api/forecast?action=openweather&stationId=11035'
 ```
 
 ## Troubleshooting

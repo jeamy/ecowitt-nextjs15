@@ -304,6 +304,69 @@ export async function GET(req: Request) {
       }
 
       return NextResponse.json({ forecast: dailyForecast }, { status: 200 });
+    } else if (action === "openmeteo") {
+      const stationId = searchParams.get("stationId");
+      if (!stationId) {
+        return NextResponse.json({ error: "stationId parameter is required" }, { status: 400 });
+      }
+
+      // First get station details for coordinates
+      const stationsResponse = await fetch(TAWES_STATIONS_ENDPOINT);
+      if (!stationsResponse.ok) {
+        throw new Error(`Failed to fetch stations: ${stationsResponse.status} ${stationsResponse.statusText}`);
+      }
+
+      const stationsData = await stationsResponse.json();
+      const station = stationsData.stations.find((s: any) => s.id === stationId);
+      
+      if (!station) {
+        return NextResponse.json({ error: "Station not found" }, { status: 404 });
+      }
+
+      const lat = station.lat;
+      const lon = station.lon;
+
+      // Fetch 7-day forecast from Open-Meteo DWD API (FREE, no API key required)
+      // Using DWD ICON model for Central Europe
+      const omUrl = `https://api.open-meteo.com/v1/dwd-icon?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum,windspeed_10m_max,windgusts_10m_max,weathercode&timezone=Europe%2FBerlin&forecast_days=7`;
+      const omResponse = await fetch(omUrl);
+      
+      if (!omResponse.ok) {
+        throw new Error(`Failed to fetch Open-Meteo forecast: ${omResponse.status} ${omResponse.statusText}`);
+      }
+
+      const omData = await omResponse.json();
+      
+      // Process Open-Meteo daily forecast (7 days)
+      const dailyForecast: any[] = [];
+      
+      if (omData.daily) {
+        const data = omData.daily;
+        const timeArray = data.time || [];
+        const tempMaxArray = data.temperature_2m_max || [];
+        const tempMinArray = data.temperature_2m_min || [];
+        const tempMeanArray = data.temperature_2m_mean || [];
+        const precipArray = data.precipitation_sum || [];
+        const windSpeedArray = data.windspeed_10m_max || [];
+        const windGustArray = data.windgusts_10m_max || [];
+        const weatherCodeArray = data.weathercode || [];
+        
+        // Take all 7 days
+        for (let i = 0; i < timeArray.length; i++) {
+          dailyForecast.push({
+            date: timeArray[i],
+            tempMin: tempMinArray[i] ?? null,
+            tempMax: tempMaxArray[i] ?? null,
+            tempMean: tempMeanArray[i] ?? null,
+            precipitation: precipArray[i] ?? 0,
+            windSpeed: windSpeedArray[i] ?? null,
+            windGust: windGustArray[i] ?? null,
+            weatherCode: weatherCodeArray[i] ?? null
+          });
+        }
+      }
+
+      return NextResponse.json({ forecast: dailyForecast }, { status: 200 });
     } else if (action === "meteogram") {
       const stationId = searchParams.get("stationId");
       if (!stationId) {

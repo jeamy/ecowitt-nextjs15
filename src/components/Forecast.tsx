@@ -46,6 +46,50 @@ interface MeteoblueDay {
   pictocode: number | null;
 }
 
+interface OpenMeteoDay {
+  date: string;
+  tempMin: number | null;
+  tempMax: number | null;
+  tempMean: number | null;
+  precipitation: number;
+  windSpeed: number | null;
+  windGust: number | null;
+  weatherCode: number | null;
+}
+
+// Map WMO Weather Code to emoji and description
+// Based on: https://open-meteo.com/en/docs
+function getWMOWeatherEmoji(code: number): string {
+  const weatherMap: Record<number, string> = {
+    0: "☀️",   // Clear sky
+    1: "🌤️",   // Mainly clear
+    2: "⛅",   // Partly cloudy
+    3: "☁️",   // Overcast
+    45: "🌫️",  // Fog
+    48: "🌫️",  // Depositing rime fog
+    51: "🌦️",  // Drizzle: Light
+    53: "🌦️",  // Drizzle: Moderate
+    55: "🌧️",  // Drizzle: Dense
+    61: "🌧️",  // Rain: Slight
+    63: "🌧️",  // Rain: Moderate
+    65: "🌧️",  // Rain: Heavy
+    71: "🌨️",  // Snow fall: Slight
+    73: "🌨️",  // Snow fall: Moderate
+    75: "❄️",  // Snow fall: Heavy
+    77: "❄️",  // Snow grains
+    80: "🌦️",  // Rain showers: Slight
+    81: "🌧️",  // Rain showers: Moderate
+    82: "🌧️",  // Rain showers: Violent
+    85: "🌨️",  // Snow showers: Slight
+    86: "❄️",  // Snow showers: Heavy
+    95: "⛈️",  // Thunderstorm: Slight or moderate
+    96: "⛈️",  // Thunderstorm with slight hail
+    99: "⛈️",  // Thunderstorm with heavy hail
+  };
+  
+  return weatherMap[code] || "🌡️";
+}
+
 // Map Meteoblue pictocode to weather emoji and description
 // Based on: https://content.meteoblue.com/en/help/standards/symbols-and-pictograms
 function getWeatherEmoji(pictocode: number): string {
@@ -90,12 +134,15 @@ export default function Forecast() {
   const [forecastData, setForecastData] = useState<ForecastDataPoint[]>([]);
   const [openWeatherData, setOpenWeatherData] = useState<OpenWeatherDay[]>([]);
   const [meteoblueData, setMeteoblueData] = useState<MeteoblueDay[]>([]);
+  const [openMeteoData, setOpenMeteoData] = useState<OpenMeteoDay[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [loadingOWM, setLoadingOWM] = useState<boolean>(false);
   const [loadingMB, setLoadingMB] = useState<boolean>(false);
+  const [loadingOM, setLoadingOM] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [errorOWM, setErrorOWM] = useState<string | null>(null);
   const [errorMB, setErrorMB] = useState<string | null>(null);
+  const [errorOM, setErrorOM] = useState<string | null>(null);
 
   // Load stations on component mount
   useEffect(() => {
@@ -203,9 +250,31 @@ export default function Forecast() {
       }
     };
 
+    const loadOpenMeteo = async () => {
+      if (!selectedStation) return;
+      
+      try {
+        setLoadingOM(true);
+        setErrorOM(null);
+        
+        const response = await fetch(`${API_ENDPOINTS.FORECAST_OPENMETEO}&stationId=${selectedStation}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch Open-Meteo forecast: ${response.status}`);
+        }
+        const data = await response.json();
+        setOpenMeteoData(data.forecast || []);
+      } catch (err) {
+        setErrorOM(`Error loading Open-Meteo forecast: ${err instanceof Error ? err.message : String(err)}`);
+        console.error("Error loading Open-Meteo forecast:", err);
+      } finally {
+        setLoadingOM(false);
+      }
+    };
+
     loadForecast();
-    loadOpenWeather();
     loadMeteoblue();
+    loadOpenMeteo();
+    loadOpenWeather();
   }, [selectedStation]);
 
   // Group forecast data by day
@@ -379,140 +448,6 @@ export default function Forecast() {
         </div>
       )}
       
-      {/* OpenWeatherMap Forecast */}
-      {loadingOWM && (
-        <div className="text-center py-8">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-          <p className="mt-2">{t("statuses.loading")}</p>
-        </div>
-      )}
-      
-      {errorOWM && (
-        <div className="bg-yellow-100 dark:bg-yellow-900 border border-yellow-400 dark:border-yellow-700 text-yellow-700 dark:text-yellow-200 px-4 py-3 rounded mb-6">
-          <p className="font-semibold mb-1">⚠️ OpenWeatherMap Prognose nicht verfügbar</p>
-          <p className="text-sm">{errorOWM}</p>
-          <p className="text-xs mt-2">
-            💡 Tipp: Neue API-Keys brauchen 10-30 Minuten zur Aktivierung. 
-            Prüfe auch, ob du die Bestätigungs-E-Mail von OpenWeatherMap erhalten hast.
-          </p>
-        </div>
-      )}
-      
-      {openWeatherData.length > 0 && (
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">🌍 OpenWeatherMap (5 Tage)</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {openWeatherData.map((dayData, index) => {
-              const date = new Date(dayData.date);
-              const dayLabel = date.toLocaleDateString("de-DE", { 
-                weekday: "short", 
-                day: "2-digit", 
-                month: "2-digit" 
-              });
-              
-              return (
-                <div 
-                  key={index} 
-                  className="border border-gray-200 dark:border-neutral-700 rounded-lg p-5 bg-white dark:bg-neutral-800 shadow-sm"
-                >
-                  <h3 className="font-semibold text-center mb-3">{dayLabel}</h3>
-                  
-                  <div className="space-y-2">
-                    {dayData.tempMax !== null && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-300 text-sm">
-                          {t("forecast.maxTemp", "Max")}
-                        </span>
-                        <span className="font-medium text-red-600 dark:text-red-400">
-                          {dayData.tempMax.toFixed(1)}°C
-                        </span>
-                      </div>
-                    )}
-                    
-                    {dayData.tempMin !== null && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-300 text-sm">
-                          {t("forecast.minTemp", "Min")}
-                        </span>
-                        <span className="font-medium text-blue-600 dark:text-blue-400">
-                          {dayData.tempMin.toFixed(1)}°C
-                        </span>
-                      </div>
-                    )}
-                    
-                    {dayData.tempDay !== null && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-300 text-sm">
-                          {t("forecast.dayTemp", "Tag")}
-                        </span>
-                        <span className="font-medium text-gray-900 dark:text-gray-100">
-                          {dayData.tempDay.toFixed(1)}°C
-                        </span>
-                      </div>
-                    )}
-                    
-                    {dayData.precipitation > 0 && (
-                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-neutral-700">
-                        <div className="flex justify-between items-center">
-                          <span className="text-gray-600 dark:text-gray-300 text-sm flex items-center gap-1">
-                            <span>💧</span>
-                            <span>{t("forecast.precipitation", "Niederschlag")}</span>
-                          </span>
-                          <span className="font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap ml-2">
-                            {dayData.precipitation.toFixed(1)} mm
-                          </span>
-                        </div>
-                        {dayData.pop !== null && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
-                            {(dayData.pop * 100).toFixed(0)}% Wahrscheinlichkeit
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    
-                    {dayData.windSpeed !== null && (
-                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-neutral-700">
-                        <div className="flex justify-between items-center">
-                          <span className="text-gray-600 dark:text-gray-300 text-sm flex items-center gap-1">
-                            <span>💨</span>
-                            <span>{t("forecast.wind", "Wind")}</span>
-                          </span>
-                          <span className="font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap ml-2">
-                            {dayData.windSpeed.toFixed(1)} km/h
-                          </span>
-                        </div>
-                        {dayData.windGust !== null && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
-                            Böen: {dayData.windGust.toFixed(1)} km/h
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    
-                    {dayData.weather && (
-                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-neutral-700 text-center">
-                        <div className="text-2xl mb-1">
-                          {dayData.weather.icon && (
-                            <img 
-                              src={`https://openweathermap.org/img/wn/${dayData.weather.icon}@2x.png`}
-                              alt={dayData.weather.description}
-                              className="inline-block w-12 h-12"
-                            />
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400">
-                          {dayData.weather.description}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-      
       {/* Meteoblue Forecast */}
       {loadingMB && (
         <div className="text-center py-8">
@@ -673,6 +608,259 @@ export default function Forecast() {
                 );
               })()}
             </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Open-Meteo Forecast */}
+      {loadingOM && (
+        <div className="text-center py-8">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+          <p className="mt-2">{t("statuses.loading")}</p>
+        </div>
+      )}
+      
+      {errorOM && (
+        <div className="bg-yellow-100 dark:bg-yellow-900 border border-yellow-400 dark:border-yellow-700 text-yellow-700 dark:text-yellow-200 px-4 py-3 rounded mb-6">
+          <p className="font-semibold mb-1">⚠️ Open-Meteo Prognose nicht verfügbar</p>
+          <p className="text-sm">{errorOM}</p>
+        </div>
+      )}
+      
+      {openMeteoData.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-4">🌍 Open-Meteo DWD (7 Tage)</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {openMeteoData.map((dayData, index) => {
+              const date = new Date(dayData.date);
+              const dayLabel = date.toLocaleDateString("de-DE", { 
+                weekday: "short", 
+                day: "2-digit", 
+                month: "2-digit" 
+              });
+              
+              return (
+                <div 
+                  key={index} 
+                  className="border border-gray-200 dark:border-neutral-700 rounded-lg p-5 bg-white dark:bg-neutral-800 shadow-sm"
+                >
+                  <h3 className="font-semibold text-center mb-3">{dayLabel}</h3>
+                  
+                  <div className="space-y-2">
+                    {dayData.tempMax !== null && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-300 text-sm">
+                          {t("forecast.maxTemp", "Max")}
+                        </span>
+                        <span className="font-medium text-red-600 dark:text-red-400">
+                          {dayData.tempMax.toFixed(1)}°C
+                        </span>
+                      </div>
+                    )}
+                    
+                    {dayData.tempMin !== null && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-300 text-sm">
+                          {t("forecast.minTemp", "Min")}
+                        </span>
+                        <span className="font-medium text-blue-600 dark:text-blue-400">
+                          {dayData.tempMin.toFixed(1)}°C
+                        </span>
+                      </div>
+                    )}
+                    
+                    {dayData.tempMean !== null && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-300 text-sm">
+                          {t("forecast.avgTemp", "Ø")}
+                        </span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100">
+                          {dayData.tempMean.toFixed(1)}°C
+                        </span>
+                      </div>
+                    )}
+                    
+                    {dayData.precipitation > 0 && (
+                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-neutral-700">
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600 dark:text-gray-300 text-sm flex items-center gap-1">
+                            <span>💧</span>
+                            <span>{t("forecast.precipitation", "Niederschlag")}</span>
+                          </span>
+                          <span className="font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap ml-2">
+                            {dayData.precipitation.toFixed(1)} mm
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {dayData.windSpeed !== null && (
+                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-neutral-700">
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600 dark:text-gray-300 text-sm flex items-center gap-1">
+                            <span>💨</span>
+                            <span>{t("forecast.wind", "Wind")}</span>
+                          </span>
+                          <span className="font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap ml-2">
+                            {dayData.windSpeed.toFixed(1)} km/h
+                          </span>
+                        </div>
+                        {dayData.windGust !== null && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
+                            Böen: {dayData.windGust.toFixed(1)} km/h
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {dayData.weatherCode !== null && (
+                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-neutral-700 text-center">
+                        <div className="text-4xl mb-1">
+                          {getWMOWeatherEmoji(dayData.weatherCode)}
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400">
+                          Code: {dayData.weatherCode}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      
+      {/* OpenWeatherMap Forecast */}
+      {loadingOWM && (
+        <div className="text-center py-8">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+          <p className="mt-2">{t("statuses.loading")}</p>
+        </div>
+      )}
+      
+      {errorOWM && (
+        <div className="bg-yellow-100 dark:bg-yellow-900 border border-yellow-400 dark:border-yellow-700 text-yellow-700 dark:text-yellow-200 px-4 py-3 rounded mb-6">
+          <p className="font-semibold mb-1">⚠️ OpenWeatherMap Prognose nicht verfügbar</p>
+          <p className="text-sm">{errorOWM}</p>
+          <p className="text-xs mt-2">
+            💡 Tipp: Neue API-Keys brauchen 10-30 Minuten zur Aktivierung. 
+            Prüfe auch, ob du die Bestätigungs-E-Mail von OpenWeatherMap erhalten hast.
+          </p>
+        </div>
+      )}
+      
+      {openWeatherData.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-4">🌍 OpenWeatherMap (5 Tage)</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {openWeatherData.map((dayData, index) => {
+              const date = new Date(dayData.date);
+              const dayLabel = date.toLocaleDateString("de-DE", { 
+                weekday: "short", 
+                day: "2-digit", 
+                month: "2-digit" 
+              });
+              
+              return (
+                <div 
+                  key={index} 
+                  className="border border-gray-200 dark:border-neutral-700 rounded-lg p-5 bg-white dark:bg-neutral-800 shadow-sm"
+                >
+                  <h3 className="font-semibold text-center mb-3">{dayLabel}</h3>
+                  
+                  <div className="space-y-2">
+                    {dayData.tempMax !== null && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-300 text-sm">
+                          {t("forecast.maxTemp", "Max")}
+                        </span>
+                        <span className="font-medium text-red-600 dark:text-red-400">
+                          {dayData.tempMax.toFixed(1)}°C
+                        </span>
+                      </div>
+                    )}
+                    
+                    {dayData.tempMin !== null && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-300 text-sm">
+                          {t("forecast.minTemp", "Min")}
+                        </span>
+                        <span className="font-medium text-blue-600 dark:text-blue-400">
+                          {dayData.tempMin.toFixed(1)}°C
+                        </span>
+                      </div>
+                    )}
+                    
+                    {dayData.tempDay !== null && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-300 text-sm">
+                          {t("forecast.dayTemp", "Tag")}
+                        </span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100">
+                          {dayData.tempDay.toFixed(1)}°C
+                        </span>
+                      </div>
+                    )}
+                    
+                    {dayData.precipitation > 0 && (
+                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-neutral-700">
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600 dark:text-gray-300 text-sm flex items-center gap-1">
+                            <span>💧</span>
+                            <span>{t("forecast.precipitation", "Niederschlag")}</span>
+                          </span>
+                          <span className="font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap ml-2">
+                            {dayData.precipitation.toFixed(1)} mm
+                          </span>
+                        </div>
+                        {dayData.pop !== null && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
+                            {(dayData.pop * 100).toFixed(0)}% Wahrscheinlichkeit
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {dayData.windSpeed !== null && (
+                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-neutral-700">
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600 dark:text-gray-300 text-sm flex items-center gap-1">
+                            <span>💨</span>
+                            <span>{t("forecast.wind", "Wind")}</span>
+                          </span>
+                          <span className="font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap ml-2">
+                            {dayData.windSpeed.toFixed(1)} km/h
+                          </span>
+                        </div>
+                        {dayData.windGust !== null && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
+                            Böen: {dayData.windGust.toFixed(1)} km/h
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {dayData.weather && (
+                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-neutral-700 text-center">
+                        <div className="text-2xl mb-1">
+                          {dayData.weather.icon && (
+                            <img 
+                              src={`https://openweathermap.org/img/wn/${dayData.weather.icon}@2x.png`}
+                              alt={dayData.weather.description}
+                              className="inline-block w-12 h-12"
+                            />
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400">
+                          {dayData.weather.description}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

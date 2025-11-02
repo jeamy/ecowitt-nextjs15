@@ -3,14 +3,14 @@
   "sensors": {
     "indoor": {
       "min": 21.3,
-      "max": 21.4,
+      "max": 21.6,
       "minTime": "2025-11-02T13:47:07.767Z",
-      "maxTime": "2025-11-02T13:19:45.681Z"
+      "maxTime": "2025-11-02T16:34:23.366Z"
     },
     "outdoor": {
-      "min": 14.7,
+      "min": 13.5,
       "max": 17.3,
-      "minTime": "2025-11-02T15:11:36.657Z",
+      "minTime": "2025-11-02T16:39:23.373Z",
       "maxTime": "2025-11-02T13:19:45.681Z"
     },
     "temp_and_humidity_ch1": {
@@ -26,9 +26,9 @@
       "maxTime": "2025-11-02T14:21:49.969Z"
     },
     "temp_and_humidity_ch3": {
-      "min": 15.6,
+      "min": 15.4,
       "max": 16.2,
-      "minTime": "2025-11-02T15:06:36.784Z",
+      "minTime": "2025-11-02T15:54:23.182Z",
       "maxTime": "2025-11-02T13:19:45.681Z"
     },
     "temp_and_humidity_ch5": {
@@ -44,30 +44,30 @@
       "maxTime": "2025-11-02T13:19:45.681Z"
     },
     "temp_and_humidity_ch7": {
-      "min": 14.3,
+      "min": 13.3,
       "max": 15.7,
-      "minTime": "2025-11-02T15:06:36.784Z",
+      "minTime": "2025-11-02T16:34:23.366Z",
       "maxTime": "2025-11-02T13:19:45.681Z"
     },
     "temp_and_humidity_ch8": {
-      "min": 20.4,
+      "min": 20.3,
       "max": 20.6,
-      "minTime": "2025-11-02T14:26:49.734Z",
+      "minTime": "2025-11-02T15:16:44.406Z",
       "maxTime": "2025-11-02T13:19:45.681Z"
     }
   },
   "humidity": {
     "indoor": {
       "min": 60,
-      "max": 62,
+      "max": 63,
       "minTime": "2025-11-02T13:19:45.681Z",
-      "maxTime": "2025-11-02T14:26:49.734Z"
+      "maxTime": "2025-11-02T15:31:44.897Z"
     },
     "outdoor": {
       "min": 83,
-      "max": 95,
+      "max": 96,
       "minTime": "2025-11-02T13:38:27.577Z",
-      "maxTime": "2025-11-02T15:06:36.784Z"
+      "maxTime": "2025-11-02T15:36:44.714Z"
     },
     "temp_and_humidity_ch1": {
       "min": 69,
