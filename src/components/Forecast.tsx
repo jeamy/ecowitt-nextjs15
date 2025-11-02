@@ -90,6 +90,37 @@ function getWMOWeatherEmoji(code: number): string {
   return weatherMap[code] || "🌡️";
 }
 
+function getWMOWeatherDescriptionKey(code: number): string {
+  const keyMap: Record<number, string> = {
+    0: "weather.clear",
+    1: "weather.mainly_clear",
+    2: "weather.partly_cloudy",
+    3: "weather.overcast",
+    45: "weather.fog",
+    48: "weather.fog_rime",
+    51: "weather.drizzle_light",
+    53: "weather.drizzle_moderate",
+    55: "weather.drizzle_dense",
+    61: "weather.rain_slight",
+    63: "weather.rain_moderate",
+    65: "weather.rain_heavy",
+    71: "weather.snow_slight",
+    73: "weather.snow_moderate",
+    75: "weather.snow_heavy",
+    77: "weather.snow_grains",
+    80: "weather.rain_showers_slight",
+    81: "weather.rain_showers_moderate",
+    82: "weather.rain_showers_violent",
+    85: "weather.snow_showers_slight",
+    86: "weather.snow_showers_heavy",
+    95: "weather.thunderstorm",
+    96: "weather.thunderstorm_hail_slight",
+    99: "weather.thunderstorm_hail_heavy",
+  };
+  
+  return keyMap[code] || "weather.unknown";
+}
+
 // Map Meteoblue pictocode to weather emoji and description
 // Based on: https://content.meteoblue.com/en/help/standards/symbols-and-pictograms
 function getWeatherEmoji(pictocode: number): string {
@@ -733,8 +764,8 @@ export default function Forecast() {
                         <div className="text-4xl mb-1">
                           {getWMOWeatherEmoji(dayData.weatherCode)}
                         </div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400">
-                          Code: {dayData.weatherCode}
+                        <div className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                          {t(getWMOWeatherDescriptionKey(dayData.weatherCode))}
                         </div>
                       </div>
                     )}
