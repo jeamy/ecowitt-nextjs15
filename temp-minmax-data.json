@@ -77,9 +77,9 @@
     },
     "temp_and_humidity_ch2": {
       "min": 64,
-      "max": 68,
+      "max": 69,
       "minTime": "2025-11-02T13:19:45.681Z",
-      "maxTime": "2025-11-02T14:26:49.734Z"
+      "maxTime": "2025-11-02T17:56:02.124Z"
     },
     "temp_and_humidity_ch3": {
       "min": 79,

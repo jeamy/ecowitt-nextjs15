@@ -51,8 +51,8 @@ export async function GET() {
         sampleData: []
       };
       
-      // Show sample data if table has rows
-      if (count > 0) {
+      // Show sample data only for non-forecast tables
+      if (count > 0 && name !== 'forecasts') {
         const sampleResult = await conn.runAndReadAll(`SELECT * FROM ${name} LIMIT 3`);
         const rawSamples = sampleResult.getRowObjects();
         // Convert all DuckDB values to JSON-serializable values
