@@ -3,7 +3,8 @@
     "realtime": "Echtzeit",
     "graphics": "Grafik",
     "saved": "Gespeicherte Daten",
-    "statistics": "Statistik"
+    "statistics": "Statistik",
+    "forecast": "Prognose"
   },
   "statuses": {
     "lastUpdate": "Letzte Aktualisierung:",
@@ -152,5 +153,46 @@
     "sortByValue": "Wert",
     "sortAsc": "ASC",
     "sortDesc": "DESC"
+  },
+  "forecast": {
+    "selectStation": "Wetterstation auswählen",
+    "selectPlaceholder": "Station auswählen...",
+    "maxTemp": "Max",
+    "minTemp": "Min",
+    "avgTemp": "Ø",
+    "dayTemp": "Tag",
+    "precipitation": "Niederschlag",
+    "wind": "Wind",
+    "noData": "Keine Prognosedaten verfügbar",
+    "weather": {
+      "1": "Sonnig",
+      "2": "Heiter",
+      "3": "Heiter",
+      "4": "Leicht bewölkt",
+      "5": "Leicht bewölkt",
+      "6": "Leicht bewölkt",
+      "7": "Teilweise bewölkt",
+      "8": "Teilweise bewölkt",
+      "9": "Teilweise bewölkt",
+      "10": "Bewölkt",
+      "11": "Nebel",
+      "12": "Nebel",
+      "13": "Nebel",
+      "14": "Nebel",
+      "15": "Regen möglich",
+      "16": "Regen",
+      "17": "Gewitter",
+      "18": "Gewitter",
+      "19": "Schnee",
+      "20": "Schneeregen",
+      "21": "Regen",
+      "22": "Schnee",
+      "23": "Gewitter möglich",
+      "24": "Gewitter mit Hagel",
+      "25": "Leichter Regen",
+      "26": "Regen",
+      "27": "Starker Regen",
+      "unknown": "Unbekannt"
+    }
   }
 }

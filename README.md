@@ -140,7 +140,28 @@ Names appear in the dashboard (labels/options). Undefined channels fall back to 
 - `GET /api/config/channels`
   - Returns `channels.json`.
 
-All API routes run in the Node.js runtime and read from the local filesystem.
+- Forecast (Geosphere API + OpenWeatherMap + Meteoblue)
+  - `GET /api/forecast?action=stations`
+    - Returns TAWES weather stations grouped by Austrian states.
+  - `GET /api/forecast?action=forecast&stationId=<ID>`
+    - Returns temperature, precipitation, and wind forecast for the specified station (next ~60 hours).
+    - Data source: Geosphere Austria ensemble forecast API (C-LAEF model).
+  - `GET /api/forecast?action=openweather&stationId=<ID>`
+    - Returns 5-day daily forecast for the specified station location.
+    - Data source: OpenWeatherMap 5 Day / 3 Hour Forecast API (FREE).
+    - Aggregates 3-hour forecasts into daily summaries.
+    - Requires `OPENWEATHER_API_KEY` environment variable.
+  - `GET /api/forecast?action=meteoblue&stationId=<ID>`
+    - Returns 7-day daily forecast for the specified station location.
+    - Data source: Meteoblue basic-day package (FREE for non-commercial use).
+    - Requires `METEOBLUE_API_KEY` environment variable.
+  - `GET /api/forecast?action=meteogram&stationId=<ID>`
+    - Returns meteogram image (14-day detailed forecast visualization).
+    - Data source: Meteoblue meteogram image API (FREE for non-commercial use).
+    - Returns WebP image format.
+    - Requires `METEOBLUE_API_KEY` environment variable.
+
+All API routes run in the Node.js runtime and read from the local filesystem (except forecast, which fetches from external Geosphere API).
 
 ### Statistics (precomputed)
 
@@ -239,7 +260,7 @@ curl 'http://localhost:3000/api/statistics?debug=1&debugDaily=2025'
 
 ## Data (Ecowitt API v3)
 
-The homepage is split into three tabs:
+The homepage is split into four tabs:
 
 - **Realtime (Echtzeit)**: Fetches live data from Ecowitt API v3 via a server-side proxy (`/api/rt/last`). Values are shown as key metrics and as gauges/charts.
 - **Grafik**: Visual, realtime gauges for the station: outdoor temperature and humidity (with gradient guides), wind compass with speed/gust, barometric pressure, rainfall KPIs (rate/hour/day/week/month/year), solar radiation, UV index, indoor temperature/humidity, plus mini‑gauges for CH1–CH8.
@@ -249,6 +270,24 @@ The homepage is split into three tabs:
   - Optional global time range: enable “Ausgewählten Zeitraum verwenden” to pick start/end and query across months.
   - Charts are interactive (zoom/pan/reset) and labels are localized.
   - Channel names are configurable via `src/config/channels.json`.
+- **Prognose (Forecast)**: Triple weather forecast display from three independent sources.
+  - **Geosphere Austria** 🇦🇹: Short-term forecast (~2.5 days / 60 hours)
+    - Temperature (min/max/avg), precipitation, and wind speed
+    - Data source: Geosphere API ensemble forecast (C-LAEF model) with 1-hour resolution
+  - **OpenWeatherMap** 🌍: Extended 5-day forecast (FREE API)
+    - Temperature (min/max/day), precipitation with probability, wind speed and gusts
+    - Weather icons and descriptions
+    - Uses free 5 Day / 3 Hour Forecast API (aggregated to daily)
+    - Requires `OPENWEATHER_API_KEY` in `.env` (free API key from openweathermap.org)
+  - **Meteoblue** 🇨🇭: Extended 7-day forecast + 14-day meteogram (FREE API for non-commercial use)
+    - Temperature (min/max/mean), precipitation, wind speed and gusts
+    - Weather pictograms from Meteoblue
+    - Detailed 14-day meteogram visualization with hourly data
+    - Uses free basic-day package and meteogram image API
+    - Requires `METEOBLUE_API_KEY` in `.env` (free API key from meteoblue.com)
+  - Station selection dropdown grouped by Austrian states (Bundesländer)
+  - Last selected station is saved in localStorage
+  - Color-coded display: red for max temperature, blue for min temperature and precipitation
 
 ### Backend Realtime Processing
 
@@ -474,6 +513,17 @@ const json = await res.json();
 
 ```bash
 curl 'http://localhost:3000/api/config/channels'
+```
+
+- Forecast (Geosphere API + OpenWeatherMap + Meteoblue)
+
+```bash
+curl 'http://localhost:3000/api/forecast?action=stations'
+curl 'http://localhost:3000/api/forecast?action=forecast&stationId=11035'
+curl 'http://localhost:3000/api/forecast?action=openweather&stationId=11035'
+curl 'http://localhost:3000/api/forecast?action=meteoblue&stationId=11035'
+# Get meteogram image (returns WebP image)
+curl 'http://localhost:3000/api/forecast?action=meteogram&stationId=11035' > meteogram.webp
 ```
 
 ## Troubleshooting

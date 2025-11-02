@@ -5,6 +5,7 @@ import Dashboard from "@/components/Dashboard";
 import Realtime from "@/components/Realtime";
 import Gauges from "@/components/Gauges";
 import Statistics from "@/components/Statistics";
+import Forecast from "@/components/Forecast";
 import { useTranslation } from "react-i18next";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { RealtimeProvider } from "@/contexts/RealtimeContext";
@@ -15,12 +16,14 @@ import { RealtimeProvider } from "@/contexts/RealtimeContext";
  * - Realtime: A list of current sensor readings.
  * - Graphics: A set of gauges and visual displays for current data.
  * - Saved: A dashboard for viewing historical data with charts.
+ * - Statistics: Statistical analysis of historical data.
+ * - Forecast: 7-day weather forecast from Geosphere API.
  *
  * @returns The Home page component.
  */
 export default function Home() {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<"rt" | "gfx" | "stored" | "stats">("rt");
+  const [tab, setTab] = useState<"rt" | "gfx" | "stored" | "stats" | "forecast">("rt");
   return (
     <RealtimeProvider>
       <div className="min-h-screen w-full bg-gray-50 dark:bg-neutral-950 text-gray-900 dark:text-gray-100 p-4 sm:p-6">
@@ -37,6 +40,12 @@ export default function Home() {
               onClick={() => setTab("gfx")}
             >
               {t("tabs.graphics")}
+            </button>
+            <button
+              className={`px-3 py-2 text-sm font-medium rounded-t ${tab === "forecast" ? "bg-white dark:bg-neutral-900 border border-b-0 border-gray-200 dark:border-neutral-800" : "text-gray-600 hover:text-gray-900"}`}
+              onClick={() => setTab("forecast")}
+            >
+              {t("tabs.forecast", "Forecast")}
             </button>
             <button
               className={`px-3 py-2 text-sm font-medium rounded-t ${tab === "stored" ? "bg-white dark:bg-neutral-900 border border-b-0 border-gray-200 dark:border-neutral-800" : "text-gray-600 hover:text-gray-900"}`}
@@ -58,6 +67,7 @@ export default function Home() {
             {tab === "gfx" && <Gauges />}
             {tab === "stored" && <Dashboard />}
             {tab === "stats" && <Statistics />}
+            {tab === "forecast" && <Forecast />}
           </div>
         </div>
       </div>

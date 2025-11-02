@@ -26,4 +26,10 @@ export const API_ENDPOINTS = {
   // Dashboard/server-side range statistics
   STATISTICS_RANGE: '/api/statistics/range',
   STATISTICS_CHANNELS: '/api/statistics/channels',
+  
+  // Forecast endpoints
+  FORECAST_STATIONS: '/api/forecast?action=stations',
+  FORECAST_DATA: '/api/forecast?action=forecast',
+  FORECAST_OPENWEATHER: '/api/forecast?action=openweather',
+  FORECAST_METEOBLUE: '/api/forecast?action=meteoblue',
 };

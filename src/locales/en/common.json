@@ -3,7 +3,8 @@
     "realtime": "Realtime",
     "graphics": "Graphics",
     "saved": "Saved Data",
-    "statistics": "Statistics"
+    "statistics": "Statistics",
+    "forecast": "Forecast"
   },
   "statuses": {
     "lastUpdate": "Last update:",
@@ -152,5 +153,46 @@
     "sortByValue": "Value",
     "sortAsc": "ASC",
     "sortDesc": "DESC"
+  },
+  "forecast": {
+    "selectStation": "Select weather station",
+    "selectPlaceholder": "Select station...",
+    "maxTemp": "Max",
+    "minTemp": "Min",
+    "avgTemp": "Avg",
+    "dayTemp": "Day",
+    "precipitation": "Precipitation",
+    "wind": "Wind",
+    "noData": "No forecast data available",
+    "weather": {
+      "1": "Sunny",
+      "2": "Clear",
+      "3": "Clear",
+      "4": "Partly cloudy",
+      "5": "Partly cloudy",
+      "6": "Partly cloudy",
+      "7": "Partly cloudy",
+      "8": "Partly cloudy",
+      "9": "Partly cloudy",
+      "10": "Cloudy",
+      "11": "Fog",
+      "12": "Fog",
+      "13": "Fog",
+      "14": "Fog",
+      "15": "Rain possible",
+      "16": "Rain",
+      "17": "Thunderstorms",
+      "18": "Thunderstorms",
+      "19": "Snow",
+      "20": "Sleet",
+      "21": "Rain",
+      "22": "Snow",
+      "23": "Thunderstorms possible",
+      "24": "Thunderstorms with hail",
+      "25": "Light rain",
+      "26": "Rain",
+      "27": "Heavy rain",
+      "unknown": "Unknown"
+    }
   }
 }
