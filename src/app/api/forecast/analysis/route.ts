@@ -21,23 +21,10 @@ export async function GET(req: Request) {
     if (!stationId) {
       return NextResponse.json({ error: "stationId parameter is required" }, { status: 400 });
     }
-
-    // Return empty data immediately - no DB needed for now
-    // Demo data will be generated in frontend
-    console.log('[API] Returning empty data (no analysis stored yet)');
-    return NextResponse.json({
-      stationId,
-      days,
-      dailyAnalysis: [],
-      accuracyStats: {},
-      generated: new Date().toISOString(),
-      hasData: false
-    });
-    
-    /* TODO: Re-enable DB query when midnight analysis is working
+    // Query DuckDB for stored analysis
     const conn = await getDuckConn();
     
-    // Create table if not exists
+    // Ensure table exists (no-op if already there)
     try {
       await conn.run(`
         CREATE TABLE IF NOT EXISTS forecast_analysis (
@@ -61,13 +48,10 @@ export async function GET(req: Request) {
           PRIMARY KEY(analysis_date, station_id, forecast_date, source)
         )
       `);
-      console.log('[API] Table created/verified');
-    } catch (tableError: any) {
-      console.error('[API] Table creation error:', tableError.message);
-      // Continue anyway - table might already exist
+    } catch (e: any) {
+      console.warn('[API] forecast_analysis table check failed:', e?.message || e);
     }
     
-    // Get stored analysis data
     const analysisQuery = `
       SELECT 
         analysis_date,
@@ -86,110 +70,81 @@ export async function GET(req: Request) {
         forecast_precipitation,
         forecast_wind_speed
       FROM forecast_analysis
-      WHERE station_id = ?
+      WHERE station_id = ${"'" + stationId + "'"}
         AND analysis_date >= DATE('now', '-${days} days')
       ORDER BY analysis_date DESC, forecast_date DESC, source
     `;
     
-    // Use simple string interpolation for DuckDB query
-    const finalQuery = analysisQuery.replace('?', `'${stationId}'`);
-    console.log('[API] Running analysis query:', finalQuery);
-    
-    let analysisData: any = [];
+    let rows: any[] = [];
     try {
-      const analysisReader = await conn.runAndReadAll(finalQuery);
-      analysisData = analysisReader.getRowObjects();
-      console.log('[API] Query returned', analysisData.length, 'rows');
-    } catch (queryError: any) {
-      console.error('[API] Query error:', queryError.message);
-      // Return empty data if query fails (table might not exist yet)
-      analysisData = [];
+      const reader = await conn.runAndReadAll(analysisQuery);
+      rows = reader.getRowObjects();
+    } catch (e: any) {
+      console.error('[API] Query error:', e?.message || e);
+      rows = [];
     }
     
     // Group by analysis_date
-    const dailyAnalysis: Record<string, any> = {};
-    
-    analysisData.forEach((row: any) => {
+    const byDate: Record<string, any> = {};
+    for (const row of rows) {
       const date = row.analysis_date;
-      if (!dailyAnalysis[date]) {
-        dailyAnalysis[date] = {
-          date,
-          forecasts: []
-        };
-      }
-      
-      dailyAnalysis[date].forecasts.push({
+      if (!byDate[date]) byDate[date] = { date, forecasts: [] as any[] };
+      byDate[date].forecasts.push({
         forecastDate: row.forecast_date,
         source: row.source,
         errors: {
           tempMin: row.temp_min_error,
           tempMax: row.temp_max_error,
           precipitation: row.precipitation_error,
-          windSpeed: row.wind_speed_error
+          windSpeed: row.wind_speed_error,
         },
         actual: {
           tempMin: row.actual_temp_min,
           tempMax: row.actual_temp_max,
           precipitation: row.actual_precipitation,
-          windSpeed: row.actual_wind_speed
+          windSpeed: row.actual_wind_speed,
         },
         forecast: {
           tempMin: row.forecast_temp_min,
           tempMax: row.forecast_temp_max,
           precipitation: row.forecast_precipitation,
-          windSpeed: row.forecast_wind_speed
-        }
+          windSpeed: row.forecast_wind_speed,
+        },
       });
-    });
+    }
     
-    // Calculate aggregate statistics per source
+    // Aggregate accuracy stats by source
     const sources = ['geosphere', 'openweather', 'meteoblue', 'openmeteo'];
     const accuracyStats: Record<string, any> = {};
+    for (const src of sources) {
+      const srows = rows.filter(r => r.source === src);
+      if (!srows.length) continue;
+      const take = (k: string) => srows.map(r => r[k]).filter((v: any) => v !== null && v !== undefined) as number[];
+      const mean = (arr: number[]) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+      const rmse = (arr: number[]) => arr.length ? Math.sqrt(arr.reduce((a, b) => a + b*b, 0) / arr.length) : null;
+      const eMin = take('temp_min_error');
+      const eMax = take('temp_max_error');
+      const ePre = take('precipitation_error');
+      const eWind = take('wind_speed_error');
+      accuracyStats[src] = {
+        sampleSize: srows.length,
+        tempMin: { mae: mean(eMin), rmse: rmse(eMin) },
+        tempMax: { mae: mean(eMax), rmse: rmse(eMax) },
+        precipitation: { mae: mean(ePre), rmse: rmse(ePre) },
+        windSpeed: { mae: mean(eWind), rmse: rmse(eWind) },
+      };
+    }
     
-    sources.forEach(source => {
-      const sourceData = analysisData.filter((row: any) => row.source === source);
-      
-      if (sourceData.length > 0) {
-        const tempMinErrors = sourceData.map((r: any) => r.temp_min_error).filter((e: any) => e !== null);
-        const tempMaxErrors = sourceData.map((r: any) => r.temp_max_error).filter((e: any) => e !== null);
-        const precipErrors = sourceData.map((r: any) => r.precipitation_error).filter((e: any) => e !== null);
-        const windErrors = sourceData.map((r: any) => r.wind_speed_error).filter((e: any) => e !== null);
-        
-        accuracyStats[source] = {
-          sampleSize: sourceData.length,
-          tempMin: {
-            mae: tempMinErrors.length > 0 ? tempMinErrors.reduce((sum: number, e: number) => sum + e, 0) / tempMinErrors.length : null,
-            rmse: tempMinErrors.length > 0 ? Math.sqrt(tempMinErrors.reduce((sum: number, e: number) => sum + e*e, 0) / tempMinErrors.length) : null
-          },
-          tempMax: {
-            mae: tempMaxErrors.length > 0 ? tempMaxErrors.reduce((sum: number, e: number) => sum + e, 0) / tempMaxErrors.length : null,
-            rmse: tempMaxErrors.length > 0 ? Math.sqrt(tempMaxErrors.reduce((sum: number, e: number) => sum + e*e, 0) / tempMaxErrors.length) : null
-          },
-          precipitation: {
-            mae: precipErrors.length > 0 ? precipErrors.reduce((sum: number, e: number) => sum + e, 0) / precipErrors.length : null,
-            rmse: precipErrors.length > 0 ? Math.sqrt(precipErrors.reduce((sum: number, e: number) => sum + e*e, 0) / precipErrors.length) : null
-          },
-          windSpeed: {
-            mae: windErrors.length > 0 ? windErrors.reduce((sum: number, e: number) => sum + e, 0) / windErrors.length : null,
-            rmse: windErrors.length > 0 ? Math.sqrt(windErrors.reduce((sum: number, e: number) => sum + e*e, 0) / windErrors.length) : null
-          }
-        };
-      }
-    });
-    
-    // Return empty arrays if no data
-    const response = {
+    const payload = {
       stationId,
       days,
-      dailyAnalysis: Object.values(dailyAnalysis),
+      dailyAnalysis: Object.values(byDate),
       accuracyStats,
       generated: new Date().toISOString(),
-      hasData: analysisData.length > 0
+      hasData: rows.length > 0,
     };
     
-    console.log('[API] Returning response with', Object.values(dailyAnalysis).length, 'daily entries');
-    return NextResponse.json(response);
-    */
+    return NextResponse.json(payload);
     
   } catch (error: any) {
     console.error("Forecast analysis API error:", error);

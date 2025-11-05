@@ -33,4 +33,10 @@ export const API_ENDPOINTS = {
   FORECAST_METEOBLUE: '/api/forecast?action=meteoblue',
   FORECAST_OPENMETEO: '/api/forecast?action=openmeteo',
   FORECAST_OPENWEATHER: '/api/forecast?action=openweather',
+  // Forecast storage/analysis
+  FORECAST_STORE: '/api/forecast/store',
+  FORECAST_ANALYZE: '/api/forecast/analyze',
+  FORECAST_ANALYSIS: '/api/forecast/analysis',
+  // Config
+  CONFIG_FORECAST_STATION: '/api/config/forecast-station',
 };

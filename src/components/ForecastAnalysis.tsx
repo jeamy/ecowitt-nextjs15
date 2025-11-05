@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { API_ENDPOINTS } from "@/constants";
 
 interface ForecastAccuracyData {
   stationId: string;
@@ -62,7 +63,7 @@ export default function ForecastAnalysis() {
   
   const loadDefaultStation = async () => {
     try {
-      const response = await fetch("/api/config/forecast-station");
+      const response = await fetch(API_ENDPOINTS.CONFIG_FORECAST_STATION);
       if (response.ok) {
         const data = await response.json();
         console.log('[ForecastAnalysis] Loaded default station:', data.stationId);
@@ -85,7 +86,7 @@ export default function ForecastAnalysis() {
 
   const fetchStations = async () => {
     try {
-      const response = await fetch("/api/forecast?action=stations");
+      const response = await fetch(API_ENDPOINTS.FORECAST_STATIONS);
       const stationsData = await response.json();
       setStations(stationsData.stations || {});
     } catch (err) {
@@ -100,7 +101,7 @@ export default function ForecastAnalysis() {
     
     try {
       // Try to fetch stored analysis first
-      const response = await fetch(`/api/forecast/analysis?stationId=${stationId}&days=${days}`);
+      const response = await fetch(`${API_ENDPOINTS.FORECAST_ANALYSIS}?stationId=${stationId}&days=${days}`);
       console.log(`[ForecastAnalysis] API response status: ${response.status}`);
       
       if (!response.ok) {

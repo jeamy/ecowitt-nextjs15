@@ -88,8 +88,8 @@ export async function register() {
 
   // Schedule daily forecast storage at midnight
   if (!global.__forecastPoller) {
-    const stationId = process.env.FORECAST_STATION_ID || "11035"; // Default: Wien Hohe Warte
-    console.log(`[forecast] Daily forecast storage enabled for station ${stationId} (runs at midnight only)`);
+    const stationSetting = process.env.FORECAST_STATION_ID || "11035"; // or 'ALL'
+    console.log(`[forecast] Daily forecast storage enabled for ${stationSetting === 'ALL' ? 'ALL stations' : `station ${stationSetting}`} (runs at midnight only)`);
 
     // Calculate milliseconds until next midnight
     const scheduleNextMidnight = () => {
@@ -101,9 +101,33 @@ export async function register() {
       
       global.__forecastPoller = setTimeout(async () => {
         try {
-          await storeForecastForStation(stationId);
-          await calculateAndStoreDailyAnalysis(stationId);
-          console.log(`[forecast] Stored forecasts and analysis for station ${stationId} at midnight`);
+          // Resolve station list
+          let stationIds: string[] = [];
+          if (stationSetting === 'ALL') {
+            try {
+              // Fetch station list directly from Geosphere API
+              const res = await fetch('https://dataset.api.hub.geosphere.at/v1/station/current/tawes-v1-10min/metadata');
+              if (res.ok) {
+                const data = await res.json();
+                stationIds = (data.stations || []).map((s: any) => String(s.id));
+              }
+            } catch (e) {
+              console.error('[forecast] Failed to load station list for ALL:', e);
+            }
+          }
+          if (!stationIds.length) stationIds = [String(stationSetting)];
+
+          for (const sid of stationIds) {
+            try {
+              await storeForecastForStation(sid);
+              await calculateAndStoreDailyAnalysis(sid);
+              console.log(`[forecast] Stored forecasts and analysis for station ${sid} at midnight`);
+            } catch (e) {
+              console.error(`[forecast] Processing failed for station ${sid}:`, e);
+            }
+            // Small delay to be gentle on upstream APIs
+            await new Promise(r => setTimeout(r, 250));
+          }
         } catch (e) {
           console.error("[forecast] Midnight storage failed:", e);
         }
@@ -122,7 +146,7 @@ export async function register() {
 /**
  * Store forecasts for a single station by calling the internal store API
  */
-async function storeForecastForStation(stationId: string) {
+export async function storeForecastForStation(stationId: string) {
   try {
     const { getDuckConn } = await import("@/lib/db/duckdb");
     const conn = await getDuckConn();
@@ -145,21 +169,65 @@ async function storeForecastForStation(stationId: string) {
       )
     `);
 
-    // Fetch forecasts from all 4 sources
-    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-    const sources = ['forecast', 'openweather', 'meteoblue', 'openmeteo'];
+    // Get station coordinates first
+    const stationsResponse = await fetch('https://dataset.api.hub.geosphere.at/v1/station/current/tawes-v1-10min/metadata');
+    const stationsData = await stationsResponse.json();
+    const station = stationsData.stations.find((s: any) => s.id === stationId);
     
-    for (const source of sources) {
+    if (!station) {
+      console.error(`[forecast] Station ${stationId} not found`);
+      return;
+    }
+    
+    const lat = station.lat;
+    const lon = station.lon;
+    
+    // Fetch forecasts from all 4 sources - DIRECTLY from external APIs
+    const sources = ['geosphere', 'openweather', 'meteoblue', 'openmeteo'];
+    
+    for (const sourceName of sources) {
       try {
-        const response = await fetch(`${baseUrl}/api/forecast?action=${source}&stationId=${stationId}`);
-        if (!response.ok) continue;
+        let forecastData: any[] = [];
         
-        const data = await response.json();
-        const forecastData = data.forecast || [];
-        
-        // Process based on source format
-        if (source === 'forecast') {
-          // Geosphere: aggregate hourly to daily
+        // Fetch from external API directly
+        if (sourceName === 'geosphere') {
+          const url = `https://dataset.api.hub.geosphere.at/v1/timeseries/forecast/ensemble-v1-1h-2500m?parameters=t2m_p50,rr_p50,u10m_p50,v10m_p50&station_ids=${stationId}`;
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const data = await res.json();
+          
+          // Process Geosphere hourly data
+          if (data && data.features && data.features.length > 0 && data.timestamps) {
+            const feature = data.features[0];
+            if (feature.properties && feature.properties.parameters) {
+              const tempData = feature.properties.parameters.t2m_p50?.data || [];
+              const precipData = feature.properties.parameters.rr_p50?.data || [];
+              const uWindData = feature.properties.parameters.u10m_p50?.data || [];
+              const vWindData = feature.properties.parameters.v10m_p50?.data || [];
+              const timestamps = data.timestamps || [];
+              
+              tempData.forEach((tempValue: any, index: number) => {
+                if (index < timestamps.length) {
+                  const time = timestamps[index];
+                  const precipValue = index < precipData.length ? precipData[index] : null;
+                  const uWind = index < uWindData.length ? uWindData[index] : null;
+                  const vWind = index < vWindData.length ? vWindData[index] : null;
+                  let windSpeed = null;
+                  if (uWind !== null && vWind !== null) {
+                    windSpeed = Math.sqrt(uWind * uWind + vWind * vWind) * 3.6;
+                  }
+                  forecastData.push({
+                    time,
+                    temperature: tempValue !== null ? parseFloat(tempValue) : null,
+                    precipitation: precipValue !== null ? parseFloat(precipValue) : null,
+                    windSpeed: windSpeed !== null ? parseFloat(windSpeed.toFixed(1)) : null
+                  });
+                }
+              });
+            }
+          }
+          
+          // Aggregate hourly to daily
           const dailyData = aggregateHourlyToDaily(forecastData);
           for (const day of dailyData) {
             await conn.run(`
@@ -171,8 +239,42 @@ async function storeForecastForStation(stationId: string) {
                             precipitation = EXCLUDED.precipitation, wind_speed = EXCLUDED.wind_speed
             `, [storageDate, stationId, day.date, 'geosphere', day.tempMin, day.tempMax, day.precipitation, day.windSpeed]);
           }
-        } else {
-          // Other sources: already daily format
+          
+        } else if (sourceName === 'openweather') {
+          const apiKey = process.env.OPENWEATHER_API_KEY;
+          if (!apiKey) continue;
+          
+          const res = await fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`);
+          if (!res.ok) continue;
+          const data = await res.json();
+          
+          // Process OpenWeather 3-hour data to daily
+          const dailyMap: Record<string, any[]> = {};
+          data.list?.forEach((item: any) => {
+            const date = new Date(item.dt * 1000);
+            const dateKey = date.toISOString().split('T')[0];
+            if (!dailyMap[dateKey]) dailyMap[dateKey] = [];
+            dailyMap[dateKey].push(item);
+          });
+          
+          forecastData = Object.entries(dailyMap).map(([dateKey, items]) => {
+            const temps = items.map((i: any) => i.main.temp);
+            const tempMins = items.map((i: any) => i.main.temp_min);
+            const tempMaxs = items.map((i: any) => i.main.temp_max);
+            const precipitations = items.map((i: any) => (i.rain?.['3h'] ?? 0) + (i.snow?.['3h'] ?? 0));
+            const windSpeeds = items.map((i: any) => i.wind.speed);
+            const windGusts = items.map((i: any) => i.wind.gust ?? 0);
+            
+            return {
+              date: new Date(dateKey + 'T12:00:00').toISOString(),
+              tempMin: Math.min(...tempMins),
+              tempMax: Math.max(...tempMaxs),
+              precipitation: precipitations.reduce((sum: number, p: number) => sum + p, 0),
+              windSpeed: windSpeeds.reduce((sum: number, w: number) => sum + w, 0) / windSpeeds.length * 3.6,
+              windGust: Math.max(...windGusts) * 3.6
+            };
+          });
+          
           for (const day of forecastData) {
             await conn.run(`
               INSERT INTO forecasts 
@@ -182,11 +284,92 @@ async function storeForecastForStation(stationId: string) {
               DO UPDATE SET temp_min = EXCLUDED.temp_min, temp_max = EXCLUDED.temp_max, 
                             precipitation = EXCLUDED.precipitation, wind_speed = EXCLUDED.wind_speed,
                             wind_gust = EXCLUDED.wind_gust
-            `, [storageDate, stationId, day.date, source, day.tempMin, day.tempMax, day.precipitation, day.windSpeed, day.windGust]);
+            `, [storageDate, stationId, day.date, 'openweather', day.tempMin, day.tempMax, day.precipitation, day.windSpeed, day.windGust]);
+          }
+          
+        } else if (sourceName === 'meteoblue') {
+          const apiKey = process.env.METEOBLUE_API_KEY;
+          if (!apiKey) continue;
+          
+          const res = await fetch(`https://my.meteoblue.com/packages/basic-day?apikey=${apiKey}&lat=${lat}&lon=${lon}&asl=500&format=json&temperature=C&windspeed=kmh&precipitationamount=mm&timeformat=iso8601`);
+          if (!res.ok) continue;
+          const data = await res.json();
+          
+          if (data.data_day) {
+            const d = data.data_day;
+            const timeArray = d.time || [];
+            const tempMaxArray = d.temperature_max || [];
+            const tempMinArray = d.temperature_min || [];
+            const precipArray = d.precipitation || [];
+            const windSpeedArray = d.windspeed_mean || [];
+            const windGustArray = d.windspeed_max || [];
+            
+            forecastData = [];
+            for (let i = 0; i < Math.min(7, timeArray.length); i++) {
+              forecastData.push({
+                date: timeArray[i],
+                tempMin: tempMinArray[i] ?? null,
+                tempMax: tempMaxArray[i] ?? null,
+                precipitation: precipArray[i] ?? 0,
+                windSpeed: windSpeedArray[i] ?? null,
+                windGust: windGustArray[i] ?? null
+              });
+            }
+          }
+          
+          for (const day of forecastData) {
+            await conn.run(`
+              INSERT INTO forecasts 
+              (storage_date, station_id, forecast_date, source, temp_min, temp_max, precipitation, wind_speed, wind_gust)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT (storage_date, station_id, forecast_date, source)
+              DO UPDATE SET temp_min = EXCLUDED.temp_min, temp_max = EXCLUDED.temp_max, 
+                            precipitation = EXCLUDED.precipitation, wind_speed = EXCLUDED.wind_speed,
+                            wind_gust = EXCLUDED.wind_gust
+            `, [storageDate, stationId, day.date, 'meteoblue', day.tempMin, day.tempMax, day.precipitation, day.windSpeed, day.windGust]);
+          }
+          
+        } else if (sourceName === 'openmeteo') {
+          const res = await fetch(`https://api.open-meteo.com/v1/dwd-icon?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum,windspeed_10m_max,windgusts_10m_max,weathercode&timezone=Europe%2FBerlin&forecast_days=7`);
+          if (!res.ok) continue;
+          const data = await res.json();
+          
+          if (data.daily) {
+            const d = data.daily;
+            const timeArray = d.time || [];
+            const tempMaxArray = d.temperature_2m_max || [];
+            const tempMinArray = d.temperature_2m_min || [];
+            const precipArray = d.precipitation_sum || [];
+            const windSpeedArray = d.windspeed_10m_max || [];
+            const windGustArray = d.windgusts_10m_max || [];
+            
+            forecastData = [];
+            for (let i = 0; i < timeArray.length; i++) {
+              forecastData.push({
+                date: timeArray[i],
+                tempMin: tempMinArray[i] ?? null,
+                tempMax: tempMaxArray[i] ?? null,
+                precipitation: precipArray[i] ?? 0,
+                windSpeed: windSpeedArray[i] ?? null,
+                windGust: windGustArray[i] ?? null
+              });
+            }
+          }
+          
+          for (const day of forecastData) {
+            await conn.run(`
+              INSERT INTO forecasts 
+              (storage_date, station_id, forecast_date, source, temp_min, temp_max, precipitation, wind_speed, wind_gust)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT (storage_date, station_id, forecast_date, source)
+              DO UPDATE SET temp_min = EXCLUDED.temp_min, temp_max = EXCLUDED.temp_max, 
+                            precipitation = EXCLUDED.precipitation, wind_speed = EXCLUDED.wind_speed,
+                            wind_gust = EXCLUDED.wind_gust
+            `, [storageDate, stationId, day.date, 'openmeteo', day.tempMin, day.tempMax, day.precipitation, day.windSpeed, day.windGust]);
           }
         }
       } catch (e) {
-        console.error(`[forecast] Failed to store ${source}:`, e);
+        console.error(`[forecast] Failed to store ${sourceName}:`, e);
       }
     }
   } catch (e) {
@@ -228,7 +411,7 @@ function aggregateHourlyToDaily(hourlyData: any[]): any[] {
  * Calculate and store daily forecast analysis
  * Compares yesterday's forecasts with actual weather data
  */
-async function calculateAndStoreDailyAnalysis(stationId: string) {
+export async function calculateAndStoreDailyAnalysis(stationId: string) {
   try {
     const { getDuckConn } = await import("@/lib/db/duckdb");
     const conn = await getDuckConn();
@@ -262,34 +445,45 @@ async function calculateAndStoreDailyAnalysis(stationId: string) {
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
     
-    // Get actual weather data for yesterday
-    const actualQuery = `
-      SELECT 
-        DATE(time) as date,
-        MIN(CAST(CASE WHEN tempf LIKE '%[^0-9.-]%' THEN NULL ELSE tempf END AS DOUBLE)) as temp_min_f,
-        MAX(CAST(CASE WHEN tempf LIKE '%[^0-9.-]%' THEN NULL ELSE tempf END AS DOUBLE)) as temp_max_f,
-        SUM(CAST(CASE WHEN rain_rate_in LIKE '%[^0-9.-]%' THEN NULL ELSE rain_rate_in END AS DOUBLE)) as precipitation_in,
-        AVG(CAST(CASE WHEN windspeedmph LIKE '%[^0-9.-]%' THEN NULL ELSE windspeedmph END AS DOUBLE)) as wind_speed_mph
-      FROM weather_data 
-      WHERE DATE(time) = ?
-      GROUP BY DATE(time)
-    `;
+    // Get actual weather data from Geosphere API for the TAWES station
+    // Fetch historical data from Geosphere for yesterday
+    const startTime = `${yesterdayStr}T00:00:00Z`;
+    const endTime = `${yesterdayStr}T23:59:59Z`;
+    const geosphereUrl = `https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v2-1d?parameters=tl,th,rr,ffam&station_ids=${stationId}&start=${startTime}&end=${endTime}`;
     
-    const actualReader = await conn.runAndReadAll(actualQuery.replace('?', `'${yesterdayStr}'`));
-    const actualData: any = actualReader.getRowObjects();
+    console.log(`[forecast] Fetching actual data from Geosphere for station ${stationId} on ${yesterdayStr}`);
     
-    if (actualData.length === 0) {
-      console.log(`[forecast] No actual weather data for ${yesterdayStr}`);
+    const response = await fetch(geosphereUrl);
+    if (!response.ok) {
+      console.log(`[forecast] Failed to fetch actual data from Geosphere: ${response.status}`);
       return;
     }
     
-    const actual = actualData[0];
+    const geosphereData = await response.json();
+    const timestamps = geosphereData.timestamps || [];
+    const features = geosphereData.features || [];
+    
+    if (timestamps.length === 0 || features.length === 0) {
+      console.log(`[forecast] No actual weather data from Geosphere for ${yesterdayStr}`);
+      return;
+    }
+    
+    // Extract data for the station
+    const stationFeature = features.find((f: any) => f.properties?.station === stationId);
+    if (!stationFeature) {
+      console.log(`[forecast] Station ${stationId} not found in Geosphere response`);
+      return;
+    }
+    
+    const params = stationFeature.properties.parameters;
     const actualConverted = {
-      tempMin: actual.temp_min_f !== null ? (actual.temp_min_f - 32) * 5/9 : null,
-      tempMax: actual.temp_max_f !== null ? (actual.temp_max_f - 32) * 5/9 : null,
-      precipitation: actual.precipitation_in !== null ? actual.precipitation_in * 25.4 : null,
-      windSpeed: actual.wind_speed_mph !== null ? actual.wind_speed_mph * 1.60934 : null
+      tempMin: params.tl?.data?.[0] ?? null,  // tl = Tmin (°C)
+      tempMax: params.th?.data?.[0] ?? null,  // th = Tmax (°C)
+      precipitation: params.rr?.data?.[0] ?? null,  // rr = precipitation (mm)
+      windSpeed: params.ffam?.data?.[0] ?? null  // ffam = wind speed mean (km/h)
     };
+    
+    console.log(`[forecast] Actual data for ${yesterdayStr}:`, actualConverted);
     
     // Get forecasts that were made for yesterday
     const forecastQuery = `
@@ -302,22 +496,25 @@ async function calculateAndStoreDailyAnalysis(stationId: string) {
         precipitation,
         wind_speed
       FROM forecasts 
-      WHERE station_id = ? 
-        AND forecast_date = ?
-        AND storage_date < ?
+      WHERE station_id = '${stationId}'
+        AND forecast_date = '${yesterdayStr}'
+        AND storage_date <= '${yesterdayStr}'
       ORDER BY storage_date DESC, source
     `;
     
-    const forecastReader = await conn.runAndReadAll(
-      forecastQuery
-        .replace('?', `'${stationId}'`)
-        .replace('?', `'${yesterdayStr}'`)
-        .replace('?', `'${yesterdayStr}'`)
-    );
+    const forecastReader = await conn.runAndReadAll(forecastQuery);
     const forecasts: any = forecastReader.getRowObjects();
     
-    // Store analysis for each forecast
-    for (const forecast of forecasts) {
+    // Take the latest (by storage_date DESC) forecast per source only
+    const latestBySource: Record<string, any> = {};
+    for (const f of forecasts) {
+      if (!latestBySource[f.source]) {
+        latestBySource[f.source] = f;
+      }
+    }
+    
+    // Store analysis for each source once
+    for (const forecast of Object.values(latestBySource)) {
       const tempMinError = actualConverted.tempMin !== null && forecast.temp_min !== null 
         ? Math.abs(actualConverted.tempMin - forecast.temp_min) : null;
       const tempMaxError = actualConverted.tempMax !== null && forecast.temp_max !== null 
