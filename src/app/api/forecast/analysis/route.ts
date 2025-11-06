@@ -70,8 +70,8 @@ export async function GET(req: Request) {
         forecast_precipitation,
         forecast_wind_speed
       FROM forecast_analysis
-      WHERE station_id = ${"'" + stationId + "'"}
-        AND analysis_date >= DATE('now', '-${days} days')
+      WHERE station_id = '${stationId}'
+        AND analysis_date >= CURRENT_DATE - INTERVAL '${days}' DAYS
       ORDER BY analysis_date DESC, forecast_date DESC, source
     `;
     
