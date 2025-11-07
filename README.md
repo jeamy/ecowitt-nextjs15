@@ -639,6 +639,42 @@ curl 'http://localhost:3000/api/forecast?action=openmeteo&stationId=11035'
 curl 'http://localhost:3000/api/forecast?action=openweather&stationId=11035'
 ```
 
+- Forecast Analysis (same API calls as frontend)
+
+```bash
+# Get analysis data (used by frontend)
+curl 'http://localhost:3000/api/forecast/analysis?stationId=11229&days=7'
+
+# Get default station config
+curl 'http://localhost:3000/api/config/forecast-station'
+
+# Check database contents (forecasts and analysis tables)
+curl 'http://localhost:3000/api/debug/db'
+```
+
+### Testing Forecast Analysis
+
+Use the provided test script to verify the complete forecast analysis system:
+
+```bash
+# Test with default station (11035) and 7 days
+./test-forecast-analysis.sh
+
+# Test with custom station and days
+./test-forecast-analysis.sh 11035 14
+```
+
+The script will:
+1. Call `/api/forecast/analysis` (same as frontend)
+2. Show database contents (forecasts and forecast_analysis tables)
+3. Display station configuration
+4. Provide a summary of the system status
+
+**Expected output after midnight poller runs:**
+- ✓ Forecasts stored for today and next days (4 sources)
+- ✓ Analysis data available (comparing today with yesterday's forecasts)
+- ✓ Frontend shows real data instead of demo data
+
 ## Troubleshooting
 
 - **No months found**: Are CSVs present in `DNT/` and named `YYYYMM*.CSV`?
