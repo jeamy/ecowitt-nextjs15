@@ -91,15 +91,23 @@ export async function register() {
     const stationSetting = process.env.FORECAST_STATION_ID || "11035"; // or 'ALL'
     console.log(`[forecast] Daily forecast storage enabled for ${stationSetting === 'ALL' ? 'ALL stations' : `station ${stationSetting}`} (runs at midnight only)`);
 
-    // Calculate milliseconds until next midnight
-    const scheduleNextMidnight = () => {
+    let lastRunDate: string | null = null;
+    
+    // Check every 10 minutes if it's between 00:00 and 00:30
+    global.__forecastPoller = setInterval(async () => {
       const now = new Date();
-      const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(0, 0, 0, 0);
-      const msUntilMidnight = tomorrow.getTime() - now.getTime();
+      const currentDate = now.toISOString().split('T')[0];
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
       
-      global.__forecastPoller = setTimeout(async () => {
+      // Run between 00:00 and 00:30 and only once per day
+      if (currentHour === 0 && currentMinute <= 30 && lastRunDate !== currentDate) {
+        console.log(`[forecast] ========================================`);
+        console.log(`[forecast] MIDNIGHT POLLER TRIGGERED at ${now.toISOString()}`);
+        console.log(`[forecast] ========================================`);
+        
+        lastRunDate = currentDate;
+        
         try {
           // Resolve station list
           let stationIds: string[] = [];
@@ -117,29 +125,34 @@ export async function register() {
           }
           if (!stationIds.length) stationIds = [String(stationSetting)];
 
+          console.log(`[forecast] Processing ${stationIds.length} station(s)...`);
+
           for (const sid of stationIds) {
             try {
+              console.log(`[forecast] → Station ${sid}: Storing forecasts...`);
               await storeForecastForStation(sid);
+              
+              console.log(`[forecast] → Station ${sid}: Calculating analysis...`);
               await calculateAndStoreDailyAnalysis(sid);
-              console.log(`[forecast] Stored forecasts and analysis for station ${sid} at midnight`);
-            } catch (e) {
-              console.error(`[forecast] Processing failed for station ${sid}:`, e);
+              
+              console.log(`[forecast] ✓ Station ${sid}: Complete`);
+            } catch (e: any) {
+              console.error(`[forecast] ✗ Station ${sid} failed:`, e?.message || e);
             }
             // Small delay to be gentle on upstream APIs
             await new Promise(r => setTimeout(r, 250));
           }
-        } catch (e) {
-          console.error("[forecast] Midnight storage failed:", e);
+          
+          console.log(`[forecast] ========================================`);
+          console.log(`[forecast] MIDNIGHT POLLER COMPLETE`);
+          console.log(`[forecast] ========================================`);
+        } catch (e: any) {
+          console.error("[forecast] Midnight storage failed:", e?.message || e);
         }
-        
-        // Schedule next midnight
-        scheduleNextMidnight();
-      }, msUntilMidnight);
-      
-      console.log(`[forecast] Next run scheduled in ${Math.round(msUntilMidnight / 1000 / 60)} minutes`);
-    };
+      }
+    }, 600000); // Check every 10 minutes (600000 ms)
     
-    scheduleNextMidnight();
+    console.log(`[forecast] Poller active: checking every 10 minutes for midnight window (00:00-00:30)`);
   }
 }
 
