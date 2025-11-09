@@ -472,19 +472,16 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     
     console.log(`[forecast-analysis] ✓ Analysis table created/verified`);
     
-    // Analyze yesterday's forecasts
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
-    console.log(`[forecast-analysis] Target date: ${yesterdayStr} (yesterday)`);
+    // Analyze TODAY's weather vs forecasts that were stored YESTERDAY for TODAY
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    console.log(`[forecast-analysis] Target date: ${todayStr} (TODAY)`);
+    console.log(`[forecast-analysis] Will compare TODAY's actual weather with forecasts stored YESTERDAY for TODAY`);
     
-    // Get actual weather data from Geosphere API for the TAWES station
-    // Fetch historical data from Geosphere for yesterday
-    const startTime = `${yesterdayStr}T00:00:00Z`;
-    const endTime = `${yesterdayStr}T23:59:59Z`;
-    const geosphereUrl = `https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v2-1d?parameters=tl,th,rr,ffam&station_ids=${stationId}&start=${startTime}&end=${endTime}`;
+    // Get CURRENT weather data from Geosphere API for the TAWES station
+    const geosphereUrl = `https://dataset.api.hub.geosphere.at/v1/station/current/tawes-v1-10min?station_ids=${stationId}`;
     
-    console.log(`[forecast-analysis] Fetching actual data from Geosphere...`);
+    console.log(`[forecast-analysis] Fetching CURRENT weather data from Geosphere...`);
     console.log(`[forecast-analysis] URL: ${geosphereUrl}`);
     
     // Add timeout to prevent hanging and retry logic
@@ -546,7 +543,7 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     console.log(`[forecast-analysis] Geosphere data: ${timestamps.length} timestamps, ${features.length} features`);
     
     if (timestamps.length === 0 || features.length === 0) {
-      console.warn(`[forecast-analysis] ✗ No actual weather data from Geosphere for ${yesterdayStr} (this is normal if data is not yet available)`);
+      console.warn(`[forecast-analysis] ✗ No current weather data from Geosphere (station may be offline)`);
       return;
     }
     
@@ -559,16 +556,19 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     }
     
     const params = stationFeature.properties.parameters;
+    
+    // Current API returns latest 10-minute data
+    // We need to extract temperature, precipitation, and wind speed
     const actualConverted = {
-      tempMin: params.tl?.data?.[0] ?? null,  // tl = Tmin (°C)
-      tempMax: params.th?.data?.[0] ?? null,  // th = Tmax (°C)
-      precipitation: params.rr?.data?.[0] ?? null,  // rr = precipitation (mm)
-      windSpeed: params.ffam?.data?.[0] ?? null  // ffam = wind speed mean (km/h)
+      tempMin: params.TL?.data?.[0] ?? null,  // TL = current temperature (we'll use as both min/max for now)
+      tempMax: params.TL?.data?.[0] ?? null,  // TL = current temperature
+      precipitation: params.RR?.data?.[0] ?? null,  // RR = precipitation sum (mm)
+      windSpeed: params.FFAM?.data?.[0] ?? null  // FFAM = wind speed mean (km/h)
     };
     
-    console.log(`[forecast-analysis] ✓ Actual data for ${yesterdayStr}:`, JSON.stringify(actualConverted, null, 2));
+    console.log(`[forecast-analysis] ✓ Current weather data:`, JSON.stringify(actualConverted, null, 2));
     
-    // Get forecasts that were made for yesterday
+    // Get forecasts that were made for TODAY (stored yesterday or before)
     const forecastQuery = `
       SELECT 
         storage_date,
@@ -580,8 +580,8 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
         wind_speed
       FROM forecasts 
       WHERE station_id = '${stationId}'
-        AND forecast_date = '${yesterdayStr}'
-        AND storage_date <= '${yesterdayStr}'
+        AND forecast_date = '${todayStr}'
+        AND storage_date < '${todayStr}'
       ORDER BY storage_date DESC, source
     `;
     
@@ -591,11 +591,11 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     const forecastReader = await conn.runAndReadAll(forecastQuery);
     const forecasts: any = forecastReader.getRowObjects();
     
-    console.log(`[forecast-analysis] Found ${forecasts.length} forecast rows for ${yesterdayStr}`);
+    console.log(`[forecast-analysis] Found ${forecasts.length} forecast rows for TODAY (${todayStr})`);
     
     if (forecasts.length === 0) {
-      console.warn(`[forecast-analysis] ✗ No forecasts found for ${yesterdayStr} in database`);
-      console.warn(`[forecast-analysis] This means no forecasts were stored before/on ${yesterdayStr}`);
+      console.warn(`[forecast-analysis] ✗ No forecasts found for TODAY (${todayStr}) in database`);
+      console.warn(`[forecast-analysis] This means no forecasts were stored BEFORE today for today`);
       return;
     }
     
@@ -647,7 +647,7 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
           forecast_precipitation = EXCLUDED.forecast_precipitation,
           forecast_wind_speed = EXCLUDED.forecast_wind_speed
       `, [
-        yesterdayStr, stationId, yesterdayStr, forecast.source,
+        todayStr, stationId, todayStr, forecast.source,
         tempMinError, tempMaxError, precipitationError, windSpeedError,
         actualConverted.tempMin, actualConverted.tempMax, actualConverted.precipitation, actualConverted.windSpeed,
         forecast.temp_min, forecast.temp_max, forecast.precipitation, forecast.wind_speed
@@ -656,12 +656,10 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
       stored++;
     }
     
-    console.log(`[forecast-analysis] ✓ Successfully stored ${stored} analysis records`);
+    console.log(`[forecast-analysis] ✓ Successfully stored ${stored} analysis records for TODAY (${todayStr})`);
     console.log(`[forecast-analysis] ========================================`);
     console.log(`[forecast-analysis] DONE`);
     console.log(`[forecast-analysis] ========================================`);
-    
-    console.log(`[forecast] Stored analysis for ${forecasts.length} forecasts for ${yesterdayStr}`);
   } catch (e: any) {
     console.error(`[forecast-analysis] ========================================`);
     console.error(`[forecast-analysis] ✗✗✗ ERROR OCCURRED ✗✗✗`);
