@@ -487,27 +487,55 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     console.log(`[forecast-analysis] Fetching actual data from Geosphere...`);
     console.log(`[forecast-analysis] URL: ${geosphereUrl}`);
     
-    // Add timeout to prevent hanging
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-    
+    // Add timeout to prevent hanging and retry logic
     let response;
-    try {
-      response = await fetch(geosphereUrl, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      console.log(`[forecast-analysis] Geosphere response status: ${response.status}`);
-    } catch (fetchError: any) {
-      clearTimeout(timeoutId);
-      if (fetchError.name === 'AbortError') {
-        console.error(`[forecast-analysis] ✗ Geosphere API timeout after 10 seconds`);
-      } else {
-        console.error(`[forecast-analysis] ✗ Geosphere API fetch error:`, fetchError.message);
+    let lastError: any = null;
+    const maxRetries = 2;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      try {
+        console.log(`[forecast-analysis] Attempt ${attempt}/${maxRetries}...`);
+        response = await fetch(geosphereUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        console.log(`[forecast-analysis] Geosphere response status: ${response.status}`);
+        
+        if (response.ok) {
+          break; // Success!
+        }
+        
+        // Log detailed error for non-OK responses
+        lastError = { status: response.status, statusText: response.statusText };
+        console.warn(`[forecast-analysis] ⚠ Attempt ${attempt} failed: ${response.status} ${response.statusText}`);
+        
+        if (attempt < maxRetries) {
+          console.log(`[forecast-analysis] Retrying in 2 seconds...`);
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        lastError = fetchError;
+        
+        if (fetchError.name === 'AbortError') {
+          console.warn(`[forecast-analysis] ⚠ Attempt ${attempt} timeout after 10 seconds`);
+        } else {
+          console.warn(`[forecast-analysis] ⚠ Attempt ${attempt} fetch error:`, fetchError.message);
+        }
+        
+        if (attempt < maxRetries) {
+          console.log(`[forecast-analysis] Retrying in 2 seconds...`);
+          await new Promise(r => setTimeout(r, 2000));
+        }
       }
-      return;
     }
     
-    if (!response.ok) {
-      console.error(`[forecast-analysis] ✗ Failed to fetch actual data from Geosphere: ${response.status}`);
+    if (!response || !response.ok) {
+      console.error(`[forecast-analysis] ✗ All ${maxRetries} attempts failed`);
+      console.error(`[forecast-analysis] ✗ Last error:`, lastError);
+      console.error(`[forecast-analysis] ✗ This is likely a Geosphere API issue (403 = access denied, 500 = server error)`);
+      console.error(`[forecast-analysis] ✗ Analysis will be skipped for today - will retry tomorrow`);
       return;
     }
     

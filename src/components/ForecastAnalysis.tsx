@@ -87,10 +87,16 @@ export default function ForecastAnalysis() {
   const fetchStations = async () => {
     try {
       const response = await fetch(API_ENDPOINTS.FORECAST_STATIONS);
+      if (!response.ok) {
+        console.warn(`[ForecastAnalysis] Failed to fetch stations: ${response.status} - skipping station list`);
+        setStations({});
+        return;
+      }
       const stationsData = await response.json();
       setStations(stationsData.stations || {});
     } catch (err) {
-      console.error("Failed to fetch stations:", err);
+      console.error("[ForecastAnalysis] Failed to fetch stations:", err);
+      setStations({});
     }
   };
 

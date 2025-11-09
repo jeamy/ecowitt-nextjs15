@@ -181,11 +181,19 @@ export default function Forecast() {
       try {
         setLoading(true);
         const response = await fetch(API_ENDPOINTS.FORECAST_STATIONS);
+        
+        let stationsData: Record<string, Station[]> = {};
+        
         if (!response.ok) {
-          throw new Error(`Failed to fetch stations: ${response.status}`);
+          console.warn(`[Forecast] Failed to fetch stations: ${response.status} - skipping station list`);
+          setError('Station list unavailable');
+        } else {
+          const data = await response.json();
+          stationsData = data.stations || {};
+          setError(null);
         }
-        const data = await response.json();
-        setStations(data.stations);
+        
+        setStations(stationsData);
         
         // Load last selected station from localStorage, or use default from env
         const lastSelected = localStorage.getItem("forecastStation");
@@ -201,25 +209,33 @@ export default function Forecast() {
             }
           } catch (err) {
             console.error("Error loading default station:", err);
+            stationToUse = '11035'; // Fallback to Wien
           }
         }
         
-        if (stationToUse && data.stations) {
+        if (stationToUse && stationsData) {
           // Verify the station exists
           let stationExists = false;
-          for (const state in data.stations) {
-            if (data.stations[state].some((station: Station) => station.id === stationToUse)) {
+          for (const state in stationsData) {
+            if (stationsData[state].some((station: Station) => station.id === stationToUse)) {
               stationExists = true;
               break;
             }
           }
           if (stationExists) {
             setSelectedStation(stationToUse);
+          } else {
+            // Use first available station if selected doesn't exist
+            const firstState = Object.keys(stationsData)[0];
+            if (firstState && stationsData[firstState][0]) {
+              setSelectedStation(stationsData[firstState][0].id);
+            }
           }
         }
       } catch (err) {
-        setError(`Error loading stations: ${err instanceof Error ? err.message : String(err)}`);
-        console.error("Error loading stations:", err);
+        console.error("[Forecast] Error loading stations:", err);
+        setStations({});
+        setError('Station list unavailable');
       } finally {
         setLoading(false);
       }
