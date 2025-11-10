@@ -1,4 +1,4 @@
-// import "server-only"; // Temporarily disabled for testing
+import "server-only";
 
 // Avoid multiple intervals in dev/HMR
 declare global {
@@ -479,8 +479,9 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     console.log(`[forecast-analysis] Will compare TODAY's actual weather with forecasts stored YESTERDAY for TODAY`);
     
     // Get CURRENT weather data from Geosphere API for the TAWES station
-    // Note: The current API endpoint does NOT use station_ids parameter - it returns ALL stations
-    const geosphereUrl = `https://dataset.api.hub.geosphere.at/v1/station/current/tawes-v1-10min`;
+    // The current API requires 'parameters' to specify which data to fetch
+    // TL = temperature, RR = precipitation, FFAM = wind speed mean
+    const geosphereUrl = `https://dataset.api.hub.geosphere.at/v1/station/current/tawes-v1-10min?parameters=TL,RR,FFAM&station_ids=${stationId}`;
     
     console.log(`[forecast-analysis] Fetching CURRENT weather data from Geosphere...`);
     console.log(`[forecast-analysis] URL: ${geosphereUrl}`);
@@ -530,11 +531,13 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     }
     
     if (!response || !response.ok) {
+      const errorMsg = `Geosphere API failed after ${maxRetries} attempts. Status: ${lastError?.status || 'unknown'}, Error: ${JSON.stringify(lastError)}`;
       console.error(`[forecast-analysis] ✗ All ${maxRetries} attempts failed`);
       console.error(`[forecast-analysis] ✗ Last error:`, lastError);
-      console.error(`[forecast-analysis] ✗ This is likely a Geosphere API issue (403 = access denied, 500 = server error)`);
+      console.error(`[forecast-analysis] ✗ URL was: ${geosphereUrl}`);
+      console.error(`[forecast-analysis] ✗ This is likely a Geosphere API issue (422 = wrong parameters, 403 = access denied, 500 = server error)`);
       console.error(`[forecast-analysis] ✗ Analysis will be skipped for today - will retry tomorrow`);
-      return;
+      throw new Error(errorMsg); // Throw error so it appears in poller logs
     }
     
     const geosphereData = await response.json();
