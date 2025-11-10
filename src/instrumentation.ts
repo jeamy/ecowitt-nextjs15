@@ -1,4 +1,4 @@
-// import "server-only"; // Temporarily disabled for testing
+import "server-only";
 
 // Avoid multiple intervals in dev/HMR
 declare global {
@@ -479,7 +479,8 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     console.log(`[forecast-analysis] Will compare TODAY's actual weather with forecasts stored YESTERDAY for TODAY`);
     
     // Get CURRENT weather data from Geosphere API for the TAWES station
-    const geosphereUrl = `https://dataset.api.hub.geosphere.at/v1/station/current/tawes-v1-10min?station_ids=${stationId}`;
+    // Note: The current API endpoint does NOT use station_ids parameter - it returns ALL stations
+    const geosphereUrl = `https://dataset.api.hub.geosphere.at/v1/station/current/tawes-v1-10min`;
     
     console.log(`[forecast-analysis] Fetching CURRENT weather data from Geosphere...`);
     console.log(`[forecast-analysis] URL: ${geosphereUrl}`);
