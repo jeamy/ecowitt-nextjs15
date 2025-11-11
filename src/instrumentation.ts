@@ -160,10 +160,15 @@ export async function register() {
  * Store forecasts for a single station by calling the internal store API
  */
 export async function storeForecastForStation(stationId: string) {
+  console.log(`[forecast-store] ========================================`);
+  console.log(`[forecast-store] START: Storing forecasts for station ${stationId}`);
+  console.log(`[forecast-store] ========================================`);
+  
   try {
     const { getDuckConn } = await import("@/lib/db/duckdb");
     const conn = await getDuckConn();
     const storageDate = new Date().toISOString().split('T')[0];
+    console.log(`[forecast-store] ✓ Database connection established`);
     
     // Create forecast table if not exists
     await conn.run(`
@@ -181,16 +186,25 @@ export async function storeForecastForStation(stationId: string) {
         PRIMARY KEY(storage_date, station_id, forecast_date, source)
       )
     `);
+    console.log(`[forecast-store] ✓ Forecast table created/verified`);
 
     // Get station coordinates first
+    console.log(`[forecast-store] Fetching station metadata...`);
     const stationsResponse = await fetch('https://dataset.api.hub.geosphere.at/v1/station/current/tawes-v1-10min/metadata');
+    
+    if (!stationsResponse.ok) {
+      throw new Error(`Failed to fetch station metadata: ${stationsResponse.status} ${stationsResponse.statusText}`);
+    }
+    
     const stationsData = await stationsResponse.json();
     const station = stationsData.stations.find((s: any) => s.id === stationId);
     
     if (!station) {
-      console.error(`[forecast] Station ${stationId} not found`);
-      return;
+      throw new Error(`Station ${stationId} not found in metadata`);
     }
+    
+    console.log(`[forecast-store] ✓ Station found: ${station.name} (${station.lat}, ${station.lon})`);
+  
     
     const lat = station.lat;
     const lon = station.lon;
@@ -393,12 +407,20 @@ export async function storeForecastForStation(stationId: string) {
             `, [storageDate, stationId, day.date, 'openmeteo', day.tempMin, day.tempMax, day.precipitation, day.windSpeed, day.windGust]);
           }
         }
-      } catch (e) {
-        console.error(`[forecast] Failed to store ${sourceName}:`, e);
+      } catch (e: any) {
+        console.error(`[forecast-store] ✗ Failed to store ${sourceName}:`, e?.message || e);
       }
     }
-  } catch (e) {
-    console.error("[forecast] Storage failed:", e);
+    
+    console.log(`[forecast-store] ========================================`);
+    console.log(`[forecast-store] DONE: Forecasts stored for station ${stationId}`);
+    console.log(`[forecast-store] ========================================`);
+  } catch (e: any) {
+    console.error(`[forecast-store] ========================================`);
+    console.error(`[forecast-store] ✗✗✗ STORAGE FAILED ✗✗✗`);
+    console.error(`[forecast-store] ========================================`);
+    console.error(`[forecast-store] Error:`, e?.message || e);
+    console.error(`[forecast-store] Stack:`, e?.stack);
     throw e;
   }
 }
