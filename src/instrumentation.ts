@@ -101,7 +101,7 @@ export async function register() {
       const currentMinute = now.getMinutes();
       
       // Run between 00:00 and 00:30 and only once per day
-      if (currentHour === 0 && currentMinute <= 30 && lastRunDate !== currentDate) {
+      if (currentHour === 20 && currentMinute <= 30 && lastRunDate !== currentDate) {
         console.log(`[forecast] ========================================`);
         console.log(`[forecast] MIDNIGHT POLLER TRIGGERED at ${now.toISOString()}`);
         console.log(`[forecast] ========================================`);
