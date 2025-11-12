@@ -87,10 +87,13 @@ export async function GET(req: Request) {
     // Group by analysis_date
     const byDate: Record<string, any> = {};
     for (const row of rows) {
-      const date = row.analysis_date;
+      // Convert DuckDB Date objects to strings
+      const date = String(row.analysis_date);
+      const forecastDate = String(row.forecast_date);
+      
       if (!byDate[date]) byDate[date] = { date, forecasts: [] as any[] };
       byDate[date].forecasts.push({
-        forecastDate: row.forecast_date,
+        forecastDate,
         source: row.source,
         errors: {
           tempMin: row.temp_min_error,
