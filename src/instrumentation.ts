@@ -494,18 +494,21 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     
     console.log(`[forecast-analysis] ✓ Analysis table created/verified`);
     
-    // Analyze TODAY's weather vs forecasts that were stored YESTERDAY for TODAY
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    console.log(`[forecast-analysis] Target date: ${todayStr} (TODAY)`);
-    console.log(`[forecast-analysis] Will compare TODAY's actual weather with forecasts stored YESTERDAY for TODAY`);
+    // Analyze YESTERDAY's weather vs forecasts that were stored for YESTERDAY
+    // We use YESTERDAY because historical data has a 1-2 day delay
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    console.log(`[forecast-analysis] Target date: ${yesterdayStr} (YESTERDAY)`);
+    console.log(`[forecast-analysis] Will compare YESTERDAY's actual weather (min/max) with forecasts stored for YESTERDAY`);
     
-    // Get CURRENT weather data from Geosphere API for the TAWES station
-    // The current API requires 'parameters' to specify which data to fetch
-    // TL = temperature, RR = precipitation, FFAM = wind speed mean
-    const geosphereUrl = `https://dataset.api.hub.geosphere.at/v1/station/current/tawes-v1-10min?parameters=TL,RR,FFAM&station_ids=${stationId}`;
+    // Get HISTORICAL weather data from Geosphere API for YESTERDAY
+    // Historical API provides daily min/max values (tl=min, th=max)
+    const startTime = `${yesterdayStr}T00:00:00Z`;
+    const endTime = `${yesterdayStr}T23:59:59Z`;
+    const geosphereUrl = `https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v2-1d?parameters=tl,th,rr,ffam&station_ids=${stationId}&start=${startTime}&end=${endTime}`;
     
-    console.log(`[forecast-analysis] Fetching CURRENT weather data from Geosphere...`);
+    console.log(`[forecast-analysis] Fetching HISTORICAL weather data from Geosphere...`);
     console.log(`[forecast-analysis] URL: ${geosphereUrl}`);
     
     // Add timeout to prevent hanging and retry logic
@@ -569,7 +572,8 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     console.log(`[forecast-analysis] Geosphere data: ${timestamps.length} timestamps, ${features.length} features`);
     
     if (timestamps.length === 0 || features.length === 0) {
-      console.warn(`[forecast-analysis] ✗ No current weather data from Geosphere (station may be offline)`);
+      console.warn(`[forecast-analysis] ✗ No historical weather data from Geosphere for ${yesterdayStr}`);
+      console.warn(`[forecast-analysis] This is normal if data is not yet available - will retry tomorrow`);
       return;
     }
     
@@ -583,18 +587,17 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     
     const params = stationFeature.properties.parameters;
     
-    // Current API returns latest 10-minute data
-    // We need to extract temperature, precipitation, and wind speed
+    // Historical API returns daily min/max values
     const actualConverted = {
-      tempMin: params.TL?.data?.[0] ?? null,  // TL = current temperature (we'll use as both min/max for now)
-      tempMax: params.TL?.data?.[0] ?? null,  // TL = current temperature
-      precipitation: params.RR?.data?.[0] ?? null,  // RR = precipitation sum (mm)
-      windSpeed: params.FFAM?.data?.[0] ?? null  // FFAM = wind speed mean (km/h)
+      tempMin: params.tl?.data?.[0] ?? null,  // tl = Tmin (°C)
+      tempMax: params.th?.data?.[0] ?? null,  // th = Tmax (°C)
+      precipitation: params.rr?.data?.[0] ?? null,  // rr = precipitation (mm)
+      windSpeed: params.ffam?.data?.[0] ?? null  // ffam = wind speed mean (km/h)
     };
     
-    console.log(`[forecast-analysis] ✓ Current weather data:`, JSON.stringify(actualConverted, null, 2));
+    console.log(`[forecast-analysis] ✓ Historical weather data for ${yesterdayStr}:`, JSON.stringify(actualConverted, null, 2));
     
-    // Get forecasts that were made for TODAY (stored yesterday or before)
+    // Get forecasts that were made for YESTERDAY (stored before yesterday)
     const forecastQuery = `
       SELECT 
         storage_date,
@@ -606,8 +609,8 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
         wind_speed
       FROM forecasts 
       WHERE station_id = '${stationId}'
-        AND forecast_date = '${todayStr}'
-        AND storage_date < '${todayStr}'
+        AND forecast_date = '${yesterdayStr}'
+        AND storage_date < '${yesterdayStr}'
       ORDER BY storage_date DESC, source
     `;
     
@@ -617,11 +620,11 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     const forecastReader = await conn.runAndReadAll(forecastQuery);
     const forecasts: any = forecastReader.getRowObjects();
     
-    console.log(`[forecast-analysis] Found ${forecasts.length} forecast rows for TODAY (${todayStr})`);
+    console.log(`[forecast-analysis] Found ${forecasts.length} forecast rows for YESTERDAY (${yesterdayStr})`);
     
     if (forecasts.length === 0) {
-      console.warn(`[forecast-analysis] ✗ No forecasts found for TODAY (${todayStr}) in database`);
-      console.warn(`[forecast-analysis] This means no forecasts were stored BEFORE today for today`);
+      console.warn(`[forecast-analysis] ✗ No forecasts found for YESTERDAY (${yesterdayStr}) in database`);
+      console.warn(`[forecast-analysis] This means no forecasts were stored BEFORE yesterday for yesterday`);
       return;
     }
     
@@ -673,7 +676,7 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
           forecast_precipitation = EXCLUDED.forecast_precipitation,
           forecast_wind_speed = EXCLUDED.forecast_wind_speed
       `, [
-        todayStr, stationId, todayStr, forecast.source,
+        yesterdayStr, stationId, yesterdayStr, forecast.source,
         tempMinError, tempMaxError, precipitationError, windSpeedError,
         actualConverted.tempMin, actualConverted.tempMax, actualConverted.precipitation, actualConverted.windSpeed,
         forecast.temp_min, forecast.temp_max, forecast.precipitation, forecast.wind_speed
@@ -682,7 +685,7 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
       stored++;
     }
     
-    console.log(`[forecast-analysis] ✓ Successfully stored ${stored} analysis records for TODAY (${todayStr})`);
+    console.log(`[forecast-analysis] ✓ Successfully stored ${stored} analysis records for YESTERDAY (${yesterdayStr})`);
     console.log(`[forecast-analysis] ========================================`);
     console.log(`[forecast-analysis] DONE`);
     console.log(`[forecast-analysis] ========================================`);
