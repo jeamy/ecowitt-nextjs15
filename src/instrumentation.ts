@@ -27,6 +27,14 @@ export async function register() {
   const intervalMs = Math.max(10_000, Number(msRaw) || 300_000); // min 10s safety
 
   if (!global.__rtPoller) {
+    const { getDuckConn } = await import("@/lib/db/duckdb");
+    const conn = await getDuckConn();
+    await conn.run(`
+      DELETE FROM forecast_analysis 
+      WHERE analysis_date < CURRENT_DATE - INTERVAL '90' DAYS
+    `);
+    console.log(`[forecast-analysis] ✓ Cleaned up old analysis records (>90 days)`);
+
     console.log(`[rt] Server poller active: every ${intervalMs} ms`);
     // Immediate run to populate cache on startup
     (async () => {
