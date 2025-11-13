@@ -494,6 +494,13 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     
     console.log(`[forecast-analysis] ✓ Analysis table created/verified`);
     
+    // Delete old analysis data (older than 90 days)
+    await conn.run(`
+      DELETE FROM forecast_analysis 
+      WHERE analysis_date < CURRENT_DATE - INTERVAL '0' DAYS
+    `);
+    console.log(`[forecast-analysis] ✓ Cleaned up old analysis records (>90 days)`);
+    
     // Analyze YESTERDAY's weather vs forecasts that were stored for YESTERDAY
     // We use YESTERDAY because historical data has a 1-2 day delay
     const yesterday = new Date();
