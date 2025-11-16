@@ -1,5 +1,3 @@
-import "server-only";
-
 // Avoid multiple intervals in dev/HMR
 declare global {
   // eslint-disable-next-line no-var
@@ -511,102 +509,44 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     const yesterdayStr = yesterday.toISOString().split('T')[0];
     console.log(`[forecast-analysis] Target date: ${yesterdayStr} (YESTERDAY)`);
     console.log(`[forecast-analysis] Will compare YESTERDAY's actual weather (min/max) with forecasts stored for YESTERDAY`);
-    
-    // Get HISTORICAL weather data from Geosphere API for YESTERDAY
-    // Historical API provides daily min/max values (tl=min, th=max)
-    const startTime = `${yesterdayStr}T00:00:00Z`;
-    const endTime = `${yesterdayStr}T23:59:59Z`;
-    const geosphereUrl = `https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v2-1d?parameters=tl,th,rr,ffam&station_ids=${stationId}&start=${startTime}&end=${endTime}`;
-    
-    console.log(`[forecast-analysis] Fetching HISTORICAL weather data from Geosphere...`);
-    console.log(`[forecast-analysis] URL: ${geosphereUrl}`);
-    
-    // Add timeout to prevent hanging and retry logic
-    let response;
-    let lastError: any = null;
-    const maxRetries = 2;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-      
-      try {
-        console.log(`[forecast-analysis] Attempt ${attempt}/${maxRetries}...`);
-        response = await fetch(geosphereUrl, { signal: controller.signal });
-        clearTimeout(timeoutId);
-        console.log(`[forecast-analysis] Geosphere response status: ${response.status}`);
-        
-        if (response.ok) {
-          break; // Success!
-        }
-        
-        // Log detailed error for non-OK responses
-        lastError = { status: response.status, statusText: response.statusText };
-        console.warn(`[forecast-analysis] ⚠ Attempt ${attempt} failed: ${response.status} ${response.statusText}`);
-        
-        if (attempt < maxRetries) {
-          console.log(`[forecast-analysis] Retrying in 2 seconds...`);
-          await new Promise(r => setTimeout(r, 2000));
-        }
-      } catch (fetchError: any) {
-        clearTimeout(timeoutId);
-        lastError = fetchError;
-        
-        if (fetchError.name === 'AbortError') {
-          console.warn(`[forecast-analysis] ⚠ Attempt ${attempt} timeout after 10 seconds`);
-        } else {
-          console.warn(`[forecast-analysis] ⚠ Attempt ${attempt} fetch error:`, fetchError.message);
-        }
-        
-        if (attempt < maxRetries) {
-          console.log(`[forecast-analysis] Retrying in 2 seconds...`);
-          await new Promise(r => setTimeout(r, 2000));
-        }
-      }
-    }
-    
-    if (!response || !response.ok) {
-      const errorMsg = `Geosphere API failed after ${maxRetries} attempts. Status: ${lastError?.status || 'unknown'}, Error: ${JSON.stringify(lastError)}`;
-      console.error(`[forecast-analysis] ✗ All ${maxRetries} attempts failed`);
-      console.error(`[forecast-analysis] ✗ Last error:`, lastError);
-      console.error(`[forecast-analysis] ✗ URL was: ${geosphereUrl}`);
-      console.error(`[forecast-analysis] ✗ This is likely a Geosphere API issue (422 = wrong parameters, 403 = access denied, 500 = server error)`);
-      console.error(`[forecast-analysis] ✗ Analysis will be skipped for today - will retry tomorrow`);
-      throw new Error(errorMsg); // Throw error so it appears in poller logs
-    }
-    
-    const geosphereData = await response.json();
-    const timestamps = geosphereData.timestamps || [];
-    const features = geosphereData.features || [];
-    
-    console.log(`[forecast-analysis] Geosphere data: ${timestamps.length} timestamps, ${features.length} features`);
-    
-    if (timestamps.length === 0 || features.length === 0) {
-      console.warn(`[forecast-analysis] ✗ No historical weather data from Geosphere for ${yesterdayStr}`);
-      console.warn(`[forecast-analysis] This is normal if data is not yet available - will retry tomorrow`);
+
+    // Load locally stored MAIN data (daily aggregates) for the selected date
+    const startOfDay = new Date(`${yesterdayStr}T00:00:00`);
+    const endOfDay = new Date(`${yesterdayStr}T23:59:59`);
+
+    const [{ ensureMainParquetsInRange }, { queryDailyAggregatesInRange }] = await Promise.all([
+      import("@/lib/db/ingest"),
+      import("@/lib/statistics"),
+    ]);
+
+    const parquetFiles = await ensureMainParquetsInRange(startOfDay, endOfDay);
+    if (!parquetFiles.length) {
+      console.warn(`[forecast-analysis] ✗ No local MAIN data available for ${yesterdayStr}`);
       return;
     }
-    
-    // Extract data for the station
-    const stationFeature = features.find((f: any) => f.properties?.station === stationId);
-    if (!stationFeature) {
-      console.error(`[forecast-analysis] ✗ Station ${stationId} not found in Geosphere response`);
-      console.log(`[forecast-analysis] Available stations:`, features.map((f: any) => f.properties?.station));
+
+    const dailyRows = await queryDailyAggregatesInRange(parquetFiles, startOfDay, endOfDay);
+    const targetRow = dailyRows.find((row: any) => String(row.day || '').startsWith(yesterdayStr));
+
+    if (!targetRow) {
+      console.warn(`[forecast-analysis] ✗ No aggregated row found for ${yesterdayStr}`);
       return;
     }
-    
-    const params = stationFeature.properties.parameters;
-    
-    // Historical API returns daily min/max values
-    const actualConverted = {
-      tempMin: params.tl?.data?.[0] ?? null,  // tl = Tmin (°C)
-      tempMax: params.th?.data?.[0] ?? null,  // th = Tmax (°C)
-      precipitation: params.rr?.data?.[0] ?? null,  // rr = precipitation (mm)
-      windSpeed: params.ffam?.data?.[0] ?? null  // ffam = wind speed mean (km/h)
+
+    const toNumber = (value: any) => {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : null;
     };
-    
-    console.log(`[forecast-analysis] ✓ Historical weather data for ${yesterdayStr}:`, JSON.stringify(actualConverted, null, 2));
-    
+
+    const actualConverted = {
+      tempMin: toNumber(targetRow.tmin),
+      tempMax: toNumber(targetRow.tmax),
+      precipitation: toNumber(targetRow.rain_day) ?? 0,
+      windSpeed: toNumber(targetRow.wind_avg ?? targetRow.wind_max)
+    };
+
+    console.log(`[forecast-analysis] ✓ Local MAIN data for ${yesterdayStr}:`, JSON.stringify(actualConverted, null, 2));
+
     // Get forecasts that were made for YESTERDAY (stored before yesterday)
     const forecastQuery = `
       SELECT 

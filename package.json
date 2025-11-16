@@ -6,7 +6,7 @@
     "predev": "tsx src/scripts/prewarm.ts",
     "dev": "next dev",
     "build": "next build",
-    "prestart": "tsx src/scripts/prewarm.ts",
+    "prestart": "tsx src/scripts/cleanup-forecast-analysis.ts && tsx src/scripts/prewarm.ts",
     "start": "next start",
     "lint": "next lint",
     "prewarm": "tsx src/scripts/prewarm.ts"
