@@ -652,47 +652,6 @@ curl 'http://localhost:3000/api/config/forecast-station'
 curl 'http://localhost:3000/api/debug/db'
 ```
 
-### Testing Forecast Analysis
-
-**1. Check current status:**
-
-```bash
-# Test with default station (11035) and 7 days
-./test-forecast-analysis.sh
-
-# Test with custom station and days
-./test-forecast-analysis.sh 11035 7
-```
-
-The script will:
-- Call `/api/forecast/analysis` (same as frontend)
-- Show database contents (forecasts and forecast_analysis tables)
-- Display station configuration
-- Provide a summary of the system status
-
-**2. Manually trigger forecast storage and analysis:**
-
-```bash
-# Run with default station (11035)
-./run-forecast-now.sh
-
-# Run with custom station
-./run-forecast-now.sh 11035
-```
-
-This script will:
-1. Store forecasts immediately (POST `/api/forecast/store`)
-2. Calculate analysis (POST `/api/forecast/analyze`)
-3. Show database contents and API response
-4. Provide detailed summary
-
-**Expected output after midnight poller runs:**
-- ✓ Forecasts stored for today and next days (4 sources)
-- ✓ Analysis data available (comparing today with yesterday's forecasts)
-- ✓ Frontend shows real data instead of demo data
-
-**Note:** Analysis requires forecasts from yesterday. If you run `run-forecast-now.sh` for the first time, it will store forecasts but analysis will fail (no yesterday's forecasts). Run it again tomorrow or wait for the midnight poller.
-
 ## Troubleshooting
 
 - **No months found**: Are CSVs present in `DNT/` and named `YYYYMM*.CSV`?
@@ -704,4 +663,4 @@ This script will:
 
 ## Attribution
 
-This project was built with assistance from Windsurf (agentic AI coding assistant) and GPT-5.
+This project was built with assistance from Windsurf (agentic AI coding assistant) and GPT-5/5.1.
