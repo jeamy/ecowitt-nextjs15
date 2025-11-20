@@ -85,24 +85,24 @@ export async function register() {
     }, statsIntervalMs);
   }
 
-  // Schedule daily forecast storage at midnight
+  // Schedule daily forecast storage at 20:00 (8 PM)
   if (!global.__forecastPoller) {
     const stationSetting = process.env.FORECAST_STATION_ID || "11035"; // or 'ALL'
-    console.log(`[forecast] Daily forecast storage enabled for ${stationSetting === 'ALL' ? 'ALL stations' : `station ${stationSetting}`} (runs at midnight only)`);
+    console.log(`[forecast] Daily forecast storage enabled for ${stationSetting === 'ALL' ? 'ALL stations' : `station ${stationSetting}`} (runs at 20:00 daily)`);
 
     let lastRunDate: string | null = null;
     
-    // Check every 10 minutes if it's between 00:00 and 00:30
+    // Check every 10 minutes if it's between 20:00 and 20:30
     global.__forecastPoller = setInterval(async () => {
       const now = new Date();
       const currentDate = now.toISOString().split('T')[0];
       const currentHour = now.getHours();
       const currentMinute = now.getMinutes();
       
-      // Run between 00:00 and 00:30 and only once per day
+      // Run between 20:00 and 20:30 and only once per day
       if (currentHour === 20 && currentMinute <= 30 && lastRunDate !== currentDate) {
         console.log(`[forecast] ========================================`);
-        console.log(`[forecast] MIDNIGHT POLLER TRIGGERED at ${now.toISOString()}`);
+        console.log(`[forecast] DAILY POLLER TRIGGERED at ${now.toISOString()}`);
         console.log(`[forecast] ========================================`);
         
         lastRunDate = currentDate;
@@ -127,23 +127,40 @@ export async function register() {
           console.log(`[forecast] Processing ${stationIds.length} station(s)...`);
 
           for (const sid of stationIds) {
-            try {
-              console.log(`[forecast] → Station ${sid}: Storing forecasts...`);
-              await storeForecastForStation(sid);
-              
-              console.log(`[forecast] → Station ${sid}: Calculating analysis...`);
-              await calculateAndStoreDailyAnalysis(sid);
-              
-              console.log(`[forecast] ✓ Station ${sid}: Complete`);
-            } catch (e: any) {
-              console.error(`[forecast] ✗ Station ${sid} failed:`, e?.message || e);
+            const maxAttempts = 3;
+            const retryDelayMs = 30_000;
+            let success = false;
+
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+              try {
+                console.log(`[forecast] → Station ${sid}: Storing forecasts (attempt ${attempt} of ${maxAttempts})...`);
+                await storeForecastForStation(sid);
+                
+                console.log(`[forecast] → Station ${sid}: Calculating analysis (attempt ${attempt} of ${maxAttempts})...`);
+                await calculateAndStoreDailyAnalysis(sid);
+                
+                console.log(`[forecast] ✓ Station ${sid}: Complete`);
+                success = true;
+                break;
+              } catch (e: any) {
+                console.error(`[forecast] ✗ Station ${sid} attempt ${attempt} failed:`, e?.message || e);
+                if (attempt < maxAttempts) {
+                  console.log(`[forecast] → Station ${sid}: Retrying in ${retryDelayMs / 1000} seconds...`);
+                  await new Promise(r => setTimeout(r, retryDelayMs));
+                }
+              }
             }
+
+            if (!success) {
+              console.error(`[forecast] ✗ Station ${sid} failed after ${maxAttempts} attempts - skipping to next station`);
+            }
+
             // Small delay to be gentle on upstream APIs
             await new Promise(r => setTimeout(r, 250));
           }
           
           console.log(`[forecast] ========================================`);
-          console.log(`[forecast] MIDNIGHT POLLER COMPLETE`);
+          console.log(`[forecast] DAILY POLLER COMPLETE`);
           console.log(`[forecast] ========================================`);
         } catch (e: any) {
           console.error("[forecast] Midnight storage failed:", e?.message || e);
@@ -560,7 +577,7 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
       FROM forecasts 
       WHERE station_id = '${stationId}'
         AND forecast_date = '${yesterdayStr}'
-        AND storage_date < '${yesterdayStr}'
+        AND storage_date <= '${yesterdayStr}'
       ORDER BY storage_date DESC, source
     `;
     
