@@ -566,9 +566,19 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     const rainGenericExpr = rainGenericExprList.length ? `COALESCE(${rainGenericExprList.join(', ')})` : 'NULL';
     const windExprList = (cols.windCandidates || []).map((c) => speedExprFor(c));
     const windExpr = windExprList.length ? `COALESCE(${windExprList.join(', ')})` : 'NULL';
-    const rainAgg = cols.rainMode === "daily" ? "max(rain_day)" : "sum(rain_day)";
 
     const arr = '[' + qp.map((p) => `'${p}'`).join(',') + ']';
+    
+    // Build rain aggregation based on mode (daily cumulative vs hourly/generic sum)
+    let rainAggExpr = 'NULL';
+    if (cols.rainMode === 'daily' && rainDailyExprList.length) {
+      rainAggExpr = 'max(rain_d)';
+    } else if (rainHourlyExprList.length) {
+      rainAggExpr = 'sum(rain_h)';
+    } else if (rainGenericExprList.length) {
+      rainAggExpr = 'sum(rain_g)';
+    }
+    
     const sql = `
       WITH src AS (
         SELECT * FROM read_parquet(${arr}, union_by_name=true)
@@ -590,7 +600,7 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
           '${yesterdayStr}' AS day,
           max(t) AS tmax,
           min(t) AS tmin,
-          ${rainAgg} AS rain_day,
+          ${rainAggExpr} AS rain_day,
           max(wind) AS wind_max,
           avg(wind) AS wind_avg
         FROM casted
