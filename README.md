@@ -299,13 +299,14 @@ The homepage is split into four tabs:
   - Uses `FORECAST_STATION_ID` as default station if no station selected
   - Last selected station is saved in localStorage
 - **Analyse (Analysis)**: Forecast accuracy analysis comparing predictions with actual weather data.
-  - **Automatic daily analysis at midnight (00:00)**: Compares yesterday's forecasts with actual weather data
+  - **Automatic daily analysis at 20:00 (8 PM)**: Compares yesterday's forecasts with actual weather data
   - **Persistent storage**: Analysis results stored in DuckDB `forecast_analysis` table
   - Shows Mean Absolute Error (MAE) and Root Mean Square Error (RMSE) for temperature, precipitation, and wind
   - Daily comparison details with error highlighting for all 4 forecast sources
   - Configurable time range (7-60 days) and station selection
-  - **Demo data shown if no real analysis available yet** (first analysis runs after midnight)
-  - Automatically stores forecasts daily via server background poller (runs at midnight, not every 24h)
+  - **Demo data shown if no real analysis available yet** (first analysis runs at 20:00)
+  - Automatically stores forecasts daily via server background poller (runs at 20:00, not every 24h)
+  - **Retry logic**: Each station gets 3 attempts with 30-second delays; failed stations are skipped
   - Station ID configured via `FORECAST_STATION_ID` environment variable (default: 11035 - Wien)
   - Same station ID is used for all forecast sources (Geosphere, Meteoblue, Open-Meteo, OpenWeatherMap)
   - Color-coded display: red for max temperature, blue for min temperature and precipitation
@@ -502,7 +503,7 @@ const rt = await fetch('/api/rt/last').then(r => r.json());
 
 ### Forecast Storage & Analysis
 
-Forecasts are automatically stored **daily at midnight (00:00)** by the server background poller (configured via `FORECAST_STATION_ID` in `.env`). Analysis is calculated automatically after storage.
+Forecasts are automatically stored **daily at 20:00 (8 PM)** by the server background poller (configured via `FORECAST_STATION_ID` in `.env`). Analysis is calculated automatically after storage. Each station gets up to 3 retry attempts with 30-second delays if errors occur.
 
 - Get stored analysis results (GET) **[Recommended]**
 

@@ -163,12 +163,12 @@ export async function register() {
           console.log(`[forecast] DAILY POLLER COMPLETE`);
           console.log(`[forecast] ========================================`);
         } catch (e: any) {
-          console.error("[forecast] Midnight storage failed:", e?.message || e);
+          console.error("[forecast] Daily storage failed:", e?.message || e);
         }
       }
     }, 600000); // Check every 10 minutes (600000 ms)
     
-    console.log(`[forecast] Poller active: checking every 10 minutes for midnight window (00:00-00:30)`);
+    console.log(`[forecast] Poller active: checking every 10 minutes for 20:00 window (20:00-20:30)`);
   }
 }
 
