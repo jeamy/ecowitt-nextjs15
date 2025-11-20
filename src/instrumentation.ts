@@ -528,28 +528,88 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     console.log(`[forecast-analysis] Will compare YESTERDAY's actual weather (min/max) with forecasts stored for YESTERDAY`);
 
     // Load locally stored MAIN data (daily aggregates) for the selected date
+    // NOTE: We compare Geosphere station forecasts with local weather station data
+    // This works because both stations are at the same location
     const startOfDay = new Date(`${yesterdayStr}T00:00:00`);
     const endOfDay = new Date(`${yesterdayStr}T23:59:59`);
 
-    const [{ ensureMainParquetsInRange }, { queryDailyAggregatesInRange }] = await Promise.all([
-      import("@/lib/db/ingest"),
-      import("@/lib/statistics"),
-    ]);
+    const { ensureMainParquetsInRange } = await import("@/lib/db/ingest");
+    const { discoverMainColumns, sqlNum, speedExprFor } = await import("@/lib/data/columns");
 
     const parquetFiles = await ensureMainParquetsInRange(startOfDay, endOfDay);
     if (!parquetFiles.length) {
-      console.warn(`[forecast-analysis] ✗ No local MAIN data available for ${yesterdayStr}`);
+      console.warn(`[forecast-analysis] ✗ No local MAIN data (Parquet) available for ${yesterdayStr}`);
+      console.warn(`[forecast-analysis] Make sure your weather station CSV files are up to date in DNT/ folder`);
       return;
     }
 
-    const dailyRows = await queryDailyAggregatesInRange(parquetFiles, startOfDay, endOfDay);
-    const targetRow = dailyRows.find((row: any) => String(row.day || '').startsWith(yesterdayStr));
+    console.log(`[forecast-analysis] ✓ Found ${parquetFiles.length} Parquet file(s) for ${yesterdayStr}`);
 
-    if (!targetRow) {
-      console.warn(`[forecast-analysis] ✗ No aggregated row found for ${yesterdayStr}`);
+    // Query daily aggregates directly from Parquet with robust column detection
+    const qp = parquetFiles.map((p) => p.replace(/\\/g, "/"));
+    const cols = await discoverMainColumns(qp);
+    
+    if (!cols.temp) {
+      console.warn(`[forecast-analysis] ✗ Could not detect temperature column in MAIN data`);
       return;
     }
 
+    console.log(`[forecast-analysis] ✓ Detected columns: temp=${cols.temp}, rain_mode=${cols.rainMode}`);
+
+    // Build SQL expressions for temperature, rain, and wind
+    const tempExpr = sqlNum('"' + String(cols.temp).replace(/"/g, '""') + '"');
+    const rainDailyExprList = (cols.dailyRainCandidates || []).map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
+    const rainHourlyExprList = (cols.hourlyRainCandidates || []).map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
+    const rainGenericExprList = (cols.genericRainCandidates || []).map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
+    const rainDailyExpr = rainDailyExprList.length ? `COALESCE(${rainDailyExprList.join(', ')})` : 'NULL';
+    const rainHourlyExpr = rainHourlyExprList.length ? `COALESCE(${rainHourlyExprList.join(', ')})` : 'NULL';
+    const rainGenericExpr = rainGenericExprList.length ? `COALESCE(${rainGenericExprList.join(', ')})` : 'NULL';
+    const windExprList = (cols.windCandidates || []).map((c) => speedExprFor(c));
+    const windExpr = windExprList.length ? `COALESCE(${windExprList.join(', ')})` : 'NULL';
+    const rainAgg = cols.rainMode === "daily" ? "max(rain_day)" : "sum(rain_day)";
+
+    const arr = '[' + qp.map((p) => `'${p}'`).join(',') + ']';
+    const sql = `
+      WITH src AS (
+        SELECT * FROM read_parquet(${arr}, union_by_name=true)
+      ),
+      casted AS (
+        SELECT ts,
+          ${tempExpr} AS t,
+          ${rainDailyExpr} AS rain_d,
+          ${rainHourlyExpr} AS rain_h,
+          ${rainGenericExpr} AS rain_g,
+          ${windExpr} AS wind
+        FROM src
+        WHERE ts IS NOT NULL
+          AND ts >= '${yesterdayStr}T00:00:00'::TIMESTAMP
+          AND ts < '${yesterdayStr}T23:59:59'::TIMESTAMP
+      ),
+      daily AS (
+        SELECT
+          '${yesterdayStr}' AS day,
+          max(t) AS tmax,
+          min(t) AS tmin,
+          ${rainAgg} AS rain_day,
+          max(wind) AS wind_max,
+          avg(wind) AS wind_avg
+        FROM casted
+        WHERE t IS NOT NULL
+      )
+      SELECT * FROM daily WHERE tmax IS NOT NULL
+    `;
+
+    console.log(`[forecast-analysis] Running daily aggregate query for ${yesterdayStr}...`);
+    const dailyReader = await conn.runAndReadAll(sql);
+    const dailyRows = dailyReader.getRowObjects();
+
+    if (!dailyRows.length) {
+      console.warn(`[forecast-analysis] ✗ No aggregated data found for ${yesterdayStr}`);
+      console.warn(`[forecast-analysis] This usually means the Parquet file has no data for this date`);
+      return;
+    }
+
+    const targetRow = dailyRows[0];
     const toNumber = (value: any) => {
       const num = Number(value);
       return Number.isFinite(num) ? num : null;
