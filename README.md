@@ -300,6 +300,7 @@ The homepage is split into four tabs:
   - Last selected station is saved in localStorage
 - **Analyse (Analysis)**: Forecast accuracy analysis comparing predictions with actual weather data.
   - **Automatic daily analysis at 20:00 (8 PM)**: Compares yesterday's forecasts with actual weather data
+  - **Data comparison**: Geosphere station forecasts are compared with local weather station data (both at same location)
   - **Persistent storage**: Analysis results stored in DuckDB `forecast_analysis` table
   - Shows Mean Absolute Error (MAE) and Root Mean Square Error (RMSE) for temperature, precipitation, and wind
   - Daily comparison details with error highlighting for all 4 forecast sources
@@ -503,7 +504,7 @@ const rt = await fetch('/api/rt/last').then(r => r.json());
 
 ### Forecast Storage & Analysis
 
-Forecasts are automatically stored **daily at 20:00 (8 PM)** by the server background poller (configured via `FORECAST_STATION_ID` in `.env`). Analysis is calculated automatically after storage. Each station gets up to 3 retry attempts with 30-second delays if errors occur.
+Forecasts are automatically stored **daily at 20:00 (8 PM)** by the server background poller (configured via `FORECAST_STATION_ID` in `.env`). Analysis is calculated automatically after storage by comparing Geosphere station forecasts with local weather station data. Each station gets up to 3 retry attempts with 30-second delays if errors occur.
 
 - Get stored analysis results (GET) **[Recommended]**
 
@@ -640,7 +641,7 @@ curl 'http://localhost:3000/api/forecast?action=openmeteo&stationId=11035'
 curl 'http://localhost:3000/api/forecast?action=openweather&stationId=11035'
 ```
 
-- Forecast Analysis (same API calls as frontend)
+- Forecast Analysis & Debug
 
 ```bash
 # Get analysis data (used by frontend)
@@ -649,7 +650,14 @@ curl 'http://localhost:3000/api/forecast/analysis?stationId=11229&days=7'
 # Get default station config
 curl 'http://localhost:3000/api/config/forecast-station'
 
-# Check database contents (forecasts and analysis tables)
+# Debug: View stored forecast data directly from DuckDB
+curl 'http://localhost:3000/api/dforecast'
+curl 'http://localhost:3000/api/dforecast?stationId=11229'
+curl 'http://localhost:3000/api/dforecast?stationId=11229&limit=50'
+curl 'http://localhost:3000/api/dforecast?table=analysis'  # View forecast_analysis table
+curl 'http://localhost:3000/api/dforecast?table=analysis&stationId=11229'
+
+# Legacy: Check all database contents
 curl 'http://localhost:3000/api/debug/db'
 ```
 
@@ -658,10 +666,15 @@ curl 'http://localhost:3000/api/debug/db'
 - **No months found**: Are CSVs present in `DNT/` and named `YYYYMM*.CSV`?
 - **Empty charts**: Check if headers match expected patterns and values are not all `--`.
 - **Time axis looks off**: Check the date format is `YYYY/M/D H:MM` (or ISO-like alternative).
+- **Forecast analysis shows no data**: 
+  - Check if forecasts are being stored: `curl 'http://localhost:3000/api/dforecast?stationId=11229'`
+  - Check if local MAIN data is up-to-date in `DNT/` folder (CSV files from weather station)
+  - Check analysis table: `curl 'http://localhost:3000/api/dforecast?table=analysis&stationId=11229'`
+  - Analysis requires both forecast data AND local weather data for the same date
 - **Build/TS errors**: Ensure `tsconfig.json` has `baseUrl`/`paths` set for `@/*` (provided).
 - **Module not found `@duckdb/node-bindings-*/duckdb.node`**: Ensure `@duckdb/node-api` is installed, Turbopack is disabled in dev (`npm run dev` without the flag), routes run in Node runtime, and `src/lib/db/duckdb.ts` uses dynamic import. Remove `.next/` and restart if needed.
 - **Unknown module type (@mapbox/node-pre-gyp)**: Remove legacy `duckdb` (`npm remove duckdb`), use `@duckdb/node-api` only.
 
 ## Attribution
 
-This project was built with assistance from Windsurf (agentic AI coding assistant) and GPT-5/5.1.
+This project was built with assistance from Windsurf (agentic AI coding assistant) and GPT-5/5.1, Claude 4.5 Sonnet .
