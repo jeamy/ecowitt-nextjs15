@@ -85,24 +85,24 @@ export async function register() {
     }, statsIntervalMs);
   }
 
-  // Schedule daily forecast storage at midnight
+  // Schedule daily forecast storage at 20:00 (8 PM)
   if (!global.__forecastPoller) {
     const stationSetting = process.env.FORECAST_STATION_ID || "11035"; // or 'ALL'
-    console.log(`[forecast] Daily forecast storage enabled for ${stationSetting === 'ALL' ? 'ALL stations' : `station ${stationSetting}`} (runs at midnight only)`);
+    console.log(`[forecast] Daily forecast storage enabled for ${stationSetting === 'ALL' ? 'ALL stations' : `station ${stationSetting}`} (runs at 20:00 daily)`);
 
     let lastRunDate: string | null = null;
     
-    // Check every 10 minutes if it's between 00:00 and 00:30
+    // Check every 10 minutes if it's between 20:00 and 20:30
     global.__forecastPoller = setInterval(async () => {
       const now = new Date();
       const currentDate = now.toISOString().split('T')[0];
       const currentHour = now.getHours();
       const currentMinute = now.getMinutes();
       
-      // Run between 00:00 and 00:30 and only once per day
+      // Run between 20:00 and 20:30 and only once per day
       if (currentHour === 20 && currentMinute <= 30 && lastRunDate !== currentDate) {
         console.log(`[forecast] ========================================`);
-        console.log(`[forecast] MIDNIGHT POLLER TRIGGERED at ${now.toISOString()}`);
+        console.log(`[forecast] DAILY POLLER TRIGGERED at ${now.toISOString()}`);
         console.log(`[forecast] ========================================`);
         
         lastRunDate = currentDate;
@@ -140,20 +140,21 @@ export async function register() {
             } catch (e: any) {
               console.error(`[forecast] ✗ Station ${sid} failed:`, e?.message || e);
             }
+
             // Small delay to be gentle on upstream APIs
             await new Promise(r => setTimeout(r, 250));
           }
           
           console.log(`[forecast] ========================================`);
-          console.log(`[forecast] MIDNIGHT POLLER COMPLETE`);
+          console.log(`[forecast] DAILY POLLER COMPLETE`);
           console.log(`[forecast] ========================================`);
         } catch (e: any) {
-          console.error("[forecast] Midnight storage failed:", e?.message || e);
+          console.error("[forecast] Daily storage failed:", e?.message || e);
         }
       }
     }, 600000); // Check every 10 minutes (600000 ms)
     
-    console.log(`[forecast] Poller active: checking every 10 minutes for midnight window (00:00-00:30)`);
+    console.log(`[forecast] Poller active: checking every 10 minutes for 20:00 window (20:00-20:30)`);
   }
 }
 
@@ -512,28 +513,98 @@ async function calculateAndStoreDailyAnalysisForDate(stationId: string, targetDa
     console.log(`[forecast-analysis] Will compare YESTERDAY's actual weather (min/max) with forecasts stored for YESTERDAY`);
 
     // Load locally stored MAIN data (daily aggregates) for the selected date
+    // NOTE: We compare Geosphere station forecasts with local weather station data
+    // This works because both stations are at the same location
     const startOfDay = new Date(`${yesterdayStr}T00:00:00`);
     const endOfDay = new Date(`${yesterdayStr}T23:59:59`);
 
-    const [{ ensureMainParquetsInRange }, { queryDailyAggregatesInRange }] = await Promise.all([
-      import("@/lib/db/ingest"),
-      import("@/lib/statistics"),
-    ]);
+    const { ensureMainParquetsInRange } = await import("@/lib/db/ingest");
+    const { discoverMainColumns, sqlNum, speedExprFor } = await import("@/lib/data/columns");
 
     const parquetFiles = await ensureMainParquetsInRange(startOfDay, endOfDay);
     if (!parquetFiles.length) {
-      console.warn(`[forecast-analysis] ✗ No local MAIN data available for ${yesterdayStr}`);
+      console.warn(`[forecast-analysis] ✗ No local MAIN data (Parquet) available for ${yesterdayStr}`);
+      console.warn(`[forecast-analysis] Make sure your weather station CSV files are up to date in DNT/ folder`);
       return;
     }
 
-    const dailyRows = await queryDailyAggregatesInRange(parquetFiles, startOfDay, endOfDay);
-    const targetRow = dailyRows.find((row: any) => String(row.day || '').startsWith(yesterdayStr));
+    console.log(`[forecast-analysis] ✓ Found ${parquetFiles.length} Parquet file(s) for ${yesterdayStr}`);
 
-    if (!targetRow) {
-      console.warn(`[forecast-analysis] ✗ No aggregated row found for ${yesterdayStr}`);
+    // Query daily aggregates directly from Parquet with robust column detection
+    const qp = parquetFiles.map((p) => p.replace(/\\/g, "/"));
+    const cols = await discoverMainColumns(qp);
+    
+    if (!cols.temp) {
+      console.warn(`[forecast-analysis] ✗ Could not detect temperature column in MAIN data`);
       return;
     }
 
+    console.log(`[forecast-analysis] ✓ Detected columns: temp=${cols.temp}, rain_mode=${cols.rainMode}`);
+
+    // Build SQL expressions for temperature, rain, and wind
+    const tempExpr = sqlNum('"' + String(cols.temp).replace(/"/g, '""') + '"');
+    const rainDailyExprList = (cols.dailyRainCandidates || []).map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
+    const rainHourlyExprList = (cols.hourlyRainCandidates || []).map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
+    const rainGenericExprList = (cols.genericRainCandidates || []).map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
+    const rainDailyExpr = rainDailyExprList.length ? `COALESCE(${rainDailyExprList.join(', ')})` : 'NULL';
+    const rainHourlyExpr = rainHourlyExprList.length ? `COALESCE(${rainHourlyExprList.join(', ')})` : 'NULL';
+    const rainGenericExpr = rainGenericExprList.length ? `COALESCE(${rainGenericExprList.join(', ')})` : 'NULL';
+    const windExprList = (cols.windCandidates || []).map((c) => speedExprFor(c));
+    const windExpr = windExprList.length ? `COALESCE(${windExprList.join(', ')})` : 'NULL';
+
+    const arr = '[' + qp.map((p) => `'${p}'`).join(',') + ']';
+    
+    // Build rain aggregation based on mode (daily cumulative vs hourly/generic sum)
+    let rainAggExpr = 'NULL';
+    if (cols.rainMode === 'daily' && rainDailyExprList.length) {
+      rainAggExpr = 'max(rain_d)';
+    } else if (rainHourlyExprList.length) {
+      rainAggExpr = 'sum(rain_h)';
+    } else if (rainGenericExprList.length) {
+      rainAggExpr = 'sum(rain_g)';
+    }
+    
+    const sql = `
+      WITH src AS (
+        SELECT * FROM read_parquet(${arr}, union_by_name=true)
+      ),
+      casted AS (
+        SELECT ts,
+          ${tempExpr} AS t,
+          ${rainDailyExpr} AS rain_d,
+          ${rainHourlyExpr} AS rain_h,
+          ${rainGenericExpr} AS rain_g,
+          ${windExpr} AS wind
+        FROM src
+        WHERE ts IS NOT NULL
+          AND ts >= '${yesterdayStr}T00:00:00'::TIMESTAMP
+          AND ts < '${yesterdayStr}T23:59:59'::TIMESTAMP
+      ),
+      daily AS (
+        SELECT
+          '${yesterdayStr}' AS day,
+          max(t) AS tmax,
+          min(t) AS tmin,
+          ${rainAggExpr} AS rain_day,
+          max(wind) AS wind_max,
+          avg(wind) AS wind_avg
+        FROM casted
+        WHERE t IS NOT NULL
+      )
+      SELECT * FROM daily WHERE tmax IS NOT NULL
+    `;
+
+    console.log(`[forecast-analysis] Running daily aggregate query for ${yesterdayStr}...`);
+    const dailyReader = await conn.runAndReadAll(sql);
+    const dailyRows = dailyReader.getRowObjects();
+
+    if (!dailyRows.length) {
+      console.warn(`[forecast-analysis] ✗ No aggregated data found for ${yesterdayStr}`);
+      console.warn(`[forecast-analysis] This usually means the Parquet file has no data for this date`);
+      return;
+    }
+
+    const targetRow = dailyRows[0];
     const toNumber = (value: any) => {
       const num = Number(value);
       return Number.isFinite(num) ? num : null;
