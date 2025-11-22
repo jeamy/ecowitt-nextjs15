@@ -36,6 +36,7 @@ export const API_ENDPOINTS = {
   // Forecast storage/analysis
   FORECAST_STORE: '/api/forecast/store',
   FORECAST_ANALYZE: '/api/forecast/analyze',
+  FORECAST_BACKFILL: '/api/forecast/backfill',
   FORECAST_ANALYSIS: '/api/forecast/analysis',
   // Config
   CONFIG_FORECAST_STATION: '/api/config/forecast-station',

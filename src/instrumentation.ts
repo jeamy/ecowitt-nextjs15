@@ -133,7 +133,9 @@ export async function register() {
               
               console.log(`[forecast] → Station ${sid}: Calculating analysis...`);
               await calculateAndStoreDailyAnalysis(sid);
-              
+              console.log(`[forecast] → Station ${sid}: Backfilling analysis for last 7 days...`);
+              await backfillForecastAnalysis(sid, 7);
+
               console.log(`[forecast] ✓ Station ${sid}: Complete`);
             } catch (e: any) {
               console.error(`[forecast] ✗ Station ${sid} failed:`, e?.message || e);
@@ -457,7 +459,7 @@ function aggregateHourlyToDaily(hourlyData: any[]): any[] {
  * Calculate and store daily forecast analysis
  * Compares yesterday's forecasts with actual weather data
  */
-export async function calculateAndStoreDailyAnalysis(stationId: string) {
+async function calculateAndStoreDailyAnalysisForDate(stationId: string, targetDate: Date) {
   console.log(`[forecast-analysis] ========================================`);
   console.log(`[forecast-analysis] START: Calculating analysis for station ${stationId}`);
   console.log(`[forecast-analysis] ========================================`);
@@ -504,8 +506,7 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     
     // Analyze YESTERDAY's weather vs forecasts that were stored for YESTERDAY
     // We use YESTERDAY because historical data has a 1-2 day delay
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterday = new Date(targetDate);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
     console.log(`[forecast-analysis] Target date: ${yesterdayStr} (YESTERDAY)`);
     console.log(`[forecast-analysis] Will compare YESTERDAY's actual weather (min/max) with forecasts stored for YESTERDAY`);
@@ -547,7 +548,7 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
 
     console.log(`[forecast-analysis] ✓ Local MAIN data for ${yesterdayStr}:`, JSON.stringify(actualConverted, null, 2));
 
-    // Get forecasts that were made for YESTERDAY (stored before yesterday)
+    // Get forecasts that were made for YESTERDAY (stored on or before yesterday)
     const forecastQuery = `
       SELECT 
         storage_date,
@@ -560,7 +561,7 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
       FROM forecasts 
       WHERE station_id = '${stationId}'
         AND forecast_date = '${yesterdayStr}'
-        AND storage_date < '${yesterdayStr}'
+        AND storage_date <= '${yesterdayStr}'
       ORDER BY storage_date DESC, source
     `;
     
@@ -647,5 +648,20 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     console.error(`[forecast-analysis] Stack trace:`, e?.stack);
     console.error(`[forecast-analysis] ========================================`);
     throw e;
+  }
+}
+
+export async function calculateAndStoreDailyAnalysis(stationId: string) {
+  const target = new Date();
+  target.setDate(target.getDate() - 1);
+  await calculateAndStoreDailyAnalysisForDate(stationId, target);
+}
+
+export async function backfillForecastAnalysis(stationId: string, days: number) {
+  const maxDays = Math.max(1, Math.min(days, 90));
+  for (let offset = 1; offset <= maxDays; offset++) {
+    const target = new Date();
+    target.setDate(target.getDate() - offset);
+    await calculateAndStoreDailyAnalysisForDate(stationId, target);
   }
 }
