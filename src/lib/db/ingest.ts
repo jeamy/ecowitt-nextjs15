@@ -1,6 +1,5 @@
 import path from "path";
 import { promises as fs } from "fs";
-import { getDuckConn } from "@/lib/db/duckdb";
 import {
   getAllsensorsFilename,
   getAllsensorsFilesInRange,
@@ -95,25 +94,27 @@ export async function ensureAllsensorsParquetForMonth(month: string): Promise<st
   const needBuild = !(await fileExists(pqAbs)) || (await mtimeMs(pqAbs)) < (await mtimeMs(csvAbs));
   if (!needBuild) return pqAbs;
 
-  const conn = await getDuckConn();
-  // Introspect to find time column name
-  const desc = await conn.runAndReadAll(`DESCRIBE SELECT * FROM read_csv_auto('${csvAbs.replace(/\\/g, '/')}', header=true, union_by_name=true, ignore_errors=true)`);
-  const cols = desc.getRowObjects();
-  const tsCol = selectTimeColumnName(cols);
-  if (!tsCol) throw new Error(`No time column found in ${path.basename(csvAbs)}`);
-  const tsId = '"' + tsCol.replace(/"/g, '""') + '"';
-  // Normalize timestamp column 'ts'
-  const sql = `
-    CREATE OR REPLACE TEMP VIEW v_src AS
-    SELECT
-      strptime(CAST(${tsId} AS VARCHAR),
-        ['%Y-%m-%d %H:%M','%Y/%m/%d %H:%M','%Y-%m-%dT%H:%M','%Y-%m-%d %H:%M:%S','%Y/%m/%d %H:%M:%S','%Y-%m-%dT%H:%M:%S','%d.%m.%Y %H:%M','%d.%m.%Y %H:%M:%S']
-      ) AS ts,
-      *
-    FROM read_csv_auto('${csvAbs.replace(/\\/g, '/')}', header=true, union_by_name=true, ignore_errors=true);
-    COPY (SELECT * FROM v_src) TO '${pqAbs.replace(/\\/g, '/')}' (FORMAT PARQUET, COMPRESSION ZSTD);
-  `;
-  await conn.run(sql);
+  const { withConn } = await import("@/lib/db/duckdb");
+  await withConn(async (conn) => {
+    // Introspect to find time column name
+    const desc = await conn.runAndReadAll(`DESCRIBE SELECT * FROM read_csv_auto('${csvAbs.replace(/\\/g, '/')}', header=true, union_by_name=true, ignore_errors=true)`);
+    const cols = desc.getRowObjects();
+    const tsCol = selectTimeColumnName(cols);
+    if (!tsCol) throw new Error(`No time column found in ${path.basename(csvAbs)}`);
+    const tsId = '"' + tsCol.replace(/"/g, '""') + '"';
+    // Normalize timestamp column 'ts'
+    const sql = `
+      CREATE OR REPLACE TEMP VIEW v_src AS
+      SELECT
+        strptime(CAST(${tsId} AS VARCHAR),
+          ['%Y-%m-%d %H:%M','%Y/%m/%d %H:%M','%Y-%m-%dT%H:%M','%Y-%m-%d %H:%M:%S','%Y/%m/%d %H:%M:%S','%Y-%m-%dT%H:%M:%S','%d.%m.%Y %H:%M','%d.%m.%Y %H:%M:%S']
+        ) AS ts,
+        *
+      FROM read_csv_auto('${csvAbs.replace(/\\/g, '/')}', header=true, union_by_name=true, ignore_errors=true);
+      COPY (SELECT * FROM v_src) TO '${pqAbs.replace(/\\/g, '/')}' (FORMAT PARQUET, COMPRESSION ZSTD);
+    `;
+    await conn.run(sql);
+  });
   return pqAbs;
 }
 
@@ -150,25 +151,27 @@ export async function ensureMainParquetForMonth(month: string): Promise<string |
   const needBuild = !(await fileExists(pqAbs)) || (await mtimeMs(pqAbs)) < (await mtimeMs(csvAbs));
   if (!needBuild) return pqAbs;
 
-  const conn = await getDuckConn();
-  // Introspect to find time column name
-  const desc2 = await conn.runAndReadAll(`DESCRIBE SELECT * FROM read_csv_auto('${csvAbs.replace(/\\/g, '/')}', header=true, union_by_name=true, ignore_errors=true)`);
-  const cols2 = desc2.getRowObjects();
-  const tsCol2 = selectTimeColumnName(cols2);
-  if (!tsCol2) throw new Error(`No time column found in ${path.basename(csvAbs)}`);
-  const tsId2 = '"' + tsCol2.replace(/"/g, '""') + '"';
-  // Normalize timestamp column 'ts'
-  const sql = `
-    CREATE OR REPLACE TEMP VIEW v_src AS
-    SELECT
-      strptime(CAST(${tsId2} AS VARCHAR),
-        ['%Y-%m-%d %H:%M','%Y/%m/%d %H:%M','%Y-%m-%dT%H:%M','%Y-%m-%d %H:%M:%S','%Y/%m/%d %H:%M:%S','%Y-%m-%dT%H:%M:%S','%d.%m.%Y %H:%M','%d.%m.%Y %H:%M:%S']
-      ) AS ts,
-      *
-    FROM read_csv_auto('${csvAbs.replace(/\\/g, '/')}', header=true, union_by_name=true, ignore_errors=true);
-    COPY (SELECT * FROM v_src) TO '${pqAbs.replace(/\\/g, '/')}' (FORMAT PARQUET, COMPRESSION ZSTD);
-  `;
-  await conn.run(sql);
+  const { withConn } = await import("@/lib/db/duckdb");
+  await withConn(async (conn) => {
+    // Introspect to find time column name
+    const desc2 = await conn.runAndReadAll(`DESCRIBE SELECT * FROM read_csv_auto('${csvAbs.replace(/\\/g, '/')}', header=true, union_by_name=true, ignore_errors=true)`);
+    const cols2 = desc2.getRowObjects();
+    const tsCol2 = selectTimeColumnName(cols2);
+    if (!tsCol2) throw new Error(`No time column found in ${path.basename(csvAbs)}`);
+    const tsId2 = '"' + tsCol2.replace(/"/g, '""') + '"';
+    // Normalize timestamp column 'ts'
+    const sql = `
+      CREATE OR REPLACE TEMP VIEW v_src AS
+      SELECT
+        strptime(CAST(${tsId2} AS VARCHAR),
+          ['%Y-%m-%d %H:%M','%Y/%m/%d %H:%M','%Y-%m-%dT%H:%M','%Y-%m-%d %H:%M:%S','%Y/%m/%d %H:%M:%S','%Y-%m-%dT%H:%M:%S','%d.%m.%Y %H:%M','%d.%m.%Y %H:%M:%S']
+        ) AS ts,
+        *
+      FROM read_csv_auto('${csvAbs.replace(/\\/g, '/')}', header=true, union_by_name=true, ignore_errors=true);
+      COPY (SELECT * FROM v_src) TO '${pqAbs.replace(/\\/g, '/')}' (FORMAT PARQUET, COMPRESSION ZSTD);
+    `;
+    await conn.run(sql);
+  });
   return pqAbs;
 }
 

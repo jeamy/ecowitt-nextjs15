@@ -120,29 +120,30 @@ export async function register() {
       // Only check if we haven't already run a catchup or scheduled run today
       if (lastCatchupRunDate !== currentDate && lastScheduledRunDate !== currentDate) {
         try {
-          const { getDuckConn } = await import("@/lib/db/duckdb");
-          const conn = await getDuckConn();
+          const { withConn } = await import("@/lib/db/duckdb");
 
-          // Check if we have ANY forecast data for today
-          // We use a simple query to check existence
-          const checkQuery = `SELECT 1 FROM forecasts WHERE storage_date = '${currentDate}' LIMIT 1`;
-          const result = await conn.runAndReadAll(checkQuery);
-          const hasData = result.getRowObjects().length > 0;
+          await withConn(async (conn) => {
+            // Check if we have ANY forecast data for today
+            // We use a simple query to check existence
+            const checkQuery = `SELECT 1 FROM forecasts WHERE storage_date = '${currentDate}' LIMIT 1`;
+            const result = await conn.runAndReadAll(checkQuery);
+            const hasData = result.getRowObjects().length > 0;
 
-          if (!hasData) {
-            console.log(`[forecast] ========================================`);
-            console.log(`[forecast] CATCHUP POLLER TRIGGERED at ${now.toISOString()}`);
-            console.log(`[forecast] No forecast data found for today (${currentDate}). Running catchup...`);
-            console.log(`[forecast] ========================================`);
+            if (!hasData) {
+              console.log(`[forecast] ========================================`);
+              console.log(`[forecast] CATCHUP POLLER TRIGGERED at ${now.toISOString()}`);
+              console.log(`[forecast] No forecast data found for today (${currentDate}). Running catchup...`);
+              console.log(`[forecast] ========================================`);
 
-            lastCatchupRunDate = currentDate;
-            await runForecastJob(stationSetting);
-          } else {
-            // We have data, so mark catchup as done for today to avoid checking DB constantly
-            // But DO NOT set lastScheduledRunDate, so the 20:00 run can still happen
-            lastCatchupRunDate = currentDate;
-            console.log(`[forecast] Data already exists for ${currentDate}. Catchup skipped.`);
-          }
+              lastCatchupRunDate = currentDate;
+              await runForecastJob(stationSetting);
+            } else {
+              // We have data, so mark catchup as done for today to avoid checking DB constantly
+              // But DO NOT set lastScheduledRunDate, so the 20:00 run can still happen
+              lastCatchupRunDate = currentDate;
+              console.log(`[forecast] Data already exists for ${currentDate}. Catchup skipped.`);
+            }
+          });
         } catch (e) {
           console.error("[forecast] Catchup check failed:", e);
         }
@@ -155,23 +156,24 @@ export async function register() {
     setTimeout(async () => {
       console.log("[forecast] Running startup check...");
       try {
-        const { getDuckConn } = await import("@/lib/db/duckdb");
-        const conn = await getDuckConn();
-        const now = new Date();
-        const currentDate = now.toISOString().split('T')[0];
+        const { withConn } = await import("@/lib/db/duckdb");
+        await withConn(async (conn) => {
+          const now = new Date();
+          const currentDate = now.toISOString().split('T')[0];
 
-        const checkQuery = `SELECT 1 FROM forecasts WHERE storage_date = '${currentDate}' LIMIT 1`;
-        const result = await conn.runAndReadAll(checkQuery);
-        const hasData = result.getRowObjects().length > 0;
+          const checkQuery = `SELECT 1 FROM forecasts WHERE storage_date = '${currentDate}' LIMIT 1`;
+          const result = await conn.runAndReadAll(checkQuery);
+          const hasData = result.getRowObjects().length > 0;
 
-        if (!hasData) {
-          console.log(`[forecast] Startup catchup triggered for ${currentDate}`);
-          lastCatchupRunDate = currentDate;
-          await runForecastJob(stationSetting);
-        } else {
-          console.log(`[forecast] Startup check: Data exists for ${currentDate}`);
-          lastCatchupRunDate = currentDate;
-        }
+          if (!hasData) {
+            console.log(`[forecast] Startup catchup triggered for ${currentDate}`);
+            lastCatchupRunDate = currentDate;
+            await runForecastJob(stationSetting);
+          } else {
+            console.log(`[forecast] Startup check: Data exists for ${currentDate}`);
+            lastCatchupRunDate = currentDate;
+          }
+        });
       } catch (e) {
         console.error("[forecast] Startup check failed:", e);
       }
@@ -235,28 +237,30 @@ export async function storeForecastForStation(stationId: string) {
   console.log(`[forecast-store] ========================================`);
 
   try {
-    const { getDuckConn } = await import("@/lib/db/duckdb");
-    const conn = await getDuckConn();
+    const { withConn } = await import("@/lib/db/duckdb");
     const storageDate = new Date().toISOString().split('T')[0];
-    console.log(`[forecast-store] ✓ Database connection established`);
 
-    // Create forecast table if not exists
-    await conn.run(`
-      CREATE TABLE IF NOT EXISTS forecasts (
-        storage_date DATE NOT NULL,
-        station_id VARCHAR(50) NOT NULL,
-        forecast_date DATE NOT NULL,
-        source VARCHAR(20) NOT NULL,
-        temp_min DOUBLE,
-        temp_max DOUBLE,
-        precipitation DOUBLE,
-        wind_speed DOUBLE,
-        wind_gust DOUBLE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY(storage_date, station_id, forecast_date, source)
-      )
-    `);
-    console.log(`[forecast-store] ✓ Forecast table created/verified`);
+    await withConn(async (conn) => {
+      console.log(`[forecast-store] ✓ Database connection established`);
+
+      // Create forecast table if not exists
+      await conn.run(`
+        CREATE TABLE IF NOT EXISTS forecasts (
+          storage_date DATE NOT NULL,
+          station_id VARCHAR(50) NOT NULL,
+          forecast_date DATE NOT NULL,
+          source VARCHAR(20) NOT NULL,
+          temp_min DOUBLE,
+          temp_max DOUBLE,
+          precipitation DOUBLE,
+          wind_speed DOUBLE,
+          wind_gust DOUBLE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY(storage_date, station_id, forecast_date, source)
+        )
+      `);
+      console.log(`[forecast-store] ✓ Forecast table created/verified`);
+    });
 
     // Get station coordinates first
     console.log(`[forecast-store] Fetching station metadata...`);
@@ -336,17 +340,19 @@ export async function storeForecastForStation(stationId: string) {
           const dailyData = aggregateHourlyToDaily(forecastData);
           console.log(`[forecast-store] Geosphere: ${forecastData.length} hourly rows → ${dailyData.length} daily rows`);
 
-          for (const day of dailyData) {
-            await conn.run(`
-              INSERT INTO forecasts 
-              (storage_date, station_id, forecast_date, source, temp_min, temp_max, precipitation, wind_speed)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-              ON CONFLICT (storage_date, station_id, forecast_date, source)
-              DO UPDATE SET temp_min = EXCLUDED.temp_min, temp_max = EXCLUDED.temp_max, 
-                            precipitation = EXCLUDED.precipitation, wind_speed = EXCLUDED.wind_speed
-            `, [storageDate, stationId, day.date, 'geosphere', day.tempMin, day.tempMax, day.precipitation, day.windSpeed]);
-            console.log(`[forecast-store]   ✓ Inserted Geosphere for ${day.date}`);
-          }
+          await withConn(async (conn) => {
+            for (const day of dailyData) {
+              await conn.run(`
+                INSERT INTO forecasts 
+                (storage_date, station_id, forecast_date, source, temp_min, temp_max, precipitation, wind_speed)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (storage_date, station_id, forecast_date, source)
+                DO UPDATE SET temp_min = EXCLUDED.temp_min, temp_max = EXCLUDED.temp_max, 
+                              precipitation = EXCLUDED.precipitation, wind_speed = EXCLUDED.wind_speed
+              `, [storageDate, stationId, day.date, 'geosphere', day.tempMin, day.tempMax, day.precipitation, day.windSpeed]);
+              console.log(`[forecast-store]   ✓ Inserted Geosphere for ${day.date}`);
+            }
+          });
           console.log(`[forecast-store] ✓ Geosphere complete: ${dailyData.length} days stored`);
 
         } else if (sourceName === 'openweather') {
@@ -384,17 +390,19 @@ export async function storeForecastForStation(stationId: string) {
             };
           });
 
-          for (const day of forecastData) {
-            await conn.run(`
-              INSERT INTO forecasts 
-              (storage_date, station_id, forecast_date, source, temp_min, temp_max, precipitation, wind_speed, wind_gust)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-              ON CONFLICT (storage_date, station_id, forecast_date, source)
-              DO UPDATE SET temp_min = EXCLUDED.temp_min, temp_max = EXCLUDED.temp_max, 
-                            precipitation = EXCLUDED.precipitation, wind_speed = EXCLUDED.wind_speed,
-                            wind_gust = EXCLUDED.wind_gust
-            `, [storageDate, stationId, day.date, 'openweather', day.tempMin, day.tempMax, day.precipitation, day.windSpeed, day.windGust]);
-          }
+          await withConn(async (conn) => {
+            for (const day of forecastData) {
+              await conn.run(`
+                INSERT INTO forecasts 
+                (storage_date, station_id, forecast_date, source, temp_min, temp_max, precipitation, wind_speed, wind_gust)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (storage_date, station_id, forecast_date, source)
+                DO UPDATE SET temp_min = EXCLUDED.temp_min, temp_max = EXCLUDED.temp_max, 
+                              precipitation = EXCLUDED.precipitation, wind_speed = EXCLUDED.wind_speed,
+                              wind_gust = EXCLUDED.wind_gust
+              `, [storageDate, stationId, day.date, 'openweather', day.tempMin, day.tempMax, day.precipitation, day.windSpeed, day.windGust]);
+            }
+          });
 
         } else if (sourceName === 'meteoblue') {
           const apiKey = process.env.METEOBLUE_API_KEY;
@@ -426,17 +434,19 @@ export async function storeForecastForStation(stationId: string) {
             }
           }
 
-          for (const day of forecastData) {
-            await conn.run(`
-              INSERT INTO forecasts 
-              (storage_date, station_id, forecast_date, source, temp_min, temp_max, precipitation, wind_speed, wind_gust)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-              ON CONFLICT (storage_date, station_id, forecast_date, source)
-              DO UPDATE SET temp_min = EXCLUDED.temp_min, temp_max = EXCLUDED.temp_max, 
-                            precipitation = EXCLUDED.precipitation, wind_speed = EXCLUDED.wind_speed,
-                            wind_gust = EXCLUDED.wind_gust
-            `, [storageDate, stationId, day.date, 'meteoblue', day.tempMin, day.tempMax, day.precipitation, day.windSpeed, day.windGust]);
-          }
+          await withConn(async (conn) => {
+            for (const day of forecastData) {
+              await conn.run(`
+                INSERT INTO forecasts 
+                (storage_date, station_id, forecast_date, source, temp_min, temp_max, precipitation, wind_speed, wind_gust)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (storage_date, station_id, forecast_date, source)
+                DO UPDATE SET temp_min = EXCLUDED.temp_min, temp_max = EXCLUDED.temp_max, 
+                              precipitation = EXCLUDED.precipitation, wind_speed = EXCLUDED.wind_speed,
+                              wind_gust = EXCLUDED.wind_gust
+              `, [storageDate, stationId, day.date, 'meteoblue', day.tempMin, day.tempMax, day.precipitation, day.windSpeed, day.windGust]);
+            }
+          });
 
         } else if (sourceName === 'openmeteo') {
           const res = await fetch(`https://api.open-meteo.com/v1/dwd-icon?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum,windspeed_10m_max,windgusts_10m_max,weathercode&timezone=Europe%2FBerlin&forecast_days=7`);
@@ -465,17 +475,19 @@ export async function storeForecastForStation(stationId: string) {
             }
           }
 
-          for (const day of forecastData) {
-            await conn.run(`
-              INSERT INTO forecasts 
-              (storage_date, station_id, forecast_date, source, temp_min, temp_max, precipitation, wind_speed, wind_gust)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-              ON CONFLICT (storage_date, station_id, forecast_date, source)
-              DO UPDATE SET temp_min = EXCLUDED.temp_min, temp_max = EXCLUDED.temp_max, 
-                            precipitation = EXCLUDED.precipitation, wind_speed = EXCLUDED.wind_speed,
-                            wind_gust = EXCLUDED.wind_gust
-            `, [storageDate, stationId, day.date, 'openmeteo', day.tempMin, day.tempMax, day.precipitation, day.windSpeed, day.windGust]);
-          }
+          await withConn(async (conn) => {
+            for (const day of forecastData) {
+              await conn.run(`
+                INSERT INTO forecasts 
+                (storage_date, station_id, forecast_date, source, temp_min, temp_max, precipitation, wind_speed, wind_gust)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (storage_date, station_id, forecast_date, source)
+                DO UPDATE SET temp_min = EXCLUDED.temp_min, temp_max = EXCLUDED.temp_max, 
+                              precipitation = EXCLUDED.precipitation, wind_speed = EXCLUDED.wind_speed,
+                              wind_gust = EXCLUDED.wind_gust
+              `, [storageDate, stationId, day.date, 'openmeteo', day.tempMin, day.tempMax, day.precipitation, day.windSpeed, day.windGust]);
+            }
+          });
         }
       } catch (e: any) {
         console.error(`[forecast-store] ✗ Failed to store ${sourceName}:`, e?.message || e);
@@ -534,44 +546,37 @@ async function calculateAndStoreDailyAnalysisForDate(stationId: string, targetDa
   console.log(`[forecast-analysis] ========================================`);
 
   try {
-    const { getDuckConn } = await import("@/lib/db/duckdb");
-    const conn = await getDuckConn();
-    console.log(`[forecast-analysis] ✓ Database connection established`);
+    const { withConn } = await import("@/lib/db/duckdb");
 
-    // Create analysis table if not exists
-    await conn.run(`
-      CREATE TABLE IF NOT EXISTS forecast_analysis (
-        analysis_date DATE NOT NULL,
-        station_id VARCHAR(50) NOT NULL,
-        forecast_date DATE NOT NULL,
-        source VARCHAR(20) NOT NULL,
-        temp_min_error DOUBLE,
-        temp_max_error DOUBLE,
-        precipitation_error DOUBLE,
-        wind_speed_error DOUBLE,
-        actual_temp_min DOUBLE,
-        actual_temp_max DOUBLE,
-        actual_precipitation DOUBLE,
-        actual_wind_speed DOUBLE,
-        forecast_temp_min DOUBLE,
-        forecast_temp_max DOUBLE,
-        forecast_precipitation DOUBLE,
-        forecast_wind_speed DOUBLE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY(analysis_date, station_id, forecast_date, source)
-      )
-    `);
+    await withConn(async (conn) => {
+      console.log(`[forecast-analysis] ✓ Database connection established`);
 
-    console.log(`[forecast-analysis] ✓ Analysis table created/verified`);
+      // Create analysis table if not exists
+      await conn.run(`
+        CREATE TABLE IF NOT EXISTS forecast_analysis (
+          analysis_date DATE NOT NULL,
+          station_id VARCHAR(50) NOT NULL,
+          forecast_date DATE NOT NULL,
+          source VARCHAR(20) NOT NULL,
+          temp_min_error DOUBLE,
+          temp_max_error DOUBLE,
+          precipitation_error DOUBLE,
+          wind_speed_error DOUBLE,
+          actual_temp_min DOUBLE,
+          actual_temp_max DOUBLE,
+          actual_precipitation DOUBLE,
+          actual_wind_speed DOUBLE,
+          forecast_temp_min DOUBLE,
+          forecast_temp_max DOUBLE,
+          forecast_precipitation DOUBLE,
+          forecast_wind_speed DOUBLE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY(analysis_date, station_id, forecast_date, source)
+        )
+      `);
 
-    // Delete old analysis data (older than 90 days)
-    /*
-    await conn.run(`
-      DELETE FROM forecast_analysis 
-      WHERE analysis_date < CURRENT_DATE - INTERVAL '90' DAYS
-    `);
-    console.log(`[forecast-analysis] ✓ Cleaned up old analysis records (>90 days)`);
-    */
+      console.log(`[forecast-analysis] ✓ Analysis table created/verified`);
+    });
 
     // Analyze YESTERDAY's weather vs forecasts that were stored for YESTERDAY
     // We use YESTERDAY because historical data has a 1-2 day delay
@@ -663,8 +668,12 @@ async function calculateAndStoreDailyAnalysisForDate(stationId: string, targetDa
     `;
 
     console.log(`[forecast-analysis] Running daily aggregate query for ${yesterdayStr}...`);
-    const dailyReader = await conn.runAndReadAll(sql);
-    const dailyRows = dailyReader.getRowObjects();
+
+    let dailyRows: any[] = [];
+    await withConn(async (conn) => {
+      const dailyReader = await conn.runAndReadAll(sql);
+      dailyRows = dailyReader.getRowObjects();
+    });
 
     if (!dailyRows.length) {
       console.warn(`[forecast-analysis] ✗ No aggregated data found for ${yesterdayStr}`);
@@ -707,8 +716,11 @@ async function calculateAndStoreDailyAnalysisForDate(stationId: string, targetDa
     console.log(`[forecast-analysis] Querying forecasts from DB...`);
     console.log(`[forecast-analysis] Query:`, forecastQuery.trim());
 
-    const forecastReader = await conn.runAndReadAll(forecastQuery);
-    const forecasts: any = forecastReader.getRowObjects();
+    let forecasts: any[] = [];
+    await withConn(async (conn) => {
+      const forecastReader = await conn.runAndReadAll(forecastQuery);
+      forecasts = forecastReader.getRowObjects();
+    });
 
     console.log(`[forecast-analysis] Found ${forecasts.length} forecast rows for YESTERDAY (${yesterdayStr})`);
 
@@ -744,33 +756,35 @@ async function calculateAndStoreDailyAnalysisForDate(stationId: string, targetDa
       console.log(`[forecast-analysis] Storing analysis for source: ${forecast.source}`);
       console.log(`[forecast-analysis]   Errors: TMin=${tempMinError?.toFixed(2)}, TMax=${tempMaxError?.toFixed(2)}, Precip=${precipitationError?.toFixed(2)}, Wind=${windSpeedError?.toFixed(2)}`);
 
-      await conn.run(`
-        INSERT INTO forecast_analysis 
-        (analysis_date, station_id, forecast_date, source, 
-         temp_min_error, temp_max_error, precipitation_error, wind_speed_error,
-         actual_temp_min, actual_temp_max, actual_precipitation, actual_wind_speed,
-         forecast_temp_min, forecast_temp_max, forecast_precipitation, forecast_wind_speed)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT (analysis_date, station_id, forecast_date, source)
-        DO UPDATE SET 
-          temp_min_error = EXCLUDED.temp_min_error,
-          temp_max_error = EXCLUDED.temp_max_error,
-          precipitation_error = EXCLUDED.precipitation_error,
-          wind_speed_error = EXCLUDED.wind_speed_error,
-          actual_temp_min = EXCLUDED.actual_temp_min,
-          actual_temp_max = EXCLUDED.actual_temp_max,
-          actual_precipitation = EXCLUDED.actual_precipitation,
-          actual_wind_speed = EXCLUDED.actual_wind_speed,
-          forecast_temp_min = EXCLUDED.forecast_temp_min,
-          forecast_temp_max = EXCLUDED.forecast_temp_max,
-          forecast_precipitation = EXCLUDED.forecast_precipitation,
-          forecast_wind_speed = EXCLUDED.forecast_wind_speed
-      `, [
-        yesterdayStr, stationId, yesterdayStr, forecast.source,
-        tempMinError, tempMaxError, precipitationError, windSpeedError,
-        actualConverted.tempMin, actualConverted.tempMax, actualConverted.precipitation, actualConverted.windSpeed,
-        forecast.temp_min, forecast.temp_max, forecast.precipitation, forecast.wind_speed
-      ]);
+      await withConn(async (conn) => {
+        await conn.run(`
+          INSERT INTO forecast_analysis 
+          (analysis_date, station_id, forecast_date, source, 
+           temp_min_error, temp_max_error, precipitation_error, wind_speed_error,
+           actual_temp_min, actual_temp_max, actual_precipitation, actual_wind_speed,
+           forecast_temp_min, forecast_temp_max, forecast_precipitation, forecast_wind_speed)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT (analysis_date, station_id, forecast_date, source)
+          DO UPDATE SET 
+            temp_min_error = EXCLUDED.temp_min_error,
+            temp_max_error = EXCLUDED.temp_max_error,
+            precipitation_error = EXCLUDED.precipitation_error,
+            wind_speed_error = EXCLUDED.wind_speed_error,
+            actual_temp_min = EXCLUDED.actual_temp_min,
+            actual_temp_max = EXCLUDED.actual_temp_max,
+            actual_precipitation = EXCLUDED.actual_precipitation,
+            actual_wind_speed = EXCLUDED.actual_wind_speed,
+            forecast_temp_min = EXCLUDED.forecast_temp_min,
+            forecast_temp_max = EXCLUDED.forecast_temp_max,
+            forecast_precipitation = EXCLUDED.forecast_precipitation,
+            forecast_wind_speed = EXCLUDED.forecast_wind_speed
+        `, [
+          yesterdayStr, stationId, yesterdayStr, forecast.source,
+          tempMinError, tempMaxError, precipitationError, windSpeedError,
+          actualConverted.tempMin, actualConverted.tempMax, actualConverted.precipitation, actualConverted.windSpeed,
+          forecast.temp_min, forecast.temp_max, forecast.precipitation, forecast.wind_speed
+        ]);
+      });
 
       stored++;
     }
@@ -779,6 +793,7 @@ async function calculateAndStoreDailyAnalysisForDate(stationId: string, targetDa
     console.log(`[forecast-analysis] ========================================`);
     console.log(`[forecast-analysis] DONE`);
     console.log(`[forecast-analysis] ========================================`);
+
   } catch (e: any) {
     console.error(`[forecast-analysis] ========================================`);
     console.error(`[forecast-analysis] ✗✗✗ ERROR OCCURRED ✗✗✗`);

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
-import { getDuckConn } from "@/lib/db/duckdb";
 import { ensureAllsensorsParquetsInRange } from "@/lib/db/ingest";
 import { sqlNum } from "@/lib/data/columns";
 
@@ -87,55 +86,57 @@ export async function GET(req: NextRequest) {
     const parquets = await ensureAllsensorsParquetsInRange(start, end);
     if (!parquets.length) return NextResponse.json({ ok: false, error: "No data in range" }, { status: 404 });
 
-    const conn = await getDuckConn();
+    const { withConn } = await import("@/lib/db/duckdb");
     const qp = parquets.map((p) => p.replace(/\\/g, "/"));
     const arr = '[' + qp.map((p) => `\'${p}\'`).join(',') + ']';
 
-    // Introspect columns
-    const descReader = await conn.runAndReadAll(`DESCRIBE SELECT * FROM read_parquet(${arr}, union_by_name=true)`);
-    const cols: any[] = descReader.getRowObjects();
-    const allNames = cols.map((r: any) => String(r.column_name || r.ColumnName || r.column || ""));
+    const days = await withConn(async (conn) => {
+      // Introspect columns
+      const descReader = await conn.runAndReadAll(`DESCRIBE SELECT * FROM read_parquet(${arr}, union_by_name=true)`);
+      const cols: any[] = descReader.getRowObjects();
+      const allNames = cols.map((r: any) => String(r.column_name || r.ColumnName || r.column || ""));
 
-    const { tempCol, feelCol } = findChannelMetricColumns(allNames, chNum);
-    if (!tempCol) return NextResponse.json({ ok: false, error: "No temperature column for channel" }, { status: 404 });
+      const { tempCol, feelCol } = findChannelMetricColumns(allNames, chNum);
+      if (!tempCol) throw new Error("No temperature column for channel");
 
-    const whereStart = start ? `ts >= strptime('${toIsoMinute(start).replace('T',' ')}', ['%Y-%m-%d %H:%M'])` : '1=1';
-    const whereEnd = end ? `ts <= strptime('${toIsoMinute(end).replace('T',' ')}', ['%Y-%m-%d %H:%M'])` : '1=1';
+      const whereStart = start ? `ts >= strptime('${toIsoMinute(start).replace('T', ' ')}', ['%Y-%m-%d %H:%M'])` : '1=1';
+      const whereEnd = end ? `ts <= strptime('${toIsoMinute(end).replace('T', ' ')}', ['%Y-%m-%d %H:%M'])` : '1=1';
 
-    const tExpr = sqlNum('"' + tempCol.replace(/"/g, '""') + '"');
-    const feelExpr = feelCol ? sqlNum('"' + feelCol.replace(/"/g, '""') + '"') : 'NULL';
+      const tExpr = sqlNum('"' + tempCol.replace(/"/g, '""') + '"');
+      const feelExpr = feelCol ? sqlNum('"' + feelCol.replace(/"/g, '""') + '"') : 'NULL';
 
-    const sql = `
-      WITH src AS (
-        SELECT * FROM read_parquet(${arr}, union_by_name=true)
-      ),
-      casted AS (
-        SELECT ts,
-          ${tExpr} AS t,
-          ${feelExpr} AS tf
-        FROM src
-        WHERE ts IS NOT NULL AND ${whereStart} AND ${whereEnd}
-      ),
-      daily AS (
-        SELECT
-          date_trunc('day', ts) AS d,
-          max(t) AS tmax,
-          min(t) AS tmin,
-          avg(t) AS tavg,
-          max(tf) AS tfmax,
-          min(tf) AS tfmin
-        FROM casted
-        GROUP BY 1
-      )
-      SELECT strftime(d, '%Y-%m-%d') AS day,
-        tmax, tmin, tavg,
-        tfmax, tfmin
-      FROM daily
-      ORDER BY day;
-    `;
+      const sql = `
+        WITH src AS (
+          SELECT * FROM read_parquet(${arr}, union_by_name=true)
+        ),
+        casted AS (
+          SELECT ts,
+            ${tExpr} AS t,
+            ${feelExpr} AS tf
+          FROM src
+          WHERE ts IS NOT NULL AND ${whereStart} AND ${whereEnd}
+        ),
+        daily AS (
+          SELECT
+            date_trunc('day', ts) AS d,
+            max(t) AS tmax,
+            min(t) AS tmin,
+            avg(t) AS tavg,
+            max(tf) AS tfmax,
+            min(tf) AS tfmin
+          FROM casted
+          GROUP BY 1
+        )
+        SELECT strftime(d, '%Y-%m-%d') AS day,
+          tmax, tmin, tavg,
+          tfmax, tfmin
+        FROM daily
+        ORDER BY day;
+      `;
 
-    const reader = await conn.runAndReadAll(sql);
-    const days = reader.getRowObjects() as Array<{ day: string; tmax: number | null; tmin: number | null; tavg: number | null; tfmax: number | null; tfmin: number | null; }>;
+      const reader = await conn.runAndReadAll(sql);
+      return reader.getRowObjects() as Array<{ day: string; tmax: number | null; tmin: number | null; tavg: number | null; tfmax: number | null; tfmin: number | null; }>;
+    });
 
     // Compute stats from daily rows
     let tMax = -Infinity, tMaxDate: string | null = null;

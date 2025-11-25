@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { getDuckConn } from "@/lib/db/duckdb";
 
 interface TableInfo {
   tableName: string;
@@ -30,55 +29,57 @@ function convertDuckDBValue(value: any): any {
 
 export async function GET() {
   try {
-    const conn = await getDuckConn();
-    
-    // Get all tables and views (DuckDB uses INFORMATION_SCHEMA)
-    const tablesResult = await conn.runAndReadAll(`
-      SELECT table_name as name, table_type 
-      FROM information_schema.tables 
-      WHERE table_schema = 'main'
-      ORDER BY table_name
-    `);
-    const tables = tablesResult.getRowObjects();
-    
-    const tableInfo: TableInfo[] = [];
-    
-    for (const table of tables) {
-      const name = String(table.name);
-      const type = String(table.table_type);
-      
-      // Get row count
-      const countResult = await conn.runAndReadAll(`SELECT COUNT(*) as count FROM ${name}`);
-      const rows = countResult.getRowObjects();
-      const count = Number(rows[0]?.count || 0);
-      
-      const info: TableInfo = {
-        tableName: name,
-        tableType: type,
-        rowCount: count,
-        sampleData: []
-      };
-      
-      // Show sample data only for non-forecast tables
-      if (count > 0 && name !== 'forecasts') {
-        const sampleResult = await conn.runAndReadAll(`SELECT * FROM ${name} LIMIT 3`);
-        const rawSamples = sampleResult.getRowObjects();
-        // Convert all DuckDB values to JSON-serializable values
-        info.sampleData = rawSamples.map(row => convertDuckDBValue(row));
+    const { withConn } = await import("@/lib/db/duckdb");
+
+    return await withConn(async (conn) => {
+      // Get all tables and views (DuckDB uses INFORMATION_SCHEMA)
+      const tablesResult = await conn.runAndReadAll(`
+        SELECT table_name as name, table_type 
+        FROM information_schema.tables 
+        WHERE table_schema = 'main'
+        ORDER BY table_name
+      `);
+      const tables = tablesResult.getRowObjects();
+
+      const tableInfo: TableInfo[] = [];
+
+      for (const table of tables) {
+        const name = String(table.name);
+        const type = String(table.table_type);
+
+        // Get row count
+        const countResult = await conn.runAndReadAll(`SELECT COUNT(*) as count FROM ${name}`);
+        const rows = countResult.getRowObjects();
+        const count = Number(rows[0]?.count || 0);
+
+        const info: TableInfo = {
+          tableName: name,
+          tableType: type,
+          rowCount: count,
+          sampleData: []
+        };
+
+        // Show sample data only for non-forecast tables
+        if (count > 0 && name !== 'forecasts') {
+          const sampleResult = await conn.runAndReadAll(`SELECT * FROM ${name} LIMIT 3`);
+          const rawSamples = sampleResult.getRowObjects();
+          // Convert all DuckDB values to JSON-serializable values
+          info.sampleData = rawSamples.map(row => convertDuckDBValue(row));
+        }
+
+        tableInfo.push(info);
       }
-      
-      tableInfo.push(info);
-    }
-    
-    return NextResponse.json({
-      database: 'weather.duckdb',
-      tables: tableInfo
+
+      return NextResponse.json({
+        database: 'weather.duckdb',
+        tables: tableInfo
+      });
     });
-    
+
   } catch (error: any) {
     console.error('Database check error:', error);
-    return NextResponse.json({ 
-      error: error.message 
+    return NextResponse.json({
+      error: error.message
     }, { status: 500 });
   }
 }

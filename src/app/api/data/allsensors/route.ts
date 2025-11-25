@@ -3,7 +3,6 @@ import path from "path";
 import { readCsvFile, parseCsv, aggregateRows } from "@/lib/csv";
 import { getAllsensorsFilename, getAllsensorsFilesInRange } from "@/lib/files";
 import { parseTimestamp, type Resolution } from "@/lib/time";
-import { getDuckConn } from "@/lib/db/duckdb";
 import { ensureAllsensorsParquetForMonth, ensureAllsensorsParquetsInRange } from "@/lib/db/ingest";
 import { discoverMainColumns as discoverColumns, sqlNum, speedExprFor } from "@/lib/data/columns";
 
@@ -52,87 +51,90 @@ export async function GET(req: Request) {
       }
 
       const parquetPaths = parquetFiles.map((p) => p.replace(/\\/g, "/"));
-      const conn = await getDuckConn();
-      const arr = '[' + parquetPaths.map((p) => `'${p}'`).join(',') + ']';
-      const describeSql = `DESCRIBE SELECT * FROM read_parquet(${arr}, union_by_name=true)`;
-      const descReader = await conn.runAndReadAll(describeSql);
-      const cols: any[] = descReader.getRowObjects();
-      const allNames = cols.map((r: any) => String(r.column_name || r.ColumnName || r.column || ""));
+      const { withConn } = await import("@/lib/db/duckdb");
 
-      const hints = await discoverColumns(parquetPaths);
+      return await withConn(async (conn) => {
+        const arr = '[' + parquetPaths.map((p) => `'${p}'`).join(',') + ']';
+        const describeSql = `DESCRIBE SELECT * FROM read_parquet(${arr}, union_by_name=true)`;
+        const descReader = await conn.runAndReadAll(describeSql);
+        const cols: any[] = descReader.getRowObjects();
+        const allNames = cols.map((r: any) => String(r.column_name || r.ColumnName || r.column || ""));
 
-      const seen = new Set<string>();
-      const numericCols: string[] = [];
-      const pushCol = (name?: string | null) => {
-        if (!name) return;
-        if (!allNames.includes(name)) return;
-        if (seen.has(name)) return;
-        seen.add(name);
-        numericCols.push(name);
-      };
+        const hints = await discoverColumns(parquetPaths);
 
-      const typedNumeric = cols
-        .filter((r: any) => {
-          const t = String(r.column_type || r.Type || r.type || "").toUpperCase();
-          return t && !t.includes("VARCHAR") && !t.includes("BOOLEAN") && t !== "";
-        })
-        .map((r: any) => String(r.column_name || r.ColumnName || r.column || ""))
-        .filter((c) => c && c !== "ts" && c !== "Time" && c !== "Zeit");
-      for (const c of typedNumeric) pushCol(c);
+        const seen = new Set<string>();
+        const numericCols: string[] = [];
+        const pushCol = (name?: string | null) => {
+          if (!name) return;
+          if (!allNames.includes(name)) return;
+          if (seen.has(name)) return;
+          seen.add(name);
+          numericCols.push(name);
+        };
 
-      const candidates: (string | null)[] = [
-        hints.temp,
-        ...hints.tempCandidates,
-        hints.dew,
-        ...hints.dewCandidates,
-        hints.feelsLike,
-        ...hints.feelsLikeCandidates,
-        hints.wind,
-        ...hints.windCandidates,
-        hints.gust,
-        ...hints.gustCandidates,
-        hints.rainDay,
-        ...hints.dailyRainCandidates,
-        ...hints.hourlyRainCandidates,
-        ...hints.genericRainCandidates,
-      ];
-      for (const c of candidates) pushCol(c);
+        const typedNumeric = cols
+          .filter((r: any) => {
+            const t = String(r.column_type || r.Type || r.type || "").toUpperCase();
+            return t && !t.includes("VARCHAR") && !t.includes("BOOLEAN") && t !== "";
+          })
+          .map((r: any) => String(r.column_name || r.ColumnName || r.column || ""))
+          .filter((c) => c && c !== "ts" && c !== "Time" && c !== "Zeit");
+        for (const c of typedNumeric) pushCol(c);
 
-      // Build select list: bucket + avg(numeric cols)
-      const bucketExpr =
-        resolution === "day" ? "date_trunc('day', ts)" :
-        resolution === "hour" ? "date_trunc('hour', ts)" :
-        "date_trunc('minute', ts)";
-      const avgList = numericCols.map((c) => {
-        const escaped = c.replace(/"/g, '""');
-        const isWind = hints.wind === c || hints.windCandidates.includes(c);
-        const isGust = hints.gust === c || hints.gustCandidates.includes(c);
-        const expr = isWind || isGust ? speedExprFor(c) : sqlNum('"' + escaped + '"');
-        return `avg(${expr}) AS "${escaped}"`;
-      }).join(",\n      ");
-      const unionSources = parquetPaths.map((p) => `SELECT * FROM read_parquet('${p}')`).join("\nUNION ALL\n");
-      const whereStart = startStr ? `(ts >= strptime('${startStr.replace("T", " ")}', ['%Y-%m-%d %H:%M','%Y/%m/%d %H:%M']))` : "1=1";
-      const whereEnd = endStr ? `(ts <= strptime('${endStr.replace("T", " ")}', ['%Y-%m-%d %H:%M','%Y/%m/%d %H:%M']))` : "1=1";
-      const sql = `
-        WITH src AS (
-          ${unionSources}
-        ),
-        filt AS (
-          SELECT * FROM src WHERE ts IS NOT NULL AND ${whereStart} AND ${whereEnd}
-        )
-        SELECT
-          strftime(${bucketExpr}, '%Y-%m-%d %H:%M') AS time
-          ${avgList ? ",\n          " + avgList : ""}
-        FROM filt
-        GROUP BY 1
-        ORDER BY 1
-      `;
-      const reader = await conn.runAndReadAll(sql);
-      let outRows: any[] = reader.getRowObjects();
-      outRows = outRows.map((r: any) => ({ key: r.time, ...r }));
-      // Header: ensure 'time' first + discovered numeric columns
-      const header = ["time", ...numericCols];
-      return NextResponse.json({ file: fileLabel, header, rows: outRows }, { status: 200 });
+        const candidates: (string | null)[] = [
+          hints.temp,
+          ...hints.tempCandidates,
+          hints.dew,
+          ...hints.dewCandidates,
+          hints.feelsLike,
+          ...hints.feelsLikeCandidates,
+          hints.wind,
+          ...hints.windCandidates,
+          hints.gust,
+          ...hints.gustCandidates,
+          hints.rainDay,
+          ...hints.dailyRainCandidates,
+          ...hints.hourlyRainCandidates,
+          ...hints.genericRainCandidates,
+        ];
+        for (const c of candidates) pushCol(c);
+
+        // Build select list: bucket + avg(numeric cols)
+        const bucketExpr =
+          resolution === "day" ? "date_trunc('day', ts)" :
+            resolution === "hour" ? "date_trunc('hour', ts)" :
+              "date_trunc('minute', ts)";
+        const avgList = numericCols.map((c) => {
+          const escaped = c.replace(/"/g, '""');
+          const isWind = hints.wind === c || hints.windCandidates.includes(c);
+          const isGust = hints.gust === c || hints.gustCandidates.includes(c);
+          const expr = isWind || isGust ? speedExprFor(c) : sqlNum('"' + escaped + '"');
+          return `avg(${expr}) AS "${escaped}"`;
+        }).join(",\n      ");
+        const unionSources = parquetPaths.map((p) => `SELECT * FROM read_parquet('${p}')`).join("\nUNION ALL\n");
+        const whereStart = startStr ? `(ts >= strptime('${startStr.replace("T", " ")}', ['%Y-%m-%d %H:%M','%Y/%m/%d %H:%M']))` : "1=1";
+        const whereEnd = endStr ? `(ts <= strptime('${endStr.replace("T", " ")}', ['%Y-%m-%d %H:%M','%Y/%m/%d %H:%M']))` : "1=1";
+        const sql = `
+          WITH src AS (
+            ${unionSources}
+          ),
+          filt AS (
+            SELECT * FROM src WHERE ts IS NOT NULL AND ${whereStart} AND ${whereEnd}
+          )
+          SELECT
+            strftime(${bucketExpr}, '%Y-%m-%d %H:%M') AS time
+            ${avgList ? ",\n          " + avgList : ""}
+          FROM filt
+          GROUP BY 1
+          ORDER BY 1
+        `;
+        const reader = await conn.runAndReadAll(sql);
+        let outRows: any[] = reader.getRowObjects();
+        outRows = outRows.map((r: any) => ({ key: r.time, ...r }));
+        // Header: ensure 'time' first + discovered numeric columns
+        const header = ["time", ...numericCols];
+        return NextResponse.json({ file: fileLabel, header, rows: outRows }, { status: 200 });
+      });
     } catch (e) {
       // Fallback to CSV path
     }

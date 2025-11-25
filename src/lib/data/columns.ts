@@ -1,4 +1,4 @@
-import { getDuckConn } from "@/lib/db/duckdb";
+
 
 export function normalizeName(s: string): string {
   const map: Record<string, string> = {
@@ -14,7 +14,7 @@ export function normalizeName(s: string): string {
   s = s.replace(/°/g, "");
   try {
     s = s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
-  } catch {}
+  } catch { }
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
@@ -53,11 +53,14 @@ export function speedExprFor(name: string) {
 }
 
 export async function discoverMainColumns(parquets: string[]): Promise<ColumnMap> {
-  const conn = await getDuckConn();
+  const { withConn } = await import("@/lib/db/duckdb");
   const arr = '[' + parquets.map((p) => `'${p.replace(/\\/g, "/")}'`).join(',') + ']';
   const sql = `DESCRIBE SELECT * FROM read_parquet(${arr}, union_by_name=true)`;
-  const reader = await conn.runAndReadAll(sql);
-  const cols: any[] = reader.getRowObjects();
+
+  const cols: any[] = await withConn(async (conn) => {
+    const reader = await conn.runAndReadAll(sql);
+    return reader.getRowObjects();
+  });
   const names = cols.map((r: any) => String(r.column_name || r.ColumnName || r.column || ""));
   const normEntries = names.map((n) => ({ n, k: normalizeName(n) }));
 

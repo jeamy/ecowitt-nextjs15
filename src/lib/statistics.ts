@@ -1,6 +1,5 @@
 import path from "path";
 import { promises as fs } from "fs";
-import { getDuckConn } from "@/lib/db/duckdb";
 import { ensureMainParquetsInRange } from "@/lib/db/ingest";
 import { discoverMainColumns, sqlNum, speedExprFor } from "@/lib/data/columns";
 import type { StatisticsPayload, YearStats, MonthStats } from "@/types/statistics";
@@ -36,7 +35,7 @@ export interface DailyAggregateRow {
 
 async function queryDailyAggregates(parquetFiles: string[]) {
   if (!parquetFiles.length) return [] as any[];
-  const conn = await getDuckConn();
+  const { withConn } = await import("@/lib/db/duckdb");
   const qp = parquetFiles.map((p) => p.replace(/\\/g, "/"));
   const cols = await discoverMainColumns(qp);
   if (!cols.temp) throw new Error("Could not detect outdoor temperature column in main dataset");
@@ -120,8 +119,10 @@ async function queryDailyAggregates(parquetFiles: string[]) {
     ORDER BY day;
   `;
 
-  const reader = await conn.runAndReadAll(sql);
-  return reader.getRowObjects();
+  return await withConn(async (conn) => {
+    const reader = await conn.runAndReadAll(sql);
+    return reader.getRowObjects();
+  });
 }
 
 /** Query daily aggregates for a specific time range (inclusive) */
@@ -131,7 +132,7 @@ export async function queryDailyAggregatesInRange(
   end?: Date
 ): Promise<DailyAggregateRow[]> {
   if (!parquetFiles.length) return [] as any[];
-  const conn = await getDuckConn();
+  const { withConn } = await import("@/lib/db/duckdb");
   const qp = parquetFiles.map((p) => p.replace(/\\/g, "/"));
   const cols = await discoverMainColumns(qp);
   if (!cols.temp) throw new Error("Could not detect outdoor temperature column in main dataset");
@@ -216,8 +217,10 @@ export async function queryDailyAggregatesInRange(
     ORDER BY day;
   `;
 
-  const reader = await conn.runAndReadAll(sql);
-  return reader.getRowObjects() as unknown as DailyAggregateRow[];
+  return await withConn(async (conn) => {
+    const reader = await conn.runAndReadAll(sql);
+    return reader.getRowObjects() as unknown as DailyAggregateRow[];
+  });
 }
 
 function formatDuck(d: Date) {
