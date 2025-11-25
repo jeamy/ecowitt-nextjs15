@@ -88,87 +88,141 @@ export async function register() {
   // Schedule daily forecast storage at 20:00 (8 PM)
   if (!global.__forecastPoller) {
     const stationSetting = process.env.FORECAST_STATION_ID || "11035"; // or 'ALL'
-    console.log(`[forecast] Daily forecast storage enabled for ${stationSetting === 'ALL' ? 'ALL stations' : `station ${stationSetting}`} (runs at 20:00 daily)`);
+    console.log(`[forecast] Daily forecast storage enabled for ${stationSetting === 'ALL' ? 'ALL stations' : `station ${stationSetting}`} (runs at 20:00 daily + catchup)`);
 
-    let lastRunDate: string | null = null;
+    let lastScheduledRunDate: string | null = null;
+    let lastCatchupRunDate: string | null = null;
 
-    // Check every 10 minutes if it's between 20:00 and 20:30
+    // Check every 10 minutes
     global.__forecastPoller = setInterval(async () => {
       const now = new Date();
       const currentDate = now.toISOString().split('T')[0];
       const currentHour = now.getHours();
       const currentMinute = now.getMinutes();
 
-      // Run between 20:00 and 20:30 and only once per day
-      if (currentHour === 20 && currentMinute <= 30 && lastRunDate !== currentDate) {
+      const isScheduledWindow = currentHour === 20 && currentMinute <= 30;
+
+      // 1. Scheduled Run (20:00 - 20:30)
+      if (isScheduledWindow && lastScheduledRunDate !== currentDate) {
         console.log(`[forecast] ========================================`);
-        console.log(`[forecast] DAILY POLLER TRIGGERED at ${now.toISOString()}`);
+        console.log(`[forecast] SCHEDULED POLLER TRIGGERED at ${now.toISOString()}`);
         console.log(`[forecast] ========================================`);
 
-        lastRunDate = currentDate;
+        lastScheduledRunDate = currentDate;
+        // Also mark catchup as done to avoid double run if we just started
+        lastCatchupRunDate = currentDate;
 
+        await runForecastJob(stationSetting);
+        return;
+      }
+
+      // 2. Catchup Run (If no data exists for today and we haven't checked recently)
+      // Only check if we haven't already run a catchup or scheduled run today
+      if (lastCatchupRunDate !== currentDate && lastScheduledRunDate !== currentDate) {
         try {
-          // Resolve station list
-          let stationIds: string[] = [];
-          if (stationSetting === 'ALL') {
-            try {
-              // Fetch station list directly from Geosphere API
-              const res = await fetch('https://dataset.api.hub.geosphere.at/v1/station/current/tawes-v1-10min/metadata');
-              if (res.ok) {
-                const data = await res.json();
-                stationIds = (data.stations || []).map((s: any) => String(s.id));
-              }
-            } catch (e) {
-              console.error('[forecast] Failed to load station list for ALL:', e);
-            }
+          const { getDuckConn } = await import("@/lib/db/duckdb");
+          const conn = await getDuckConn();
+
+          // Check if we have ANY forecast data for today
+          // We use a simple query to check existence
+          const checkQuery = `SELECT 1 FROM forecasts WHERE storage_date = '${currentDate}' LIMIT 1`;
+          const result = await conn.runAndReadAll(checkQuery);
+          const hasData = result.getRowObjects().length > 0;
+
+          if (!hasData) {
+            console.log(`[forecast] ========================================`);
+            console.log(`[forecast] CATCHUP POLLER TRIGGERED at ${now.toISOString()}`);
+            console.log(`[forecast] No forecast data found for today (${currentDate}). Running catchup...`);
+            console.log(`[forecast] ========================================`);
+
+            lastCatchupRunDate = currentDate;
+            await runForecastJob(stationSetting);
+          } else {
+            // We have data, so mark catchup as done for today to avoid checking DB constantly
+            // But DO NOT set lastScheduledRunDate, so the 20:00 run can still happen
+            lastCatchupRunDate = currentDate;
+            console.log(`[forecast] Data already exists for ${currentDate}. Catchup skipped.`);
           }
-          if (!stationIds.length) stationIds = [String(stationSetting)];
-
-          console.log(`[forecast] Processing ${stationIds.length} station(s)...`);
-
-          for (const sid of stationIds) {
-            const maxAttempts = 3;
-            const retryDelayMs = 30_000;
-            let success = false;
-
-            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-              try {
-                console.log(`[forecast] → Station ${sid}: Storing forecasts (attempt ${attempt} of ${maxAttempts})...`);
-                await storeForecastForStation(sid);
-
-                console.log(`[forecast] → Station ${sid}: Calculating analysis (attempt ${attempt} of ${maxAttempts})...`);
-                await calculateAndStoreDailyAnalysis(sid);
-
-                console.log(`[forecast] ✓ Station ${sid}: Complete`);
-                success = true;
-                break;
-              } catch (e: any) {
-                console.error(`[forecast] ✗ Station ${sid} attempt ${attempt} failed:`, e?.message || e);
-                if (attempt < maxAttempts) {
-                  console.log(`[forecast] → Station ${sid}: Retrying in ${retryDelayMs / 1000} seconds...`);
-                  await new Promise(r => setTimeout(r, retryDelayMs));
-                }
-              }
-            }
-
-            if (!success) {
-              console.error(`[forecast] ✗ Station ${sid} failed after ${maxAttempts} attempts - skipping to next station`);
-            }
-
-            // Small delay to be gentle on upstream APIs
-            await new Promise(r => setTimeout(r, 250));
-          }
-
-          console.log(`[forecast] ========================================`);
-          console.log(`[forecast] DAILY POLLER COMPLETE`);
-          console.log(`[forecast] ========================================`);
-        } catch (e: any) {
-          console.error("[forecast] Daily storage failed:", e?.message || e);
+        } catch (e) {
+          console.error("[forecast] Catchup check failed:", e);
         }
       }
-    }, 600000); // Check every 10 minutes (600000 ms)
+    }, 3600000); // Check every hour (3600000 ms)
 
-    console.log(`[forecast] Poller active: checking every 10 minutes for 20:00 window (20:00-20:30)`);
+    console.log(`[forecast] Poller active: checking every hour`);
+
+    // Trigger an immediate check on startup (after 10s delay to let DB settle)
+    setTimeout(async () => {
+      console.log("[forecast] Running startup check...");
+      try {
+        const { getDuckConn } = await import("@/lib/db/duckdb");
+        const conn = await getDuckConn();
+        const now = new Date();
+        const currentDate = now.toISOString().split('T')[0];
+
+        const checkQuery = `SELECT 1 FROM forecasts WHERE storage_date = '${currentDate}' LIMIT 1`;
+        const result = await conn.runAndReadAll(checkQuery);
+        const hasData = result.getRowObjects().length > 0;
+
+        if (!hasData) {
+          console.log(`[forecast] Startup catchup triggered for ${currentDate}`);
+          lastCatchupRunDate = currentDate;
+          await runForecastJob(stationSetting);
+        } else {
+          console.log(`[forecast] Startup check: Data exists for ${currentDate}`);
+          lastCatchupRunDate = currentDate;
+        }
+      } catch (e) {
+        console.error("[forecast] Startup check failed:", e);
+      }
+    }, 10000);
+  }
+}
+
+async function runForecastJob(stationSetting: string) {
+  try {
+    // Resolve station list
+    let stationIds: string[] = [];
+    if (stationSetting === 'ALL') {
+      try {
+        // Fetch station list directly from Geosphere API
+        const res = await fetch('https://dataset.api.hub.geosphere.at/v1/station/current/tawes-v1-10min/metadata');
+        if (res.ok) {
+          const data = await res.json();
+          stationIds = (data.stations || []).map((s: any) => String(s.id));
+        }
+      } catch (e) {
+        console.error('[forecast] Failed to load station list for ALL:', e);
+      }
+    }
+    if (!stationIds.length) stationIds = [String(stationSetting)];
+
+    console.log(`[forecast] Processing ${stationIds.length} station(s)...`);
+
+    for (const sid of stationIds) {
+      try {
+        console.log(`[forecast] → Station ${sid}: Storing forecasts...`);
+        await storeForecastForStation(sid);
+
+        console.log(`[forecast] → Station ${sid}: Calculating analysis...`);
+        await calculateAndStoreDailyAnalysis(sid);
+        console.log(`[forecast] → Station ${sid}: Backfilling analysis for last 7 days...`);
+        await backfillForecastAnalysis(sid, 7);
+
+        console.log(`[forecast] ✓ Station ${sid}: Complete`);
+      } catch (e: any) {
+        console.error(`[forecast] ✗ Station ${sid} failed:`, e?.message || e);
+      }
+
+      // Small delay to be gentle on upstream APIs
+      await new Promise(r => setTimeout(r, 250));
+    }
+
+    console.log(`[forecast] ========================================`);
+    console.log(`[forecast] JOB COMPLETE`);
+    console.log(`[forecast] ========================================`);
+  } catch (e: any) {
+    console.error("[forecast] Job failed:", e?.message || e);
   }
 }
 
@@ -213,7 +267,7 @@ export async function storeForecastForStation(stationId: string) {
     }
 
     const stationsData = await stationsResponse.json();
-    const station = stationsData.stations.find((s: any) => s.id === stationId);
+    const station = stationsData.stations.find((s: any) => String(s.id) === String(stationId));
 
     if (!station) {
       throw new Error(`Station ${stationId} not found in metadata`);
@@ -474,7 +528,7 @@ function aggregateHourlyToDaily(hourlyData: any[]): any[] {
  * Calculate and store daily forecast analysis
  * Compares yesterday's forecasts with actual weather data
  */
-export async function calculateAndStoreDailyAnalysis(stationId: string) {
+async function calculateAndStoreDailyAnalysisForDate(stationId: string, targetDate: Date) {
   console.log(`[forecast-analysis] ========================================`);
   console.log(`[forecast-analysis] START: Calculating analysis for station ${stationId}`);
   console.log(`[forecast-analysis] ========================================`);
@@ -521,8 +575,7 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
 
     // Analyze YESTERDAY's weather vs forecasts that were stored for YESTERDAY
     // We use YESTERDAY because historical data has a 1-2 day delay
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterday = new Date(targetDate);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
     console.log(`[forecast-analysis] Target date: ${yesterdayStr} (YESTERDAY)`);
     console.log(`[forecast-analysis] Will compare YESTERDAY's actual weather (min/max) with forecasts stored for YESTERDAY`);
@@ -634,7 +687,7 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
 
     console.log(`[forecast-analysis] ✓ Local MAIN data for ${yesterdayStr}:`, JSON.stringify(actualConverted, null, 2));
 
-    // Get forecasts that were made for YESTERDAY (stored before yesterday)
+    // Get forecasts that were made for YESTERDAY (stored on or before yesterday)
     const forecastQuery = `
       SELECT 
         storage_date,
@@ -734,5 +787,20 @@ export async function calculateAndStoreDailyAnalysis(stationId: string) {
     console.error(`[forecast-analysis] Stack trace:`, e?.stack);
     console.error(`[forecast-analysis] ========================================`);
     throw e;
+  }
+}
+
+export async function calculateAndStoreDailyAnalysis(stationId: string) {
+  const target = new Date();
+  target.setDate(target.getDate() - 1);
+  await calculateAndStoreDailyAnalysisForDate(stationId, target);
+}
+
+export async function backfillForecastAnalysis(stationId: string, days: number) {
+  const maxDays = Math.max(1, Math.min(days, 90));
+  for (let offset = 1; offset <= maxDays; offset++) {
+    const target = new Date();
+    target.setDate(target.getDate() - offset);
+    await calculateAndStoreDailyAnalysisForDate(stationId, target);
   }
 }
