@@ -16,12 +16,12 @@ export async function GET(req: Request) {
     const stationId = searchParams.get("stationId");
     const limit = parseInt(searchParams.get("limit") || "100");
     const table = searchParams.get("table") || "forecasts"; // 'forecasts' or 'analysis'
-    
+
     const conn = await getDuckConn();
-    
+
     let query = "";
     let params: any[] = [];
-    
+
     if (table === "analysis") {
       // Query forecast_analysis table
       query = `
@@ -70,10 +70,10 @@ export async function GET(req: Request) {
       `;
       params = stationId ? [stationId, limit] : [limit];
     }
-    
+
     const reader = await conn.runAndReadAll(query, params);
     const rows = reader.getRowObjects();
-    
+
     // Convert DuckDB values to plain JSON
     const data = rows.map((row: any) => {
       const converted: any = {};
@@ -91,16 +91,16 @@ export async function GET(req: Request) {
       }
       return converted;
     });
-    
+
     // Get row counts
     const forecastCountQuery = `SELECT COUNT(*) as count FROM forecasts ${stationId ? "WHERE station_id = ?" : ""}`;
     const forecastCountReader = await conn.runAndReadAll(forecastCountQuery, stationId ? [stationId] : []);
     const forecastCount = Number(forecastCountReader.getRowObjects()[0]?.count || 0);
-    
+
     const analysisCountQuery = `SELECT COUNT(*) as count FROM forecast_analysis ${stationId ? "WHERE station_id = ?" : ""}`;
     const analysisCountReader = await conn.runAndReadAll(analysisCountQuery, stationId ? [stationId] : []);
     const analysisCount = Number(analysisCountReader.getRowObjects()[0]?.count || 0);
-    
+
     return NextResponse.json({
       table,
       stationId: stationId || "all",
@@ -117,10 +117,10 @@ export async function GET(req: Request) {
         'Content-Type': 'application/json; charset=utf-8'
       }
     });
-    
+
   } catch (error: any) {
     console.error("DForecast API error:", error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     }, { status: 500 });

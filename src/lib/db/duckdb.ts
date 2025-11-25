@@ -16,7 +16,7 @@ export async function getDuckConn(): Promise<DuckDBConnection> {
   const dbPath = path.join(dataDir, "weather.duckdb");
   // Use cached instance to avoid double-attaching same DB
   const api = await import("@duckdb/node-api");
-  const instance: DuckDBInstance = await api.DuckDBInstance.fromCache(dbPath, { threads: "4" });
+  const instance: DuckDBInstance = await api.DuckDBInstance.fromCache(dbPath, { threads: "2" });
   conn = (await instance.connect()) as DuckDBConnection;
   return conn;
 }
