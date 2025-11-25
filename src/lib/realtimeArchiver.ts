@@ -65,13 +65,13 @@ function timeString(d: Date) {
   const D = d.getDate();
   const H = d.getHours();
   const Min = d.getMinutes();
-  
+
   // Add leading zeros
   const mm = M < 10 ? `0${M}` : String(M);
   const dd = D < 10 ? `0${D}` : String(D);
   const hh = H < 10 ? `0${H}` : String(H);
   const min = Min < 10 ? `0${Min}` : String(Min);
-  
+
   return `${y}/${mm}/${dd} ${hh}:${min}`;
 }
 
@@ -114,14 +114,14 @@ function numVal(v: any): number | null {
  */
 function calculateDewPoint(temperature: number | null, humidity: number | null): number | null {
   if (temperature === null || humidity === null) return null;
-  
+
   // Magnus-Formel für Taupunktberechnung
   const a = 17.27;
   const b = 237.7;
-  
+
   const alpha = ((a * temperature) / (b + temperature)) + Math.log(humidity / 100.0);
   const dewPoint = (b * alpha) / (a - alpha);
-  
+
   return Number.isFinite(dewPoint) ? Math.round(dewPoint * 10) / 10 : null;
 }
 
@@ -134,17 +134,17 @@ function calculateDewPoint(temperature: number | null, humidity: number | null):
  */
 function calculateHeatIndex(temperature: number | null, humidity: number | null): number | null {
   if (temperature === null || humidity === null) return null;
-  
+
   // Vereinfachte Formel für den Wärmeindex (Heat Index)
   if (temperature < 20) {
     // Bei niedrigen Temperaturen ist der Wärmeindex gleich der Temperatur
     return temperature;
   }
-  
+
   // Standardformel für Wärmeindex
   const t = temperature;
   const rh = humidity;
-  
+
   // Koeffizienten für die Rothfusz-Gleichung
   const c1 = -8.78469475556;
   const c2 = 1.61139411;
@@ -155,10 +155,10 @@ function calculateHeatIndex(temperature: number | null, humidity: number | null)
   const c7 = 0.002211732;
   const c8 = 0.00072546;
   const c9 = -0.000003582;
-  
+
   const heatIndex = c1 + (c2 * t) + (c3 * rh) + (c4 * t * rh) + (c5 * t * t) +
-                   (c6 * rh * rh) + (c7 * t * t * rh) + (c8 * t * rh * rh) + (c9 * t * t * rh * rh);
-  
+    (c6 * rh * rh) + (c7 * t * t * rh) + (c8 * t * rh * rh) + (c9 * t * t * rh * rh);
+
   return Number.isFinite(heatIndex) ? Math.round(heatIndex * 10) / 10 : temperature;
 }
 
@@ -207,28 +207,28 @@ export async function writeLiveToDNT(payload: any) {
   for (let i = 1; i <= 8; i++) {
     const ch = tryRead(payload, `ch${i}`) ?? tryRead(payload, `temp_and_humidity_ch${i}`);
     allsHeader.push(
-      `CH${i} Temperature(℃)`, 
-      `CH${i} Taupunkt(℃)`, 
-      `CH${i} Wärmeindex(℃)`, 
+      `CH${i} Temperature(℃)`,
+      `CH${i} Taupunkt(℃)`,
+      `CH${i} Wärmeindex(℃)`,
       `CH${i} Luftfeuchtigkeit(%)`
     );
     const t = numVal(ch?.temperature);
     const h = numVal(ch?.humidity);
-    
+
     // Berechne Taupunkt und Wärmeindex, falls sie nicht in der API-Antwort vorhanden sind
     let d = numVal(ch?.dew_point);
     let hi = numVal(ch?.feels_like);
-    
+
     // Falls Taupunkt fehlt, aber Temperatur und Luftfeuchtigkeit vorhanden sind, berechne ihn
     if (d === null && t !== null && h !== null) {
       d = calculateDewPoint(t, h);
     }
-    
+
     // Falls Wärmeindex fehlt, aber Temperatur und Luftfeuchtigkeit vorhanden sind, berechne ihn
     if (hi === null && t !== null && h !== null) {
       hi = calculateHeatIndex(t, h);
     }
-    
+
     allsRow.push(t, d, hi, h);
   }
   await appendCsv(allsFile, allsHeader, allsRow);
@@ -325,24 +325,55 @@ export async function getLastRealtime(): Promise<{ ok: boolean; updatedAt: strin
  * @param {boolean} [all=true] - Whether to fetch all data or a subset.
  * @returns {Promise<any>} A promise that resolves to the JSON response from the API.
  */
+let isFetching = false;
+
+/**
+ * Fetches the latest data from the Ecowitt API, archives it to CSV, and caches it.
+ * @param {boolean} [all=true] - Whether to fetch all data or a subset.
+ * @returns {Promise<any>} A promise that resolves to the JSON response from the API.
+ */
 export async function fetchAndArchive(all: boolean = true) {
-  const target = buildTargetUrl(all);
-  const res = await fetch(target, { cache: "no-store" });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`Upstream ${res.status}: ${txt}`);
+  if (isFetching) {
+    console.log("[rt] fetchAndArchive already in progress, skipping");
+    return;
   }
-  const data = await res.json();
-  const payload = (data && (data.data || (data as any).payload || data)) as any;
-  if (payload && typeof payload === "object") {
-    await writeLiveToDNT(payload);
-    // Update temperature min/max tracking
-    updateTempMinMax(payload);
-    // Log success with ISO timestamp
+  isFetching = true;
+
+  try {
+    const target = buildTargetUrl(all);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
     try {
-      console.log(`[rt] update ok: ${new Date().toISOString()}`);
-    } catch {}
-    await setLastRealtime({ ok: true, updatedAt: new Date().toISOString(), data: payload });
+      const res = await fetch(target, {
+        cache: "no-store",
+        signal: controller.signal
+      });
+
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`Upstream ${res.status}: ${txt}`);
+      }
+      const data = await res.json();
+      const payload = (data && (data.data || (data as any).payload || data)) as any;
+      if (payload && typeof payload === "object") {
+        await writeLiveToDNT(payload);
+        // Update temperature min/max tracking
+        updateTempMinMax(payload);
+        // Log success with ISO timestamp
+        try {
+          console.log(`[rt] update ok: ${new Date().toISOString()}`);
+        } catch { }
+        await setLastRealtime({ ok: true, updatedAt: new Date().toISOString(), data: payload });
+      }
+      return data;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  } catch (e) {
+    // Re-throw to let caller handle logging/error state, but ensure lock is released
+    throw e;
+  } finally {
+    isFetching = false;
   }
-  return data;
 }

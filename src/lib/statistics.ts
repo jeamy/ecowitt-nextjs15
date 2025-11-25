@@ -149,7 +149,7 @@ export async function queryDailyAggregatesInRange(
   const tempExprList = (mergedTempCandidates.length ? mergedTempCandidates : (cols.temp ? [cols.temp] : []))
     .map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
   const tExpr = tempExprList.length ? `COALESCE(${tempExprList.join(', ')})` : 'NULL';
-  
+
   // Feels-like expression (optional)
   const feelsList = (cols.feelsLikeCandidates && cols.feelsLikeCandidates.length ? cols.feelsLikeCandidates : (cols.feelsLike ? [cols.feelsLike] : []))
     .map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
@@ -520,10 +520,23 @@ export async function writeStatistics(stats: StatisticsPayload): Promise<void> {
   await fs.writeFile(STATS_PATH, JSON.stringify(stats, null, 2), "utf8");
 }
 
+let isComputing = false;
+
 export async function updateStatistics(): Promise<StatisticsPayload> {
-  const stats = await computeStatistics();
-  await writeStatistics(stats);
-  return stats;
+  if (isComputing) {
+    console.log("[stats] updateStatistics already in progress, returning current disk stats");
+    const current = await readStatistics();
+    if (current) return current;
+    throw new Error("Statistics computation in progress and no cache available");
+  }
+  isComputing = true;
+  try {
+    const stats = await computeStatistics();
+    await writeStatistics(stats);
+    return stats;
+  } finally {
+    isComputing = false;
+  }
 }
 
 export async function updateStatisticsIfNeeded(maxAgeMs = 24 * 60 * 60 * 1000): Promise<StatisticsPayload> {
