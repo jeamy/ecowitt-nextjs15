@@ -12,26 +12,26 @@
     "prewarm": "tsx src/scripts/prewarm.ts"
   },
   "dependencies": {
-    "@duckdb/node-api": "^1.4.2-r.1",
+    "@duckdb/node-api": "^1.4.3-r.1",
     "@heroicons/react": "^2.2.0",
     "chart.js": "^4.5.1",
     "chartjs-plugin-zoom": "^2.2.0",
-    "i18next": "^25.6.3",
-    "next": "16.0.4",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
-    "react-i18next": "^16.3.5",
+    "i18next": "^25.7.3",
+    "next": "16.1.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-i18next": "^16.5.0",
     "suncalc": "^1.9.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^24",
+    "@types/node": "^25",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
-    "eslint": "9.39.1",
-    "eslint-config-next": "16.0.4",
+    "eslint": "9.39.2",
+    "eslint-config-next": "16.1.0",
     "tailwindcss": "^4",
-    "tsx": "^4.20.6",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   },
   "overrides": {
