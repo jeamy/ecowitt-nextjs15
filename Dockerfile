@@ -19,7 +19,7 @@ COPY . .
 RUN npm run build --webpack
 
 # Set environment variables
-EXPOSE 3010
+#EXPOSE 3010
 ENV PORT=3010
 ENV NODE_ENV=production
 
