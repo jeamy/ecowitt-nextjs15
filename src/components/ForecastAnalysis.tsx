@@ -12,7 +12,6 @@ interface ForecastAccuracyData {
     accuracyStats: AccuracyStats;
   };
   generated: string;
-  isDemo?: boolean;
 }
 
 interface DailyComparison {
@@ -67,10 +66,8 @@ export default function ForecastAnalysis() {
       const response = await fetch(API_ENDPOINTS.CONFIG_FORECAST_STATION);
       if (response.ok) {
         const data = await response.json();
-        console.log('[ForecastAnalysis] Loaded default station:', data.stationId);
         setStationId(data.stationId);
       } else {
-        console.log('[ForecastAnalysis] Failed to load default station, using fallback');
         setStationId("11035"); // Fallback: Wien Hohe Warte
       }
     } catch (err) {
@@ -102,33 +99,22 @@ export default function ForecastAnalysis() {
   };
 
   const fetchAnalysis = async () => {
-    console.log(`[ForecastAnalysis] Fetching analysis for station ${stationId}, days ${days}`);
     setLoading(true);
     setError(null);
+    setData(null);
 
     try {
-      // Try to fetch stored analysis first
       const response = await fetch(`${API_ENDPOINTS.FORECAST_ANALYSIS}?stationId=${stationId}&days=${days}`);
-      console.log(`[ForecastAnalysis] API response status: ${response.status}`);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[ForecastAnalysis] API error: ${response.status}`, errorText);
-        // Show demo data on error
-        setData(generateDemoData(stationId, days));
-        setLoading(false);
+        setError(`Analysis request failed (${response.status}): ${errorText}`);
         return;
       }
 
       const analysisData = await response.json();
-      console.log(`[ForecastAnalysis] Received data:`, analysisData);
 
-      // Check if we have any data
       if (!analysisData.dailyAnalysis || analysisData.dailyAnalysis.length === 0 || !analysisData.hasData) {
-        console.log('[ForecastAnalysis] No analysis data available, showing demo data');
-        // Show demo data if no real data available
-        setData(generateDemoData(stationId, days));
-        setLoading(false);
         return;
       }
 
@@ -156,102 +142,14 @@ export default function ForecastAnalysis() {
           })),
           accuracyStats: analysisData.accuracyStats
         },
-        generated: analysisData.generated,
-        isDemo: false
+        generated: analysisData.generated
       });
     } catch (err: any) {
       console.error('[ForecastAnalysis] Fetch error:', err);
-      // On error, show demo data
-      setData(generateDemoData(stationId || "11035", days));
-      setLoading(false);
+      setError(err?.message || String(err));
     } finally {
       setLoading(false);
     }
-  };
-
-  const generateDemoData = (stationId: string, days: number) => {
-    const dailyComparisons = [];
-    const sources = ['geosphere', 'openweather', 'meteoblue', 'openmeteo'];
-
-    // Generate demo data for the last 7 days
-    for (let i = 1; i <= Math.min(days, 7); i++) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-
-      const actual = {
-        tempMin: 8 + Math.random() * 5,
-        tempMax: 18 + Math.random() * 5,
-        precipitation: Math.random() > 0.7 ? Math.random() * 10 : 0,
-        windSpeed: 10 + Math.random() * 15
-      };
-
-      const forecasts: any = {};
-      const errors: any = {};
-
-      sources.forEach(source => {
-        const tempMinError = Math.random() * 3;
-        const tempMaxError = Math.random() * 3;
-        const precipError = Math.random() * 5;
-        const windError = Math.random() * 8;
-
-        forecasts[source] = {
-          tempMin: actual.tempMin + (Math.random() > 0.5 ? tempMinError : -tempMinError),
-          tempMax: actual.tempMax + (Math.random() > 0.5 ? tempMaxError : -tempMaxError),
-          precipitation: Math.max(0, actual.precipitation + (Math.random() > 0.5 ? precipError : -precipError)),
-          windSpeed: actual.windSpeed + (Math.random() > 0.5 ? windError : -windError)
-        };
-
-        errors[source] = {
-          tempMinError,
-          tempMaxError,
-          precipitationError: precipError,
-          windSpeedError: windError
-        };
-      });
-
-      dailyComparisons.push({
-        date: dateStr,
-        actual,
-        forecasts,
-        errors
-      });
-    }
-
-    // Calculate demo accuracy stats
-    const accuracyStats: any = {};
-    sources.forEach(source => {
-      accuracyStats[source] = {
-        sampleSize: dailyComparisons.length,
-        tempMin: {
-          mae: 1.5 + Math.random() * 1.5,
-          rmse: 2.0 + Math.random() * 2.0
-        },
-        tempMax: {
-          mae: 1.8 + Math.random() * 1.5,
-          rmse: 2.3 + Math.random() * 2.0
-        },
-        precipitation: {
-          mae: 2.5 + Math.random() * 2.0,
-          rmse: 3.5 + Math.random() * 2.5
-        },
-        windSpeed: {
-          mae: 4.0 + Math.random() * 3.0,
-          rmse: 5.5 + Math.random() * 3.5
-        }
-      };
-    });
-
-    return {
-      stationId,
-      days,
-      data: {
-        dailyComparisons,
-        accuracyStats
-      },
-      generated: new Date().toISOString(),
-      isDemo: true
-    };
   };
 
   const getSourceName = (source: string) => {
@@ -269,27 +167,8 @@ export default function ForecastAnalysis() {
     return error.toFixed(1);
   };
 
-  if (loading) return <div className="p-6">{t("analysis.loading")}</div>;
-  if (error) return <div className="p-6 text-red-500">{t("analysis.errorPrefix")} {error}</div>;
-  if (!data) return <div className="p-6">{t("analysis.noData")}</div>;
-
   return (
     <div className="p-6 space-y-6">
-      {/* Demo Data Warning */}
-      {data.isDemo && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">ℹ️</span>
-            <div>
-              <h3 className="font-semibold text-yellow-800">{t("analysis.demoTitle")}</h3>
-              <p className="text-sm text-yellow-700">
-                {t("analysis.demoText")}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Controls */}
       <div className="flex flex-wrap gap-4 items-end bg-white p-4 rounded-lg shadow">
         <div>
@@ -334,6 +213,22 @@ export default function ForecastAnalysis() {
         </button>
       </div>
 
+      {loading && !data && (
+        <div className="bg-white p-6 rounded-lg shadow">{t("analysis.loading")}</div>
+      )}
+
+      {error && (
+        <div className="bg-white p-6 rounded-lg shadow text-red-500">
+          {t("analysis.errorPrefix")} {error}
+        </div>
+      )}
+
+      {!loading && !error && !data && (
+        <div className="bg-white p-6 rounded-lg shadow">{t("analysis.noData")}</div>
+      )}
+
+      {data && (
+        <>
       {/* Summary Stats */}
       <div className="bg-white p-6 rounded-lg shadow">
         <h2 className="text-xl font-bold mb-4">{t("analysis.summaryTitle")}</h2>
@@ -430,6 +325,8 @@ export default function ForecastAnalysis() {
           <strong>{t("analysis.infoTitle")}</strong> {t("analysis.infoText")}
         </p>
       </div>
+        </>
+      )}
     </div>
   );
 }

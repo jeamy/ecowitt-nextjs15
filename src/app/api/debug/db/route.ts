@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { quoteIdent } from "@/lib/data/columns";
+import { requireAdminRequest } from "@/lib/server/adminAuth";
 
 interface TableInfo {
   tableName: string;
@@ -27,8 +29,11 @@ function convertDuckDBValue(value: any): any {
   return value;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const unauthorized = requireAdminRequest(req);
+    if (unauthorized) return unauthorized;
+
     const { withConn } = await import("@/lib/db/duckdb");
 
     return await withConn(async (conn) => {
@@ -48,7 +53,8 @@ export async function GET() {
         const type = String(table.table_type);
 
         // Get row count
-        const countResult = await conn.runAndReadAll(`SELECT COUNT(*) as count FROM ${name}`);
+        const tableId = quoteIdent(name);
+        const countResult = await conn.runAndReadAll(`SELECT COUNT(*) as count FROM ${tableId}`);
         const rows = countResult.getRowObjects();
         const count = Number(rows[0]?.count || 0);
 
@@ -61,7 +67,7 @@ export async function GET() {
 
         // Show sample data only for non-forecast tables
         if (count > 0 && name !== 'forecasts') {
-          const sampleResult = await conn.runAndReadAll(`SELECT * FROM ${name} LIMIT 3`);
+          const sampleResult = await conn.runAndReadAll(`SELECT * FROM ${tableId} LIMIT 3`);
           const rawSamples = sampleResult.getRowObjects();
           // Convert all DuckDB values to JSON-serializable values
           info.sampleData = rawSamples.map(row => convertDuckDBValue(row));

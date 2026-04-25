@@ -11,7 +11,6 @@ export const API_ENDPOINTS = {
   
   // Temperature min/max
   TEMP_MINMAX: '/api/temp-minmax',
-  TEMP_MINMAX_UPDATE: '/api/temp-minmax/update',
   
   // Data endpoints
   DATA_MONTHS: '/api/data/months',
@@ -21,7 +20,6 @@ export const API_ENDPOINTS = {
   
   // Statistics endpoints
   STATISTICS: '/api/statistics',
-  STATISTICS_UPDATE: '/api/statistics/update',
   STATISTICS_DAILY: '/api/statistics/daily',
   // Dashboard/server-side range statistics
   STATISTICS_RANGE: '/api/statistics/range',
@@ -33,10 +31,6 @@ export const API_ENDPOINTS = {
   FORECAST_METEOBLUE: '/api/forecast?action=meteoblue',
   FORECAST_OPENMETEO: '/api/forecast?action=openmeteo',
   FORECAST_OPENWEATHER: '/api/forecast?action=openweather',
-  // Forecast storage/analysis
-  FORECAST_STORE: '/api/forecast/store',
-  FORECAST_ANALYZE: '/api/forecast/analyze',
-  FORECAST_BACKFILL: '/api/forecast/backfill',
   FORECAST_ANALYSIS: '/api/forecast/analysis',
   // Config
   CONFIG_FORECAST_STATION: '/api/config/forecast-station',

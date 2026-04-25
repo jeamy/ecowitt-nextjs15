@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { computeAstro, formatTime } from "@/lib/astro";
 import { API_ENDPOINTS } from "@/constants";
 import { useRealtime } from "@/contexts/RealtimeContext";
+import { calculateDewPoint, calculateHeatIndex, fmtVU, numVal, tryRead, valueAndUnit } from "@/components/realtimeUtils";
 
 import { useTranslation } from "react-i18next";
 
@@ -16,6 +17,12 @@ function LabelValue({ label, value }: { label: string; value: React.ReactNode })
       <span className="font-medium text-gray-900 dark:text-gray-100">{value ?? "—"}</span>
     </div>
   );
+}
+
+function fmtFixed(value: string | number | null, unit: string) {
+  if (value == null || value === "") return "—";
+  const n = Number(value);
+  return Number.isFinite(n) ? `${n.toFixed(1)}${unit}` : "—";
 }
 
 function TemperatureLabelValue({ 
@@ -52,7 +59,7 @@ function TemperatureLabelValue({
         <div className="flex flex-col w-full">
           <div className="flex justify-between items-center">
             <span className="text-gray-600 dark:text-gray-300 text-sm">{label}</span>
-            <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{(Number(currentTemp.value) || 0).toFixed(1)}{unit}</span>
+            <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{fmtFixed(currentTemp.value, unit)}</span>
           </div>
           {minMax && sensorData && (
             <div className="mt-1 space-y-0.5">
@@ -100,7 +107,7 @@ function HumidityLabelValue({
         <div className="flex flex-col w-full">
           <div className="flex justify-between items-center">
             <span className="text-gray-600 dark:text-gray-300 text-sm">{label}</span>
-            <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{(Number(currentHumidity.value) || 0).toFixed(1)}{unit}</span>
+            <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{fmtFixed(currentHumidity.value, unit)}</span>
           </div>
           {minMax && sensorData && (
             <div className="mt-1 space-y-0.5">
@@ -151,88 +158,6 @@ function MinMaxDisplay({
       {sensorData?.max != null && formatMinMax(sensorData.max, sensorData.maxTime, 'Max', true)}
     </div>
   );
-}
-
-function tryRead(obj: any, path: string): any {
-  return path.split(".").reduce((acc, key) => (acc && key in acc ? acc[key] : undefined), obj);
-}
-
-function numVal(v: any): number | null {
-  if (v == null) return null;
-  if (typeof v === "number") return Number.isFinite(v) ? v : null;
-  if (typeof v === "string") return isNaN(Number(v)) ? null : Number(v);
-  if (typeof v === "object" && v) {
-    const x = (v as any).value;
-    if (x == null) return null;
-    if (typeof x === "number") return Number.isFinite(x) ? x : null;
-    if (typeof x === "string") return isNaN(Number(x)) ? null : Number(x);
-  }
-  return null;
-}
-
-function calculateDewPoint(temperature: number, humidity: number): number {
-  // Magnus-Formel für Taupunktberechnung
-  const a = 17.27;
-  const b = 237.7;
-  
-  const alpha = ((a * temperature) / (b + temperature)) + Math.log(humidity / 100.0);
-  const dewPoint = (b * alpha) / (a - alpha);
-  
-  return Number.isFinite(dewPoint) ? Math.round(dewPoint * 10) / 10 : temperature;
-}
-
-function calculateHeatIndex(temperature: number, humidity: number): number {
-  // Vereinfachte Formel für den Wärmeindex (Heat Index)
-  if (temperature < 20) {
-    // Bei niedrigen Temperaturen ist der Wärmeindex gleich der Temperatur
-    return temperature;
-  }
-  
-  // Standardformel für Wärmeindex
-  const t = temperature;
-  const rh = humidity;
-  
-  // Koeffizienten für die Rothfusz-Gleichung
-  const c1 = -8.78469475556;
-  const c2 = 1.61139411;
-  const c3 = 2.33854883889;
-  const c4 = -0.14611605;
-  const c5 = -0.012308094;
-  const c6 = -0.0164248277778;
-  const c7 = 0.002211732;
-  const c8 = 0.00072546;
-  const c9 = -0.000003582;
-  
-  const heatIndex = c1 + (c2 * t) + (c3 * rh) + (c4 * t * rh) + (c5 * t * t) +
-                   (c6 * rh * rh) + (c7 * t * t * rh) + (c8 * t * rh * rh) + (c9 * t * t * rh * rh);
-  
-  return Number.isFinite(heatIndex) ? Math.round(heatIndex * 10) / 10 : temperature;
-}
-
-function valueAndUnit(v: any): { value: string | number | null; unit?: string } {
-  if (v == null) return { value: null };
-  if (typeof v === "object" && ("value" in v)) {
-    // Stelle sicher, dass "0" und 0 als gültige Werte behandelt werden
-    const value = (v as any).value;
-    return { value: value, unit: (v as any).unit };
-  }
-  return { value: v };
-}
-
-function fmtVU(vu: { value: string | number | null; unit?: string }, fallbackUnit?: string) {
-  // Prüfe explizit auf null und leere Strings, aber nicht auf 0
-  if (vu.value == null || vu.value === "") return "—";
-  
-  // Stelle sicher, dass 0 und "0" korrekt angezeigt werden
-  const unit = vu.unit ?? fallbackUnit ?? "";
-  
-  // Wenn der Wert 0 oder "0" oder "0.0" ist, zeige "0" mit der Einheit an
-  const numValue = Number(vu.value);
-  if (numValue === 0) {
-    return `0${unit ? ` ${unit}` : ""}`;
-  }
-  
-  return `${vu.value}${unit ? ` ${unit}` : ""}`;
 }
 
 function fmtBattery(v: any, t: (key: string) => string) {
@@ -305,9 +230,6 @@ export default function Realtime() {
   useEffect(() => {
     const fetchTempMinMax = async () => {
       try {
-        // Force update all temperatures first
-        await fetch(API_ENDPOINTS.TEMP_MINMAX_UPDATE, { method: "POST", cache: "no-store" });
-        // Then get the updated data
         const res = await fetch(API_ENDPOINTS.TEMP_MINMAX, { cache: "no-store" });
         if (!res.ok) return;
         const json = await res.json();

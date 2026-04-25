@@ -1420,21 +1420,11 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
   const fmt = makeTimeTickFormatter(xBase, spanMin, locale);
   const hoverFmt = makeHoverTimeFormatter(xBase, locale);
   const header = (data.header || []).slice();
-  // Debug main headers and sample row
-  try {
-    console.debug("[Main] Header:", header);
-    console.debug("[Main] Numeric cols:", cols);
-    console.debug("[Main] First row keys:", Object.keys(rows[0] || {}));
-    console.debug("[Main] First row sample:", rows[0]);
-  } catch {}
-  
   // Temperaturmetriken identifizieren und gruppieren
   const tempColumns = findTemperatureColumns(header);
-  console.debug("[Main] Detected temp columns:", tempColumns);
   
   // Regenmetriken identifizieren und gruppieren
   const rainColumns = findRainColumns(header);
-  console.debug("[Main] Detected rain columns:", rainColumns);
   
   // Windmetriken identifizieren (Geschwindigkeit & Böe)
   const { windCol, gustCol } = findWindColumns(header);
@@ -1449,11 +1439,6 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
   
   for (let i = 0; i < tempColumns.length; i++) {
     const col = tempColumns[i];
-    // Debug values for this column
-    try {
-      const samples = rows.slice(0, 5).map((r) => ({ v: r[col], t: typeof r[col] }));
-      console.debug(`[Main] Column '${col}' samples:`, samples);
-    } catch {}
     const series: LineSeries = {
       id: col,
       color: tempColors[i % tempColors.length],
@@ -1463,7 +1448,6 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
       tempSeries.push(series);
     }
   }
-  console.debug("[Main] tempSeries length:", tempSeries.length);
   
   // Regendiagramm erstellen
   const rainSeries: LineSeries[] = [];
@@ -2015,7 +1999,6 @@ function findTemperatureColumns(header: string[]): string[] {
     }
   }
   
-  console.debug("Detected temperature metrics:", tempColumns);
   return tempColumns;
 }
 
@@ -2029,8 +2012,6 @@ function findTemperatureColumns(header: string[]): string[] {
 function findRainColumns(header: string[]): string[] {
   const rainColumns: string[] = [];
   
-  console.debug("Available headers for rain detection:", header);
-  
   // Suche nach Regen/Woche
   const regenWoche = header.find(h => {
     const s = h.toLowerCase();
@@ -2038,7 +2019,6 @@ function findRainColumns(header: string[]): string[] {
            (s.includes("week") || s.includes("woche"));
   });
   if (regenWoche) {
-    console.debug("Rain/week found:", regenWoche);
     rainColumns.push(regenWoche);
   }
   
@@ -2049,7 +2029,6 @@ function findRainColumns(header: string[]): string[] {
            (s.includes("month") || s.includes("monat"));
   });
   if (regenMonat) {
-    console.debug("Rain/month found:", regenMonat);
     rainColumns.push(regenMonat);
   }
   
@@ -2060,13 +2039,11 @@ function findRainColumns(header: string[]): string[] {
            (s.includes("year") || s.includes("jahr"));
   });
   if (regenJahr) {
-    console.debug("Rain/year found:", regenJahr);
     rainColumns.push(regenJahr);
   }
   
   // Wichtig: Regen/Stunde NICHT in die Regenmetriken aufnehmen, da diese als Balkendiagramm dargestellt wird
   
-  console.debug("Detected rain metrics:", rainColumns);
   return rainColumns;
 }
 

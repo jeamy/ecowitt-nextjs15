@@ -5,17 +5,7 @@ import { useTranslation } from "react-i18next";
 import { API_ENDPOINTS } from "@/constants";
 import { useRealtime } from "@/contexts/RealtimeContext";
 import { computeAstro, formatTime } from "@/lib/astro";
-
-/**
- * Safely reads a nested property from an object.
- * @param obj - The object to read from.
- * @param path - The dot-separated path to the property.
- * @returns The property value, or undefined if not found.
- * @private
- */
-function tryRead(obj: any, path: string): any {
-  return path.split(".").reduce((acc, key) => (acc && key in acc ? (acc as any)[key] : undefined), obj);
-}
+import { calculateDewPoint, calculateHeatIndex, fmtVU, numVal, tryRead, valueAndUnit } from "@/components/realtimeUtils";
 
 /**
  * Determines the color for a given temperature value based on a predefined scale.
@@ -204,104 +194,6 @@ function HumGradientBar(props: { min: number; max: number; step: number; height?
       ))}
     </svg>
   );
-}
-
-/**
- * Safely extracts a numeric value from various possible data structures.
- * @param v - The value to parse, which can be a number, string, or object with a `value` property.
- * @returns The numeric value, or null if parsing fails.
- * @private
- */
-function numVal(v: any): number | null {
-  if (v == null) return null;
-  if (typeof v === "number") return Number.isFinite(v) ? v : null;
-  if (typeof v === "string") return isNaN(Number(v)) ? null : Number(v);
-  if (typeof v === "object" && v) {
-    const x = (v as any).value;
-    if (x == null) return null;
-    if (typeof x === "number") return Number.isFinite(x) ? x : null;
-    if (typeof x === "string") return isNaN(Number(x)) ? null : Number(x);
-  }
-  return null;
-}
-
-/**
- * Extracts a value and its unit from a potential value-unit object.
- * @param v - The value, which can be a primitive or an object like `{ value: 10, unit: '°C' }`.
- * @returns An object containing the value and an optional unit.
- * @private
- */
-function valueAndUnit(v: any): { value: string | number | null; unit?: string } {
-  if (v == null) return { value: null };
-  if (typeof v === "object" && ("value" in v)) {
-    // Stelle sicher, dass "0" und 0 als gültige Werte behandelt werden
-    const value = (v as any).value;
-    return { value: value, unit: (v as any).unit };
-  }
-  return { value: v };
-}
-
-/**
- * Formats a value-unit object into a display string.
- * @param vu - The value-unit object.
- * @param fallbackUnit - A fallback unit to use if the object doesn't specify one.
- * @returns A formatted string like "10 °C" or "—" if the value is null.
- * @private
- */
-function fmtVU(vu: { value: string | number | null; unit?: string }, fallbackUnit?: string) {
-  // Prüfe explizit auf null und leere Strings, aber nicht auf 0
-  if (vu.value == null || vu.value === "") return "—";
-  
-  // Stelle sicher, dass 0 und "0" korrekt angezeigt werden
-  const unit = vu.unit ?? fallbackUnit ?? "";
-  
-  // Wenn der Wert 0 oder "0" oder "0.0" ist, zeige "0" mit der Einheit an
-  const numValue = Number(vu.value);
-  if (numValue === 0) {
-    return `0${unit ? ` ${unit}` : ""}`;
-  }
-  
-  return `${vu.value}${unit ? ` ${unit}` : ""}`;
-}
-
-/**
- * Calculates the dew point.
- * @param temperature - The temperature in Celsius.
- * @param humidity - The relative humidity in percent.
- * @returns The calculated dew point in Celsius.
- * @private
- */
-function calculateDewPoint(temperature: number, humidity: number): number {
-  const a = 17.27;
-  const b = 237.7;
-  const alpha = (a * temperature) / (b + temperature) + Math.log(humidity / 100.0);
-  const dewPoint = (b * alpha) / (a - alpha);
-  return Number.isFinite(dewPoint) ? Math.round(dewPoint * 10) / 10 : temperature;
-}
-
-/**
- * Calculates the heat index (apparent temperature).
- * @param temperature - The temperature in Celsius.
- * @param humidity - The relative humidity in percent.
- * @returns The calculated heat index in Celsius.
- * @private
- */
-function calculateHeatIndex(temperature: number, humidity: number): number {
-  if (temperature < 20) return temperature;
-  const t = temperature;
-  const rh = humidity;
-  const c1 = -8.78469475556;
-  const c2 = 1.61139411;
-  const c3 = 2.33854883889;
-  const c4 = -0.14611605;
-  const c5 = -0.012308094;
-  const c6 = -0.0164248277778;
-  const c7 = 0.002211732;
-  const c8 = 0.00072546;
-  const c9 = -0.000003582;
-  const hi =
-    c1 + c2 * t + c3 * rh + c4 * t * rh + c5 * t * t + c6 * rh * rh + c7 * t * t * rh + c8 * t * rh * rh + c9 * t * t * rh * rh;
-  return Number.isFinite(hi) ? Math.round(hi * 10) / 10 : temperature;
 }
 
 /**
@@ -754,9 +646,6 @@ export default function Gauges() {
   useEffect(() => {
     const fetchTempMinMax = async () => {
       try {
-        // Force update all temperatures first
-        await fetch(API_ENDPOINTS.TEMP_MINMAX_UPDATE, { method: "POST", cache: "no-store" });
-        // Then get the updated data
         const res = await fetch(API_ENDPOINTS.TEMP_MINMAX, { cache: "no-store" });
         if (!res.ok) return;
         const json = await res.json();

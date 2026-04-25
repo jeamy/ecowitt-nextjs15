@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { updateTempMinMax, getTodayTempMinMax } from '@/lib/temp-minmax';
 import { getLastRealtime } from '@/lib/realtimeArchiver';
+import { requireAdminRequest } from '@/lib/server/adminAuth';
 
 /**
  * API route to update and then retrieve the daily min/max temperature and humidity data.
@@ -15,8 +16,11 @@ import { getLastRealtime } from '@/lib/realtimeArchiver';
  * //   "message": "All temperatures updated successfully"
  * // }
  */
-export async function POST() {
+export async function POST(req: Request) {
   try {
+    const unauthorized = requireAdminRequest(req);
+    if (unauthorized) return unauthorized;
+
     // Get current realtime data directly
     const rtData = await getLastRealtime();
     if (!rtData || !rtData.ok || !rtData.data) {
@@ -35,10 +39,6 @@ export async function POST() {
   }
 }
 
-/**
- * Also allow GET for convenience. See POST for details.
- * @returns {Promise<NextResponse>} A JSON response with the updated min/max data.
- */
 export async function GET() {
-  return POST();
+  return NextResponse.json({ ok: false, error: 'Method not allowed' }, { status: 405 });
 }

@@ -174,6 +174,8 @@ export default function Forecast() {
   const [errorOWM, setErrorOWM] = useState<string | null>(null);
   const [errorMB, setErrorMB] = useState<string | null>(null);
   const [errorOM, setErrorOM] = useState<string | null>(null);
+  const [failedPictos, setFailedPictos] = useState<Record<number, boolean>>({});
+  const [meteogramFailed, setMeteogramFailed] = useState(false);
 
   // Load stations on component mount
   useEffect(() => {
@@ -248,6 +250,7 @@ export default function Forecast() {
   useEffect(() => {
     const loadForecast = async () => {
       if (!selectedStation) return;
+      setMeteogramFailed(false);
       
       try {
         setLoading(true);
@@ -613,23 +616,20 @@ export default function Forecast() {
                         )}
                       </div>
                     )}
-                    
+
                     {dayData.pictocode !== null && (
                       <div className="mt-3 pt-3 border-t border-gray-200 dark:border-neutral-700 text-center">
                         <div className="mb-1">
-                          <img 
-                            src={`https://static.meteoblue.com/assets/images/picto/${dayData.pictocode}_iday.svg`}
-                            alt={`Weather code ${dayData.pictocode}`}
-                            className="inline-block w-16 h-16"
-                            onError={(e) => {
-                              // Fallback to emoji if image fails
-                              const target = e.target as HTMLImageElement;
-                              const parent = target.parentElement;
-                              if (parent && dayData.pictocode !== null) {
-                                parent.innerHTML = `<div class="text-4xl">${getWeatherEmoji(dayData.pictocode)}</div>`;
-                              }
-                            }}
-                          />
+                          {failedPictos[dayData.pictocode] ? (
+                            <div className="text-4xl">{getWeatherEmoji(dayData.pictocode)}</div>
+                          ) : (
+                            <img
+                              src={`https://static.meteoblue.com/assets/images/picto/${dayData.pictocode}_iday.svg`}
+                              alt={`Weather code ${dayData.pictocode}`}
+                              className="inline-block w-16 h-16"
+                              onError={() => setFailedPictos((prev) => ({ ...prev, [dayData.pictocode!]: true }))}
+                            />
+                          )}
                         </div>
                         <div className="text-xs text-gray-600 dark:text-gray-300">
                           {t(`forecast.weather.${dayData.pictocode}`, t("forecast.weather.unknown", "Unknown"))}
@@ -641,7 +641,7 @@ export default function Forecast() {
               );
             })}
           </div>
-          
+
           {/* Meteoblue Meteogram */}
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-3">📊 Meteogramm (14 Tage)</h3>
@@ -649,24 +649,23 @@ export default function Forecast() {
               {(() => {
                 const station = Object.values(stations).flat().find(s => s.id === selectedStation);
                 if (!station) return null;
-                
+
                 // Use API route to get meteogram with server-side API key
                 const meteogramUrl = `/api/forecast?action=meteogram&stationId=${selectedStation}`;
-                
+
                 return (
-                  <img 
-                    src={meteogramUrl}
-                    alt={`Meteogramm für ${station.name}`}
-                    className="w-full h-auto"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                      const parent = target.parentElement;
-                      if (parent) {
-                        parent.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 py-4">Meteogramm konnte nicht geladen werden. Prüfe deinen Meteoblue API-Key.</p>';
-                      }
-                    }}
-                  />
+                  meteogramFailed ? (
+                    <p className="text-center text-gray-500 dark:text-gray-400 py-4">
+                      Meteogramm konnte nicht geladen werden. Prüfe deinen Meteoblue API-Key.
+                    </p>
+                  ) : (
+                    <img
+                      src={meteogramUrl}
+                      alt={`Meteogramm für ${station.name}`}
+                      className="w-full h-auto"
+                      onError={() => setMeteogramFailed(true)}
+                    />
+                  )
                 );
               })()}
             </div>

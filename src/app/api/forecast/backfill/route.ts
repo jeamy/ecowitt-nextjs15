@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { backfillForecastAnalysis } from "@/instrumentation";
+import { requireAdminRequest } from "@/lib/server/adminAuth";
 
 export const runtime = "nodejs";
 
@@ -10,11 +11,14 @@ export const runtime = "nodejs";
  */
 export async function POST(req: Request) {
   try {
+    const unauthorized = requireAdminRequest(req);
+    if (unauthorized) return unauthorized;
+
     const { stationId, days } = await req.json();
     if (!stationId) {
       return NextResponse.json({ error: "stationId is required" }, { status: 400 });
     }
-    const numDays = typeof days === "number" && Number.isFinite(days) ? days : 30;
+    const numDays = typeof days === "number" && Number.isFinite(days) ? Math.min(Math.max(Math.floor(days), 1), 365) : 30;
 
     await backfillForecastAnalysis(String(stationId), numDays);
 

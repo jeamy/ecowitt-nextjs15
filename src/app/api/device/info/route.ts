@@ -32,8 +32,7 @@ function buildDeviceInfoUrl() {
  * //   "ok": true,
  * //   "timezone": "Europe/Berlin",
  * //   "latitude": 52.52,
- * //   "longitude": 13.40,
- * //   "raw": { ...full api response... }
+ * //   "longitude": 13.40
  * // }
  */
 export async function GET() {
@@ -56,7 +55,7 @@ export async function GET() {
     if (lat != null && typeof lat !== "number") lat = Number(lat);
     if (lon != null && typeof lon !== "number") lon = Number(lon);
 
-    return NextResponse.json({ ok: true, timezone: tz, latitude: lat, longitude: lon, raw: json }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ ok: true, timezone: tz, latitude: lat, longitude: lon }, { headers: { "Cache-Control": "no-store" } });
   } catch (err: any) {
     return NextResponse.json({ ok: false, error: String(err?.message || err) }, { status: 500 });
   }

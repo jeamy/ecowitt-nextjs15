@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import EcoCon from "eco";
-import { buildTargetUrl, writeLiveToDNT } from "@/lib/realtimeArchiver";
+import { buildTargetUrl } from "@/lib/realtimeArchiver";
 
 export const dynamic = "force-dynamic"; // always fetch fresh
 export const runtime = "nodejs"; // we need fs access
@@ -35,18 +34,6 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: `Upstream ${res.status}`, body: text }, { status: res.status });
     }
     const data = await res.json();
-    // Optional: archive via API route (disabled by default to avoid duplicates with server poller)
-    if (process.env.RT_ARCHIVE_FROM_API === "1") {
-      try {
-        const payload = (data && (data.data || (data as any).payload || data)) as any;
-        if (payload && typeof payload === "object") {
-          await writeLiveToDNT(payload);
-        }
-      } catch (e) {
-        // Swallow write errors to not break realtime API
-        console.error("[rt] write to DNT failed:", e);
-      }
-    }
     return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
   } catch (err: any) {
     return NextResponse.json({ ok: false, error: String(err?.message || err) }, { status: 500 });

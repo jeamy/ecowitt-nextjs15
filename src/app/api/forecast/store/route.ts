@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { storeForecastForStation } from "@/instrumentation";
+import { requireAdminRequest } from "@/lib/server/adminAuth";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,9 @@ export const runtime = "nodejs";
  */
 export async function POST(req: Request) {
   try {
+    const unauthorized = requireAdminRequest(req);
+    if (unauthorized) return unauthorized;
+
     const { stationId } = await req.json();
     
     if (!stationId) {

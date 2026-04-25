@@ -9,14 +9,11 @@ export const runtime = "nodejs";
  * Returns daily analysis results from the database
  */
 export async function GET(req: Request) {
-  console.log('[API] Forecast analysis request received');
   try {
     const { searchParams } = new URL(req.url);
     const stationId = searchParams.get("stationId");
     const daysParam = Number(searchParams.get("days") || "30");
     const days = Number.isFinite(daysParam) && daysParam > 0 ? Math.min(Math.floor(daysParam), 3650) : 30;
-
-    console.log('[API] Parameters:', { stationId, days });
 
     if (!stationId) {
       return NextResponse.json({ error: "stationId parameter is required" }, { status: 400 });
@@ -27,32 +24,16 @@ export async function GET(req: Request) {
 
     let rows: any[] = [];
     await withConn(async (conn) => {
-      // Ensure table exists (no-op if already there)
-      try {
-        await conn.run(`
-          CREATE TABLE IF NOT EXISTS forecast_analysis (
-            analysis_date DATE NOT NULL,
-            station_id VARCHAR(50) NOT NULL,
-            forecast_date DATE NOT NULL,
-            source VARCHAR(20) NOT NULL,
-            temp_min_error DOUBLE,
-            temp_max_error DOUBLE,
-            precipitation_error DOUBLE,
-            wind_speed_error DOUBLE,
-            actual_temp_min DOUBLE,
-            actual_temp_max DOUBLE,
-            actual_precipitation DOUBLE,
-            actual_wind_speed DOUBLE,
-            forecast_temp_min DOUBLE,
-            forecast_temp_max DOUBLE,
-            forecast_precipitation DOUBLE,
-            forecast_wind_speed DOUBLE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY(analysis_date, station_id, forecast_date, source)
-          )
-        `);
-      } catch (e: any) {
-        console.warn('[API] forecast_analysis table check failed:', e?.message || e);
+      const tableReader = await conn.runAndReadAll(`
+        SELECT COUNT(*) AS count
+        FROM information_schema.tables
+        WHERE table_name = 'forecast_analysis'
+      `);
+      const tableRows = tableReader.getRowObjects();
+      const hasForecastAnalysis = Number((tableRows[0] as any)?.count ?? 0) > 0;
+      if (!hasForecastAnalysis) {
+        rows = [];
+        return;
       }
 
       const analysisQuery = `
