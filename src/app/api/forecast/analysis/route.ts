@@ -12,8 +12,10 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const stationId = searchParams.get("stationId");
-    const daysParam = Number(searchParams.get("days") || "30");
-    const days = Number.isFinite(daysParam) && daysParam > 0 ? Math.min(Math.floor(daysParam), 3650) : 30;
+    const daysRaw = searchParams.get("days") || "30";
+    const allDays = daysRaw === "all";
+    const daysParam = Number(daysRaw);
+    const days = allDays ? null : Number.isFinite(daysParam) && daysParam > 0 ? Math.min(Math.floor(daysParam), 3650) : 30;
 
     if (!stationId) {
       return NextResponse.json({ error: "stationId parameter is required" }, { status: 400 });
@@ -55,7 +57,7 @@ export async function GET(req: Request) {
           forecast_wind_speed
         FROM forecast_analysis
         WHERE station_id = ${sqlLiteral(stationId)}
-          AND analysis_date >= CURRENT_DATE - INTERVAL '${days}' DAYS
+          ${days === null ? "" : `AND analysis_date >= CURRENT_DATE - INTERVAL '${days}' DAYS`}
         ORDER BY analysis_date DESC, forecast_date DESC, source
       `;
 
@@ -124,7 +126,7 @@ export async function GET(req: Request) {
 
     const payload = {
       stationId,
-      days,
+      days: days === null ? "all" : days,
       dailyAnalysis: Object.values(byDate),
       accuracyStats,
       generated: new Date().toISOString(),

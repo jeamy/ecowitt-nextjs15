@@ -6,7 +6,7 @@ import { API_ENDPOINTS } from "@/constants";
 
 interface ForecastAccuracyData {
   stationId: string;
-  days: number;
+  days: number | "all";
   data: {
     dailyComparisons: DailyComparison[];
     accuracyStats: AccuracyStats;
@@ -50,7 +50,7 @@ export default function ForecastAnalysis() {
   const { t, i18n } = useTranslation();
   const locale = i18n.language === "en" ? "en-GB" : "de-DE";
   const [stationId, setStationId] = useState("");
-  const [days, setDays] = useState(30);
+  const [days, setDays] = useState<number | "all">(30);
   const [data, setData] = useState<ForecastAccuracyData | null>(null);
   const [loading, setLoading] = useState(true); // Start with loading true
   const [error, setError] = useState<string | null>(null);
@@ -193,14 +193,16 @@ export default function ForecastAnalysis() {
         <div>
           <label className="block text-sm font-medium mb-1">{t("analysis.daysLabel")}</label>
           <select
-            value={days}
-            onChange={(e) => setDays(parseInt(e.target.value))}
+            value={String(days)}
+            onChange={(e) => setDays(e.target.value === "all" ? "all" : parseInt(e.target.value))}
             className="border rounded px-3 py-2"
           >
             <option value={7}>{t("analysis.days7")}</option>
             <option value={14}>{t("analysis.days14")}</option>
             <option value={30}>{t("analysis.days30")}</option>
             <option value={60}>{t("analysis.days60")}</option>
+            <option value={90}>{t("analysis.days90")}</option>
+            <option value="all">{t("analysis.daysAll")}</option>
           </select>
         </div>
 
