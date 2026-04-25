@@ -31,10 +31,10 @@ export function parseCsv(content: string): { header: string[]; rows: Row[] } {
   if (lines[0].charCodeAt(0) === 0xfeff) {
     lines[0] = lines[0].slice(1);
   }
-  const header = lines[0].split(",").map((s) => s.trim());
+  const header = parseCsvLine(lines[0]).map((s) => s.trim());
   const rows: Row[] = [];
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(",");
+    const cols = parseCsvLine(lines[i]);
     if (cols.length === 0) continue;
     const row: Row = { time: "" } as Row;
     for (let c = 0; c < header.length; c++) {
@@ -55,6 +55,30 @@ export function parseCsv(content: string): { header: string[]; rows: Row[] } {
   return { header, rows };
 }
 
+function parseCsvLine(line: string): string[] {
+  const cols: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (quoted && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (ch === "," && !quoted) {
+      cols.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  cols.push(current);
+  return cols;
+}
+
 /**
  * Aggregates rows of data by a given time resolution.
  * @param {Row[]} rows - The array of rows to aggregate.
@@ -65,7 +89,14 @@ export function parseCsv(content: string): { header: string[]; rows: Row[] } {
  */
 export function aggregateRows(rows: Row[], resolution: Resolution, start?: Date, end?: Date): Array<Row & { key: string }> {
   // Group by floored time
-  const map = new Map<string, { t: Date; acc: Record<string, number>; cnt: Record<string, number> }>();
+  const map = new Map<string, {
+    t: Date;
+    acc: Record<string, number>;
+    cnt: Record<string, number>;
+    max: Record<string, number>;
+    dirSin: Record<string, number>;
+    dirCos: Record<string, number>;
+  }>();
   for (const r of rows) {
     const dt = parseTimestamp(r.time);
     if (!dt) continue;
@@ -75,14 +106,20 @@ export function aggregateRows(rows: Row[], resolution: Resolution, start?: Date,
     const k = keyForResolution(bucket, resolution);
     let entry = map.get(k);
     if (!entry) {
-      entry = { t: bucket, acc: {}, cnt: {} };
+      entry = { t: bucket, acc: {}, cnt: {}, max: {}, dirSin: {}, dirCos: {} };
       map.set(k, entry);
     }
     for (const [k2, v] of Object.entries(r)) {
       if (k2 === "time") continue;
       if (typeof v === "number") {
+        if (isDirectionColumn(k2)) {
+          const rad = (v * Math.PI) / 180;
+          entry.dirSin[k2] = (entry.dirSin[k2] ?? 0) + Math.sin(rad);
+          entry.dirCos[k2] = (entry.dirCos[k2] ?? 0) + Math.cos(rad);
+        }
         entry.acc[k2] = (entry.acc[k2] ?? 0) + v;
         entry.cnt[k2] = (entry.cnt[k2] ?? 0) + 1;
+        entry.max[k2] = Math.max(entry.max[k2] ?? Number.NEGATIVE_INFINITY, v);
       }
     }
   }
@@ -92,28 +129,39 @@ export function aggregateRows(rows: Row[], resolution: Resolution, start?: Date,
     const row: Row & { key: string } = { key: k, time: k } as any;
     for (const [col, sum] of Object.entries(e.acc)) {
       const n = e.cnt[col] ?? 1;
-      row[col] = sum / n;
+      if (isDirectionColumn(col)) {
+        const deg = (Math.atan2(e.dirSin[col] ?? 0, e.dirCos[col] ?? 0) * 180) / Math.PI;
+        row[col] = (deg + 360) % 360;
+      } else if (isDailyRainColumn(col)) {
+        row[col] = e.max[col];
+      } else if (isIntervalRainColumn(col)) {
+        row[col] = sum;
+      } else {
+        row[col] = sum / n;
+      }
     }
     out.push(row);
   }
   return out;
 }
 
-/**
- * Infers the keys for temperature, humidity, dew point, and heat index from a CSV header.
- * @param {string[]} header - The array of header strings.
- * @returns {{ temp: string[]; hum: string[]; dew: string[]; heat: string[] }} An object containing arrays of keys for each metric.
- */
-export function inferAllsensorKeys(header: string[]): { temp: string[]; hum: string[]; dew: string[]; heat: string[] } {
-  const temp: string[] = [];
-  const hum: string[] = [];
-  const dew: string[] = [];
-  const heat: string[] = [];
-  for (const h of header) {
-    if (/^CH\d+ Temperature/.test(h)) temp.push(h);
-    else if (/^CH\d+ Luftfeuchtigkeit/.test(h) || /^WN35CH\d+hum/.test(h)) hum.push(h);
-    else if (/^CH\d+ Taupunkt/.test(h)) dew.push(h);
-    else if (/^CH\d+ Wärmeindex/.test(h)) heat.push(h);
-  }
-  return { temp, hum, dew, heat };
+function normalizedColumnName(name: string) {
+  return name.toLowerCase().replace(/[ä]/g, "ae").replace(/[ö]/g, "oe").replace(/[ü]/g, "ue").replace(/[^a-z0-9]+/g, "");
+}
+
+function isDirectionColumn(name: string) {
+  const k = normalizedColumnName(name);
+  return k.includes("windrichtung") || k.includes("winddirection") || k === "direction";
+}
+
+function isDailyRainColumn(name: string) {
+  const k = normalizedColumnName(name);
+  return (k.includes("regen") || k.includes("rain")) && (k.includes("tag") || k.includes("daily") || k.includes("today"));
+}
+
+function isIntervalRainColumn(name: string) {
+  const k = normalizedColumnName(name);
+  if (!(k.includes("regen") || k.includes("rain"))) return false;
+  if (k.includes("rate") || k.includes("jahr") || k.includes("year") || k.includes("monat") || k.includes("month") || k.includes("woche") || k.includes("week")) return false;
+  return k.includes("stunde") || k.includes("hour") || k.includes("minute") || k.includes("min");
 }

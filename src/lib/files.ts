@@ -26,18 +26,9 @@ function ymOf(d?: Date): number | null {
   return d.getFullYear() * 100 + (d.getMonth() + 1);
 }
 
-/**
- * Gets all 'allsensors' CSV files within a given date range.
- * @param {Date} [start] - The start date of the range.
- * @param {Date} [end] - The end date of the range.
- * @returns {Promise<string[]>} A promise that resolves to an array of filenames.
- */
-export async function getAllsensorsFilesInRange(start?: Date, end?: Date): Promise<string[]> {
+async function filesInRange(rxLower: RegExp, start?: Date, end?: Date): Promise<string[]> {
   const files = await listDntFiles();
-  // match case-insensitively: 202501Allsensors_A.csv / .CSV
-  const list = files
-    .filter((f) => /^\d{6}allsensors_a\.csv$/.test(f.toLowerCase()))
-    .sort();
+  const list = files.filter((f) => rxLower.test(f.toLowerCase())).sort();
   const ys = ymOf(start);
   const ye = ymOf(end);
   if (!ys && !ye) return list;
@@ -47,6 +38,16 @@ export async function getAllsensorsFilesInRange(start?: Date, end?: Date): Promi
     if (ye && ym > ye) return false;
     return true;
   });
+}
+
+/**
+ * Gets all 'allsensors' CSV files within a given date range.
+ * @param {Date} [start] - The start date of the range.
+ * @param {Date} [end] - The end date of the range.
+ * @returns {Promise<string[]>} A promise that resolves to an array of filenames.
+ */
+export async function getAllsensorsFilesInRange(start?: Date, end?: Date): Promise<string[]> {
+  return filesInRange(/^\d{6}allsensors_a\.csv$/, start, end);
 }
 
 /**
@@ -56,20 +57,7 @@ export async function getAllsensorsFilesInRange(start?: Date, end?: Date): Promi
  * @returns {Promise<string[]>} A promise that resolves to an array of filenames.
  */
 export async function getMainFilesInRange(start?: Date, end?: Date): Promise<string[]> {
-  const files = await listDntFiles();
-  // match case-insensitively: 202501A.csv / .CSV
-  const list = files
-    .filter((f) => /^\d{6}a\.csv$/.test(f.toLowerCase()))
-    .sort();
-  const ys = ymOf(start);
-  const ye = ymOf(end);
-  if (!ys && !ye) return list;
-  return list.filter((f) => {
-    const ym = Number(f.slice(0, 6));
-    if (ys && ym < ys) return false;
-    if (ye && ym > ye) return false;
-    return true;
-  });
+  return filesInRange(/^\d{6}a\.csv$/, start, end);
 }
 
 /**
@@ -77,7 +65,7 @@ export async function getMainFilesInRange(start?: Date, end?: Date): Promise<str
  * @param {RegExp} rxLower - The regular expression to match against lowercase filenames.
  * @returns {Promise<string | null>} A promise that resolves to the filename, or null if no match is found.
  */
-export async function latestFileMatching(rxLower: RegExp): Promise<string | null> {
+async function latestFileMatching(rxLower: RegExp): Promise<string | null> {
   const files = await listDntFiles();
   const m = files.filter((f) => rxLower.test(f.toLowerCase())).sort();
   return m.length ? m[m.length - 1] : null;

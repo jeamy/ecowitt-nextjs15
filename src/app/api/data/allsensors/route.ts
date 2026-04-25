@@ -4,7 +4,7 @@ import { readCsvFile, parseCsv, aggregateRows } from "@/lib/csv";
 import { getAllsensorsFilename, getAllsensorsFilesInRange } from "@/lib/files";
 import { parseTimestamp, type Resolution } from "@/lib/time";
 import { ensureAllsensorsParquetForMonth, ensureAllsensorsParquetsInRange } from "@/lib/db/ingest";
-import { discoverMainColumns as discoverColumns, sqlNum, speedExprFor } from "@/lib/data/columns";
+import { discoverMainColumns as discoverColumns, parquetListLiteral, quoteIdent, sqlLiteral, sqlNum, speedExprFor } from "@/lib/data/columns";
 
 export const runtime = "nodejs";
 
@@ -54,7 +54,7 @@ export async function GET(req: Request) {
       const { withConn } = await import("@/lib/db/duckdb");
 
       return await withConn(async (conn) => {
-        const arr = '[' + parquetPaths.map((p) => `'${p}'`).join(',') + ']';
+        const arr = parquetListLiteral(parquetPaths);
         const describeSql = `DESCRIBE SELECT * FROM read_parquet(${arr}, union_by_name=true)`;
         const descReader = await conn.runAndReadAll(describeSql);
         const cols: any[] = descReader.getRowObjects();
@@ -108,12 +108,15 @@ export async function GET(req: Request) {
           const escaped = c.replace(/"/g, '""');
           const isWind = hints.wind === c || hints.windCandidates.includes(c);
           const isGust = hints.gust === c || hints.gustCandidates.includes(c);
-          const expr = isWind || isGust ? speedExprFor(c) : sqlNum('"' + escaped + '"');
-          return `avg(${expr}) AS "${escaped}"`;
+          const isDailyRain = hints.dailyRainCandidates.includes(c);
+          const isIntervalRain = hints.hourlyRainCandidates.includes(c) || hints.genericRainCandidates.includes(c);
+          const expr = isWind || isGust ? speedExprFor(c) : sqlNum(quoteIdent(c));
+          const aggFunc = isDailyRain ? "max" : (isIntervalRain ? "sum" : "avg");
+          return `${aggFunc}(${expr}) AS "${escaped}"`;
         }).join(",\n      ");
-        const unionSources = parquetPaths.map((p) => `SELECT * FROM read_parquet('${p}')`).join("\nUNION ALL\n");
-        const whereStart = startStr ? `(ts >= strptime('${startStr.replace("T", " ")}', ['%Y-%m-%d %H:%M','%Y/%m/%d %H:%M']))` : "1=1";
-        const whereEnd = endStr ? `(ts <= strptime('${endStr.replace("T", " ")}', ['%Y-%m-%d %H:%M','%Y/%m/%d %H:%M']))` : "1=1";
+        const unionSources = parquetPaths.map((p) => `SELECT * FROM read_parquet(${sqlLiteral(p)})`).join("\nUNION ALL\n");
+        const whereStart = startStr ? `(ts >= strptime(${sqlLiteral(startStr.replace("T", " "))}, ['%Y-%m-%d %H:%M','%Y/%m/%d %H:%M']))` : "1=1";
+        const whereEnd = endStr ? `(ts <= strptime(${sqlLiteral(endStr.replace("T", " "))}, ['%Y-%m-%d %H:%M','%Y/%m/%d %H:%M']))` : "1=1";
         const sql = `
           WITH src AS (
             ${unionSources}

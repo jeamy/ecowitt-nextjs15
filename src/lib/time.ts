@@ -12,7 +12,9 @@ export type Resolution = "minute" | "hour" | "day";
 export function parseTimestamp(ts: string): Date | null {
   // Expected like: 2025/8/1 0:03 (no zero padding guaranteed)
   if (!ts) return null;
-  const [datePart, timePart] = ts.trim().split(/[\sT]+/);
+  const value = ts.trim();
+  if (!value) return null;
+  const [datePart, timePart] = value.split(/[\sT]+/);
   if (!datePart) return null;
   const dateSep = datePart.includes("-") ? "-" : "/";
   const [y, m, d] = datePart.split(dateSep).map((s) => Number(s));
@@ -21,10 +23,23 @@ export function parseTimestamp(ts: string): Date | null {
     const [h, m2, s2] = timePart.split(":");
     hh = Number(h ?? 0);
     mm = Number(m2 ?? 0);
-    ss = Number(s2 ?? 0);
+    ss = Number(String(s2 ?? 0).replace(/[^0-9.-].*$/, ""));
   }
-  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
-  return new Date(y, (m || 1) - 1, d || 1, hh, mm, ss, 0);
+  if (![y, m, d, hh, mm, ss].every(Number.isFinite)) return null;
+  if (m < 1 || m > 12 || d < 1 || d > 31 || hh < 0 || hh > 23 || mm < 0 || mm > 59 || ss < 0 || ss > 59) return null;
+
+  const out = new Date(y, m - 1, d, hh, mm, ss, 0);
+  if (
+    out.getFullYear() !== y ||
+    out.getMonth() !== m - 1 ||
+    out.getDate() !== d ||
+    out.getHours() !== hh ||
+    out.getMinutes() !== mm ||
+    out.getSeconds() !== ss
+  ) {
+    return null;
+  }
+  return out;
 }
 
 /**
@@ -69,12 +84,3 @@ export function keyForResolution(dt: Date, res: Resolution): string {
  * @private
  */
 function pad(n: number): string { return n < 10 ? `0${n}` : String(n); }
-
-/**
- * Converts a Date object to an ISO string, adjusted for the local timezone.
- * @param {Date} dt - The date to convert.
- * @returns {string} The ISO string.
- */
-export function iso(dt: Date): string {
-  return new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString();
-}

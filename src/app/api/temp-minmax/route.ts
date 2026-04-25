@@ -18,7 +18,6 @@ import { getTodayTempMinMax, getAllTempMinMax } from '@/lib/temp-minmax';
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const date = searchParams.get('date');
     const all = searchParams.get('all');
     
     if (all === 'true') {

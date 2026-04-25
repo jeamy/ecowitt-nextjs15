@@ -1,5 +1,3 @@
-
-
 export function normalizeName(s: string): string {
   const map: Record<string, string> = {
     "ä": "ae",
@@ -42,19 +40,30 @@ function needsMsFactor(name: string) {
   return /m\/?s/i.test(name) || normalizeName(name).includes("ms");
 }
 
+export function sqlLiteral(value: string): string {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+export function quoteIdent(value: string): string {
+  return '"' + String(value).replace(/"/g, '""') + '"';
+}
+
+export function parquetListLiteral(paths: string[]): string {
+  return '[' + paths.map((p) => sqlLiteral(p.replace(/\\/g, "/"))).join(',') + ']';
+}
+
 export function sqlNum(colId: string): string {
   return `CASE\n    WHEN CAST(${colId} AS VARCHAR) IS NULL THEN NULL\n    WHEN lower(trim(CAST(${colId} AS VARCHAR))) IN ('--','-','n/a','', 'null', 'nan') THEN NULL\n    ELSE TRY_CAST(\n      REGEXP_REPLACE(\n        REPLACE(REPLACE(TRIM(CAST(${colId} AS VARCHAR)), ',', '.'), '−', '-'),\n        '[^0-9\\\-\\.]+' ,\n        ''\n      ) AS DOUBLE\n    )\n  END`;
 }
 
 export function speedExprFor(name: string) {
-  const q = '"' + String(name).replace(/"/g, '""') + '"';
-  const base = sqlNum(q);
+  const base = sqlNum(quoteIdent(name));
   return needsMsFactor(name) ? `(${base}) * 3.6` : base;
 }
 
 export async function discoverMainColumns(parquets: string[]): Promise<ColumnMap> {
   const { withConn } = await import("@/lib/db/duckdb");
-  const arr = '[' + parquets.map((p) => `'${p.replace(/\\/g, "/")}'`).join(',') + ']';
+  const arr = parquetListLiteral(parquets);
   const sql = `DESCRIBE SELECT * FROM read_parquet(${arr}, union_by_name=true)`;
 
   const cols: any[] = await withConn(async (conn) => {

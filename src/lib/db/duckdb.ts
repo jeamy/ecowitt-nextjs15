@@ -33,14 +33,13 @@ export async function getDuckConn(): Promise<DuckDBConnection> {
 
 /**
  * Executes a callback with a managed DuckDB connection.
- * The connection is obtained from the singleton instance and will be
- * automatically managed by DuckDB's connection pool.
- * 
- * Note: DuckDB connections don't need explicit closing - they are managed
- * by the instance's connection pool.
+ * The connection is closed after the callback finishes.
  */
 export async function withConn<T>(callback: (conn: DuckDBConnection) => Promise<T>): Promise<T> {
   const conn = await getDuckConn();
-  return await callback(conn);
+  try {
+    return await callback(conn);
+  } finally {
+    conn.closeSync();
+  }
 }
-

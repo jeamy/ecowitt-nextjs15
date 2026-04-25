@@ -13,7 +13,8 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const stationId = searchParams.get("stationId");
-    const days = parseInt(searchParams.get("days") || "30");
+    const daysParam = Number(searchParams.get("days") || "30");
+    const days = Number.isFinite(daysParam) && daysParam > 0 ? Math.min(Math.floor(daysParam), 3650) : 30;
 
     console.log('[API] Parameters:', { stationId, days });
 
@@ -22,6 +23,7 @@ export async function GET(req: Request) {
     }
     // Query DuckDB for stored analysis
     const { withConn } = await import("@/lib/db/duckdb");
+    const { sqlLiteral } = await import("@/lib/data/columns");
 
     let rows: any[] = [];
     await withConn(async (conn) => {
@@ -71,7 +73,7 @@ export async function GET(req: Request) {
           forecast_precipitation,
           forecast_wind_speed
         FROM forecast_analysis
-        WHERE station_id = '${stationId}'
+        WHERE station_id = ${sqlLiteral(stationId)}
           AND analysis_date >= CURRENT_DATE - INTERVAL '${days}' DAYS
         ORDER BY analysis_date DESC, forecast_date DESC, source
       `;

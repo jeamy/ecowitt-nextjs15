@@ -117,31 +117,3 @@ export function formatTime(d: Date | null, tz?: string, locale: string = "en"): 
     return `${hh}:${mm}`;
   }
 }
-
-/**
- * Calculates the percentage of the day that has passed for a given date and time zone.
- * @param {Date} d - The date object.
- * @param {string} [tz] - The time zone to use.
- * @returns {number} The percentage of the day passed, from 0.0 to 1.0.
- */
-export function timeOfDayPercent(d: Date, tz?: string): number {
-  // returns 0..1 position within day for the given date in tz
-  try {
-    const parts = new Intl.DateTimeFormat("en-GB", {
-      timeZone: tz || undefined,
-      hourCycle: "h23",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
-    }).formatToParts(d);
-    const h = Number(parts.find(p => p.type === "hour")?.value || 0);
-    const m = Number(parts.find(p => p.type === "minute")?.value || 0);
-    const s = Number(parts.find(p => p.type === "second")?.value || 0);
-    return (h * 3600 + m * 60 + s) / 86400;
-  } catch {
-    const h = d.getHours();
-    const m = d.getMinutes();
-    const s = d.getSeconds();
-    return (h * 3600 + m * 60 + s) / 86400;
-  }
-}

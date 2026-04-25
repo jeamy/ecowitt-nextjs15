@@ -592,7 +592,7 @@ async function calculateAndStoreDailyAnalysisForDate(stationId: string, targetDa
     const endOfDay = new Date(`${yesterdayStr}T23:59:59`);
 
     const { ensureMainParquetsInRange } = await import("@/lib/db/ingest");
-    const { discoverMainColumns, sqlNum, speedExprFor } = await import("@/lib/data/columns");
+    const { discoverMainColumns, parquetListLiteral, quoteIdent, sqlLiteral, sqlNum, speedExprFor } = await import("@/lib/data/columns");
 
     const parquetFiles = await ensureMainParquetsInRange(startOfDay, endOfDay);
     if (!parquetFiles.length) {
@@ -615,17 +615,17 @@ async function calculateAndStoreDailyAnalysisForDate(stationId: string, targetDa
     console.log(`[forecast-analysis] ✓ Detected columns: temp=${cols.temp}, rain_mode=${cols.rainMode}`);
 
     // Build SQL expressions for temperature, rain, and wind
-    const tempExpr = sqlNum('"' + String(cols.temp).replace(/"/g, '""') + '"');
-    const rainDailyExprList = (cols.dailyRainCandidates || []).map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
-    const rainHourlyExprList = (cols.hourlyRainCandidates || []).map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
-    const rainGenericExprList = (cols.genericRainCandidates || []).map((c) => sqlNum('"' + String(c).replace(/"/g, '""') + '"'));
+    const tempExpr = sqlNum(quoteIdent(cols.temp));
+    const rainDailyExprList = (cols.dailyRainCandidates || []).map((c) => sqlNum(quoteIdent(c)));
+    const rainHourlyExprList = (cols.hourlyRainCandidates || []).map((c) => sqlNum(quoteIdent(c)));
+    const rainGenericExprList = (cols.genericRainCandidates || []).map((c) => sqlNum(quoteIdent(c)));
     const rainDailyExpr = rainDailyExprList.length ? `COALESCE(${rainDailyExprList.join(', ')})` : 'NULL';
     const rainHourlyExpr = rainHourlyExprList.length ? `COALESCE(${rainHourlyExprList.join(', ')})` : 'NULL';
     const rainGenericExpr = rainGenericExprList.length ? `COALESCE(${rainGenericExprList.join(', ')})` : 'NULL';
     const windExprList = (cols.windCandidates || []).map((c) => speedExprFor(c));
     const windExpr = windExprList.length ? `COALESCE(${windExprList.join(', ')})` : 'NULL';
 
-    const arr = '[' + qp.map((p) => `'${p}'`).join(',') + ']';
+    const arr = parquetListLiteral(qp);
 
     // Build rain aggregation based on mode (daily cumulative vs hourly/generic sum)
     let rainAggExpr = 'NULL';
@@ -650,12 +650,12 @@ async function calculateAndStoreDailyAnalysisForDate(stationId: string, targetDa
           ${windExpr} AS wind
         FROM src
         WHERE ts IS NOT NULL
-          AND ts >= '${yesterdayStr}T00:00:00'::TIMESTAMP
-          AND ts < '${yesterdayStr}T23:59:59'::TIMESTAMP
+          AND ts >= ${sqlLiteral(`${yesterdayStr}T00:00:00`)}::TIMESTAMP
+          AND ts < ${sqlLiteral(`${yesterdayStr}T23:59:59`)}::TIMESTAMP
       ),
       daily AS (
         SELECT
-          '${yesterdayStr}' AS day,
+          ${sqlLiteral(yesterdayStr)} AS day,
           max(t) AS tmax,
           min(t) AS tmin,
           ${rainAggExpr} AS rain_day,
@@ -707,9 +707,9 @@ async function calculateAndStoreDailyAnalysisForDate(stationId: string, targetDa
         precipitation,
         wind_speed
       FROM forecasts 
-      WHERE station_id = '${stationId}'
-        AND forecast_date = '${yesterdayStr}'
-        AND storage_date <= '${yesterdayStr}'
+      WHERE station_id = ${sqlLiteral(stationId)}
+        AND forecast_date = ${sqlLiteral(yesterdayStr)}
+        AND storage_date <= ${sqlLiteral(yesterdayStr)}
       ORDER BY storage_date DESC, source
     `;
 

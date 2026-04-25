@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import { ensureAllsensorsParquetsInRange } from "@/lib/db/ingest";
-import { sqlNum } from "@/lib/data/columns";
+import { parquetListLiteral, quoteIdent, sqlLiteral, sqlNum } from "@/lib/data/columns";
 
 export const runtime = "nodejs";
 
@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
 
     const { withConn } = await import("@/lib/db/duckdb");
     const qp = parquets.map((p) => p.replace(/\\/g, "/"));
-    const arr = '[' + qp.map((p) => `\'${p}\'`).join(',') + ']';
+    const arr = parquetListLiteral(qp);
 
     const days = await withConn(async (conn) => {
       // Introspect columns
@@ -99,11 +99,11 @@ export async function GET(req: NextRequest) {
       const { tempCol, feelCol } = findChannelMetricColumns(allNames, chNum);
       if (!tempCol) throw new Error("No temperature column for channel");
 
-      const whereStart = start ? `ts >= strptime('${toIsoMinute(start).replace('T', ' ')}', ['%Y-%m-%d %H:%M'])` : '1=1';
-      const whereEnd = end ? `ts <= strptime('${toIsoMinute(end).replace('T', ' ')}', ['%Y-%m-%d %H:%M'])` : '1=1';
+      const whereStart = start ? `ts >= strptime(${sqlLiteral(toIsoMinute(start).replace('T', ' '))}, ['%Y-%m-%d %H:%M'])` : '1=1';
+      const whereEnd = end ? `ts <= strptime(${sqlLiteral(toIsoMinute(end).replace('T', ' '))}, ['%Y-%m-%d %H:%M'])` : '1=1';
 
-      const tExpr = sqlNum('"' + tempCol.replace(/"/g, '""') + '"');
-      const feelExpr = feelCol ? sqlNum('"' + feelCol.replace(/"/g, '""') + '"') : 'NULL';
+      const tExpr = sqlNum(quoteIdent(tempCol));
+      const feelExpr = feelCol ? sqlNum(quoteIdent(feelCol)) : 'NULL';
 
       const sql = `
         WITH src AS (

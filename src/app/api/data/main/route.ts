@@ -4,7 +4,7 @@ import { readCsvFile, parseCsv, aggregateRows } from "@/lib/csv";
 import { getMainFilename, getMainFilesInRange } from "@/lib/files";
 import { parseTimestamp, type Resolution } from "@/lib/time";
 import { ensureMainParquetForMonth, ensureMainParquetsInRange } from "@/lib/db/ingest";
-import { discoverMainColumns, sqlNum, speedExprFor } from "@/lib/data/columns";
+import { discoverMainColumns, parquetListLiteral, quoteIdent, sqlLiteral, sqlNum, speedExprFor } from "@/lib/data/columns";
 import { queryDailyAggregatesInRange } from "@/lib/statistics";
 
 export const runtime = "nodejs";
@@ -68,7 +68,7 @@ export async function GET(req: Request) {
         const { withConn } = await import("@/lib/db/duckdb");
 
         return await withConn(async (conn) => {
-          const arr = '[' + parquetPaths.map((p) => `'${p}'`).join(',') + ']';
+          const arr = parquetListLiteral(parquetPaths);
           const describeSql = `DESCRIBE SELECT * FROM read_parquet(${arr}, union_by_name=true)`;
           const descReader = await conn.runAndReadAll(describeSql);
           const cols: any[] = descReader.getRowObjects();
@@ -123,16 +123,16 @@ export async function GET(req: Request) {
             const isFeels = colsHints.feelsLike === c || colsHints.feelsLikeCandidates.includes(c) || c.toLowerCase().includes("gefühl");
             const isWind = colsHints.wind === c || colsHints.windCandidates.includes(c);
             const isGust = colsHints.gust === c || colsHints.gustCandidates.includes(c);
-            const isRain = c.toLowerCase().includes("niederschlag") || c.toLowerCase().includes("rain");
-
-            const numericExpr = isWind || isGust ? speedExprFor(c) : sqlNum('"' + escaped + '"');
-            const aggFunc = (isTemp || isDew || isFeels || isWind || isGust) ? "max" : "avg";
+            const isDailyRain = colsHints.dailyRainCandidates.includes(c) || c.toLowerCase().includes("regen/tag") || c.toLowerCase().includes("daily rain");
+            const isIntervalRain = colsHints.hourlyRainCandidates.includes(c) || colsHints.genericRainCandidates.includes(c);
+            const numericExpr = isWind || isGust ? speedExprFor(c) : sqlNum(quoteIdent(c));
+            const aggFunc = (isTemp || isDew || isFeels || isWind || isGust || isDailyRain) ? "max" : (isIntervalRain ? "sum" : "avg");
             return `${aggFunc}(${numericExpr}) AS "${escaped}"`;
           }).join(",\n          ");
 
-          const whereStart = start ? `(ts >= strptime('${start.toISOString().slice(0, 16).replace("T", " ")}', ['%Y-%m-%d %H:%M']))` : "1=1";
-          const whereEnd = end ? `(ts <= strptime('${end.toISOString().slice(0, 16).replace("T", " ")}', ['%Y-%m-%d %H:%M']))` : "1=1";
-          const unionSources = parquetPaths.map((p) => `SELECT * FROM read_parquet('${p}')`).join("\nUNION ALL\n");
+          const whereStart = start ? `(ts >= strptime(${sqlLiteral(start.toISOString().slice(0, 16).replace("T", " "))}, ['%Y-%m-%d %H:%M']))` : "1=1";
+          const whereEnd = end ? `(ts <= strptime(${sqlLiteral(end.toISOString().slice(0, 16).replace("T", " "))}, ['%Y-%m-%d %H:%M']))` : "1=1";
+          const unionSources = parquetPaths.map((p) => `SELECT * FROM read_parquet(${sqlLiteral(p)})`).join("\nUNION ALL\n");
 
           const sql = `
             WITH src AS (
@@ -161,7 +161,7 @@ export async function GET(req: Request) {
       const { withConn } = await import("@/lib/db/duckdb");
 
       return await withConn(async (conn) => {
-        const arr = '[' + parquetPaths.map((p) => `'${p}'`).join(',') + ']';
+        const arr = parquetListLiteral(parquetPaths);
         const describeSql = `DESCRIBE SELECT * FROM read_parquet(${arr}, union_by_name=true)`;
         const descReader = await conn.runAndReadAll(describeSql);
         const cols: any[] = descReader.getRowObjects();
@@ -216,12 +216,15 @@ export async function GET(req: Request) {
           const escaped = c.replace(/"/g, '""');
           const isWind = colsHints.wind === c || colsHints.windCandidates.includes(c);
           const isGust = colsHints.gust === c || colsHints.gustCandidates.includes(c);
-          const numericExpr = isWind || isGust ? speedExprFor(c) : sqlNum('"' + escaped + '"');
-          return `avg(${numericExpr}) AS "${escaped}"`;
+          const isDailyRain = colsHints.dailyRainCandidates.includes(c) || c.toLowerCase().includes("regen/tag") || c.toLowerCase().includes("daily rain");
+          const isIntervalRain = colsHints.hourlyRainCandidates.includes(c) || colsHints.genericRainCandidates.includes(c);
+          const numericExpr = isWind || isGust ? speedExprFor(c) : sqlNum(quoteIdent(c));
+          const aggFunc = isDailyRain ? "max" : (isIntervalRain ? "sum" : "avg");
+          return `${aggFunc}(${numericExpr}) AS "${escaped}"`;
         }).join(",\n          ");
-        const unionSources = parquetPaths.map((p) => `SELECT * FROM read_parquet('${p}')`).join("\nUNION ALL\n");
-        const whereStart = startStr ? `(ts >= strptime('${startStr.replace("T", " ")}', ['%Y-%m-%d %H:%M','%Y/%m/%d %H:%M']))` : "1=1";
-        const whereEnd = endStr ? `(ts <= strptime('${endStr.replace("T", " ")}', ['%Y-%m-%d %H:%M','%Y/%m/%d %H:%M']))` : "1=1";
+        const unionSources = parquetPaths.map((p) => `SELECT * FROM read_parquet(${sqlLiteral(p)})`).join("\nUNION ALL\n");
+        const whereStart = startStr ? `(ts >= strptime(${sqlLiteral(startStr.replace("T", " "))}, ['%Y-%m-%d %H:%M','%Y/%m/%d %H:%M']))` : "1=1";
+        const whereEnd = endStr ? `(ts <= strptime(${sqlLiteral(endStr.replace("T", " "))}, ['%Y-%m-%d %H:%M','%Y/%m/%d %H:%M']))` : "1=1";
         const sql = `
           WITH src AS (
             ${unionSources}

@@ -71,7 +71,27 @@ function saveData(data: TempMinMax): void {
  * @private
  */
 function getTodayDate(): string {
-  return new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function numericValue(input: any): number | null {
+  const raw = input && typeof input === 'object' && 'value' in input ? input.value : input;
+  if (raw == null) return null;
+  const value = typeof raw === 'number' ? raw : parseFloat(String(raw).replace(',', '.'));
+  return Number.isFinite(value) ? value : null;
+}
+
+function collectSensor(
+  target: Record<string, number>,
+  sensorKey: string,
+  input: any
+): void {
+  const value = numericValue(input);
+  if (value !== null) target[sensorKey] = value;
 }
 
 /**
@@ -102,57 +122,24 @@ export function updateTempMinMax(sensorData: Record<string, any>): void {
   const humiditySensors: Record<string, number> = {};
   
   // Indoor temperature and humidity
-  if (sensorData.indoor?.temperature != null) {
-    const temp = sensorData.indoor.temperature.value || sensorData.indoor.temperature;
-    if (temp != null && !isNaN(parseFloat(temp))) {
-      tempSensors['indoor'] = parseFloat(temp);
-    }
-  }
-  if (sensorData.indoor?.humidity != null) {
-    const humidity = sensorData.indoor.humidity.value || sensorData.indoor.humidity;
-    if (humidity != null && !isNaN(parseFloat(humidity))) {
-      humiditySensors['indoor'] = parseFloat(humidity);
-    }
-  }
+  collectSensor(tempSensors, 'indoor', sensorData.indoor?.temperature);
+  collectSensor(humiditySensors, 'indoor', sensorData.indoor?.humidity);
   
   // Outdoor temperature and humidity
-  if (sensorData.outdoor?.temperature != null) {
-    const temp = sensorData.outdoor.temperature.value || sensorData.outdoor.temperature;
-    if (temp != null && !isNaN(parseFloat(temp))) {
-      tempSensors['outdoor'] = parseFloat(temp);
-    }
-  }
-  if (sensorData.outdoor?.humidity != null) {
-    const humidity = sensorData.outdoor.humidity.value || sensorData.outdoor.humidity;
-    if (humidity != null && !isNaN(parseFloat(humidity))) {
-      humiditySensors['outdoor'] = parseFloat(humidity);
-    }
-  }
+  collectSensor(tempSensors, 'outdoor', sensorData.outdoor?.temperature);
+  collectSensor(humiditySensors, 'outdoor', sensorData.outdoor?.humidity);
   
   // Channel temperatures and humidity - check all possible channel formats
   Object.keys(sensorData).forEach(key => {
     if (/^(ch\d+|temp_and_humidity_ch\d+)$/i.test(key)) {
-      const tempObj = sensorData[key]?.temperature;
-      if (tempObj != null) {
-        const temp = tempObj.value || tempObj;
-        if (temp != null && !isNaN(parseFloat(temp))) {
-          tempSensors[key] = parseFloat(temp);
-        }
-      }
-      
-      const humidityObj = sensorData[key]?.humidity;
-      if (humidityObj != null) {
-        const humidity = humidityObj.value || humidityObj;
-        if (humidity != null && !isNaN(parseFloat(humidity))) {
-          humiditySensors[key] = parseFloat(humidity);
-        }
-      }
+      collectSensor(tempSensors, key, sensorData[key]?.temperature);
+      collectSensor(humiditySensors, key, sensorData[key]?.humidity);
     }
   });
   
   // Update min/max for each temperature sensor
   Object.entries(tempSensors).forEach(([sensorKey, temp]) => {
-    if (!isFinite(temp)) return;
+    if (!Number.isFinite(temp)) return;
     
     if (!todayEntry!.sensors[sensorKey]) {
       todayEntry!.sensors[sensorKey] = {
@@ -176,7 +163,7 @@ export function updateTempMinMax(sensorData: Record<string, any>): void {
   
   // Update min/max for each humidity sensor
   Object.entries(humiditySensors).forEach(([sensorKey, humidity]) => {
-    if (!isFinite(humidity)) return;
+    if (!Number.isFinite(humidity)) return;
     
     if (!todayEntry!.humidity[sensorKey]) {
       todayEntry!.humidity[sensorKey] = {
@@ -208,19 +195,6 @@ export function updateTempMinMax(sensorData: Record<string, any>): void {
  */
 export function getTodayTempMinMax(): TempMinMax | null {
   return loadData();
-}
-
-/**
- * Gets the min/max data for a specific date. Note: This currently only works for today.
- * @param {string} date - The date in YYYY-MM-DD format.
- * @returns {TempMinMax | null} The data for the specified date, or null if not found.
- */
-export function getTempMinMaxForDate(date: string): TempMinMax | null {
-  const data = loadData();
-  if (data && data.date === date) {
-    return data;
-  }
-  return null;
 }
 
 /**
