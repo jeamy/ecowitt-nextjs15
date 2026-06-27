@@ -117,6 +117,7 @@ function TemperatureBlock({ y, stacked }: { y: YearStats | MonthStats; stacked?:
         </div>
       )}
       <div className="mt-2">
+        <ThresholdItem className="text-red-800" label={t("dashboard.daysOver35C")} td={temp.over35} unit="°C" />
         <ThresholdItem className="text-red-600" label={t("dashboard.daysOver30C")} td={temp.over30} unit="°C" />
         <ThresholdItem className="text-orange-500" label={t("statistics.daysOver25C", "Days > 25 °C")} td={temp.over25} unit="°C" />
         <ThresholdItem className="text-green-600" label={t("statistics.daysOver20C", "Days > 20 °C")} td={temp.over20} unit="°C" />

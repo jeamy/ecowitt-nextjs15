@@ -142,6 +142,7 @@ export async function GET(req: NextRequest) {
     let tMax = -Infinity, tMaxDate: string | null = null;
     let tMin = Infinity, tMinDate: string | null = null;
     let tAvgSum = 0, tAvgCnt = 0;
+    const over35: { date: string; value: number }[] = [];
     const over30: { date: string; value: number }[] = [];
     const under0: { date: string; value: number }[] = [];
     for (const r of days) {
@@ -149,7 +150,7 @@ export async function GET(req: NextRequest) {
       const tx = typeof r.tmax === 'number' && Number.isFinite(r.tmax) ? r.tmax : null;
       const tn = typeof r.tmin === 'number' && Number.isFinite(r.tmin) ? r.tmin : null;
       const ta = typeof r.tavg === 'number' && Number.isFinite(r.tavg) ? r.tavg : null;
-      if (tx !== null) { if (tx > tMax) { tMax = tx; tMaxDate = d; } if (tx > 30) over30.push({ date: d, value: tx }); }
+      if (tx !== null) { if (tx > tMax) { tMax = tx; tMaxDate = d; } if (tx > 35) over35.push({ date: d, value: tx }); if (tx > 30) over30.push({ date: d, value: tx }); }
       if (tn !== null) { if (tn < tMin) { tMin = tn; tMinDate = d; } if (tn < 0) under0.push({ date: d, value: tn }); }
       if (ta !== null) { tAvgSum += ta; tAvgCnt++; }
     }
@@ -159,6 +160,7 @@ export async function GET(req: NextRequest) {
       min: Number.isFinite(tMin) ? tMin : null,
       minDate: tMinDate,
       avg: tAvgCnt > 0 ? tAvgSum / tAvgCnt : null,
+      over35: { count: over35.length, items: over35 },
       over30: { count: over30.length, items: over30 },
       over25: { count: days.filter(d => typeof d.tmax === 'number' && (d.tmax as number) > 25).length, items: days.filter(d => typeof d.tmax === 'number' && (d.tmax as number) > 25).map(d => ({ date: d.day, value: d.tmax as number })) },
       over20: { count: days.filter(d => typeof d.tmax === 'number' && (d.tmax as number) > 20).length, items: days.filter(d => typeof d.tmax === 'number' && (d.tmax as number) > 20).map(d => ({ date: d.day, value: d.tmax as number })) },

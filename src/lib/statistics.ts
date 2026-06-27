@@ -143,6 +143,7 @@ export function computeStatsFromDaily(rows: DailyAggregateRow[]): {
   let tMax = Number.NEGATIVE_INFINITY; let tMaxDate: string | null = null;
   let tMin = Number.POSITIVE_INFINITY; let tMinDate: string | null = null;
   let tAvgSum = 0; let tAvgCnt = 0;
+  const over35: { date: string; value: number }[] = [];
   const over30: { date: string; value: number }[] = [];
   const over25: { date: string; value: number }[] = [];
   const over20: { date: string; value: number }[] = [];
@@ -168,6 +169,7 @@ export function computeStatsFromDaily(rows: DailyAggregateRow[]): {
     const ta = toNum(r.tavg);
     if (tx !== null) {
       if (tx > tMax) { tMax = tx; tMaxDate = d; }
+      if (tx > 35) over35.push({ date: d, value: tx });
       if (tx > 30) over30.push({ date: d, value: tx });
       if (tx > 25) over25.push({ date: d, value: tx });
       if (tx > 20) over20.push({ date: d, value: tx });
@@ -208,6 +210,7 @@ export function computeStatsFromDaily(rows: DailyAggregateRow[]): {
     min: Number.isFinite(tMin) ? tMin : null,
     minDate: tMinDate,
     avg: tAvgCnt > 0 ? tAvgSum / tAvgCnt : null,
+    over35: { count: over35.length, items: over35 },
     over30: { count: over30.length, items: over30 },
     over25: { count: over25.length, items: over25 },
     over20: { count: over20.length, items: over20 },

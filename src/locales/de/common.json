@@ -106,6 +106,7 @@
     "globalRange": "Gesamter Zeitraum",
     "start": "Start",
     "end": "Ende",
+    "daysOver35C": "Tage > 35 °C",
     "daysOver30C": "Tage > 30 °C",
     "daysUnder0C": "Tage < 0 °C",
     "highestTemperature": "Höchste Temperatur",

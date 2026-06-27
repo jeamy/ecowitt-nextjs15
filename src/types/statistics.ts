@@ -14,6 +14,7 @@ export interface TemperatureStats {
   min: number | null;
   minDate: string | null; // YYYY-MM-DD
   avg: number | null; // average temperature over the period
+  over35: ThresholdList; // days with max temp > 35°C
   over30: ThresholdList; // days with max temp > 30°C
   over25: ThresholdList; // days with max temp > 25°C
   over20: ThresholdList; // days with max temp > 20°C
