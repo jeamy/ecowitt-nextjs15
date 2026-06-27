@@ -252,7 +252,7 @@ export default function Statistics() {
   const [data, setData] = useState<StatisticsPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [selectedYears, setSelectedYears] = useState<number[]>([]);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -298,61 +298,70 @@ export default function Statistics() {
     return (data?.years || []).slice().sort((a, b) => (b?.year ?? 0) - (a?.year ?? 0));
   }, [data?.years]);
 
-  // Default selection to latest year when data arrives
+  // Default selection to latest year when data arrives.
   useEffect(() => {
-    if (!selectedYear && yearsSorted.length > 0) {
-      setSelectedYear(yearsSorted[0].year);
+    if (selectedYears.length === 0 && yearsSorted.length > 0) {
+      setSelectedYears([yearsSorted[0].year]);
     }
-  }, [yearsSorted, selectedYear]);
+  }, [yearsSorted, selectedYears.length]);
 
-  const currentYearStats = useMemo(() => {
-    if (yearsSorted.length === 0) return null;
-    if (selectedYear == null) return yearsSorted[0];
-    return yearsSorted.find((y) => y.year === selectedYear) || yearsSorted[0];
-  }, [yearsSorted, selectedYear]);
+  const selectedYearStats = useMemo(() => {
+    const selected = new Set(selectedYears);
+    return yearsSorted.filter((year) => selected.has(year.year));
+  }, [yearsSorted, selectedYears]);
+
+  const toggleYear = (year: number) => {
+    setSelectedYears((current) =>
+      current.includes(year)
+        ? current.filter((selected) => selected !== year)
+        : [...current, year]
+    );
+  };
 
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-lg font-semibold">{t("tabs.statistics", "Statistics")}</h2>
         <div className="flex items-center gap-3">
-          <label className="text-xs text-gray-500">
-            {t("dashboard.year")}:&nbsp;
-            <select
-              className="text-xs bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded px-2 py-1"
-              value={currentYearStats?.year ?? ""}
-              onChange={(e) => setSelectedYear(Number(e.target.value))}
-            >
-              {yearsSorted.map((y) => (
-                <option key={y.year} value={y.year}>{y.year}</option>
-              ))}
-            </select>
-          </label>
+          <fieldset className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+            <legend className="sr-only">{t("dashboard.year")}</legend>
+            <span aria-hidden>{t("dashboard.year")}:</span>
+            {yearsSorted.map((y) => (
+              <label key={y.year} className="inline-flex items-center gap-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedYears.includes(y.year)}
+                  onChange={() => toggleYear(y.year)}
+                />
+                <span>{y.year}</span>
+              </label>
+            ))}
+          </fieldset>
           <div className="text-xs text-gray-500">
             {t("statuses.lastUpdate")} {data?.updatedAt ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(data.updatedAt)) : "–"}
           </div>
         </div>
       </div>
-      {currentYearStats && (
-        <div>
-          <StatisticsKpis y={currentYearStats} />
+      {selectedYearStats.map((yearStats) => (
+        <section key={yearStats.year} className="mb-8" aria-labelledby={`statistics-year-${yearStats.year}`}>
+          <h3 id={`statistics-year-${yearStats.year}`} className="text-lg font-semibold mb-3">
+            {t("dashboard.year")}: {yearStats.year}
+          </h3>
+          <StatisticsKpis y={yearStats} />
           <StatisticsLegend />
-          <CalendarHeatmap year={currentYearStats.year} />
-          <CalendarHeatmap
-            year={currentYearStats.year}
-            metric="tmin"
-          />
-          <TopExtremes year={currentYearStats.year} />
-        </div>
-      )}
+          <CalendarHeatmap year={yearStats.year} />
+          <CalendarHeatmap year={yearStats.year} metric="tmin" />
+          <TopExtremes year={yearStats.year} />
+        </section>
+      ))}
       {loading && <div className="text-sm text-gray-600 dark:text-gray-300">{t("statuses.loading")}</div>}
       {error && <div className="text-sm text-red-600">{t("statuses.error")}: {error}</div>}
       {!loading && !error && data && data.years.length === 0 && (
         <div className="text-sm text-gray-600 dark:text-gray-300">{t("statuses.noData")}</div>
       )}
-      {!loading && !error && yearsSorted.length > 0 && (
+      {!loading && !error && selectedYearStats.length > 0 && (
         <div>
-          {yearsSorted.map((y) => (
+          {selectedYearStats.map((y) => (
             <YearSection key={y.year} y={y} />
           ))}
         </div>
