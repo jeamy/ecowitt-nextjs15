@@ -349,7 +349,10 @@ export async function updateStatistics(): Promise<StatisticsPayload> {
 
 export async function updateStatisticsIfNeeded(maxAgeMs = 24 * 60 * 60 * 1000): Promise<StatisticsPayload> {
   const existing = await readStatistics();
-  if (existing && existing.updatedAt) {
+  const hasOver35 = existing?.years.every((year) =>
+    year.temperature?.over35 && year.months.every((month) => month.temperature?.over35)
+  );
+  if (existing && existing.updatedAt && hasOver35) {
     const age = Date.now() - new Date(existing.updatedAt).getTime();
     if (age < maxAgeMs) return existing;
   }

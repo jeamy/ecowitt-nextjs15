@@ -271,7 +271,9 @@ export default function Statistics() {
           .sort((a: any, b: any) => (b?.year ?? 0) - (a?.year ?? 0))
           .map((y: any) => ({
             ...y,
-            months: (y.months || []).slice().sort((m1: any, m2: any) => (m1?.month ?? 0) - (m2?.month ?? 0)),
+            months: (y.months || [])
+              .slice()
+              .sort((m1: any, m2: any) => (m1?.month ?? 0) - (m2?.month ?? 0)),
           }));
         if (!cancelled) setData({ updatedAt: json.updatedAt, years: yearsSorted });
       } catch (e: any) {
