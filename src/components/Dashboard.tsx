@@ -1450,21 +1450,15 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
   }
   
   // Regendiagramm erstellen
-  // Die Akkumulator-Spalten (Regen/Woche, Regen/Monat, Regen/Jahr) werden relativ
-  // zum Beginn des gewählten Zeitraums normalisiert, damit die Linie bei 0 beginnt.
   const rainSeries: LineSeries[] = [];
   const rainColors = [COLORS[1], COLORS[3], COLORS[5]]; // Grün, Gelb, Rot
   
   for (let i = 0; i < rainColumns.length; i++) {
     const col = rainColumns[i];
-    const rawPoints = rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) }));
-    // Finde den ersten gültigen Wert und subtrahiere ihn (Normalisierung auf 0)
-    const firstValid = rawPoints.find((p) => Number.isFinite(p.y));
-    const offset = firstValid ? firstValid.y : 0;
     const series: LineSeries = {
       id: col,
       color: rainColors[i % rainColors.length],
-      points: rawPoints.map((p) => ({ x: p.x, y: Number.isFinite(p.y) ? p.y - offset : p.y })),
+      points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) })),
     };
     if (series.points.some((p) => Number.isFinite(p.y))) {
       rainSeries.push(series);
