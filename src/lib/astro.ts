@@ -1,4 +1,4 @@
-import SunCalc from "suncalc";
+import { getTimes, getMoonTimes, getMoonIllumination } from "suncalc";
 
 /**
  * Represents the result of astronomical calculations.
@@ -74,9 +74,9 @@ export function moonPhaseName(phase: number, locale: string = "en"): string {
  * @returns {AstroResult} An object containing the astronomical data.
  */
 export function computeAstro(lat: number, lon: number, date: Date = new Date(), locale: string = "en"): AstroResult {
-  const times = SunCalc.getTimes(date, lat, lon);
-  const mt = SunCalc.getMoonTimes(date, lat, lon, true /* UTC to avoid host tz issues */);
-  const ill = SunCalc.getMoonIllumination(date);
+  const times = getTimes(date, lat, lon);
+  const mt = getMoonTimes(date, lat, lon);
+  const ill = getMoonIllumination(date);
   return {
     sunrise: times.sunrise ?? null,
     sunset: times.sunset ?? null,
