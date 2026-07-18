@@ -1316,7 +1316,7 @@ export default function Dashboard() {
             {mode === "main" && (
               <div className={styles.sectionCard}>
                 {dataMain
-                  ? renderMainCharts(dataMain, xBaseMain, minuteDataMain, t, locale, rangeStats)
+                  ? renderMainCharts(dataMain, xBaseMain, minuteDataMain, t, locale, rangeStats, useGlobalRange)
                   : <div className={styles.emptyState}>{t('statuses.noData')}</div>}
               </div>
             )}
@@ -1410,7 +1410,7 @@ function renderChannelChart(data: DataResp, chKey: string, metric: ChannelMetric
  * @returns A React fragment containing all the charts for the main sensors.
  * @private
  */
-function renderMainCharts(data: DataResp, xBase: number | null, minuteData: DataResp | null, t: (key: string) => string, locale: string, serverRangeStats?: any) {
+function renderMainCharts(data: DataResp, xBase: number | null, minuteData: DataResp | null, t: (key: string) => string, locale: string, serverRangeStats?: any, isCustomRange?: boolean) {
   const rows = data.rows || [];
   if (!rows.length || !xBase) return <div className="text-xs text-gray-500">{t('statuses.noData')}</div>;
   const times = rows.map((r) => toDate(r.time as string)).filter(Boolean) as Date[];
@@ -1450,9 +1450,9 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
   }
   
   // Regendiagramm erstellen
-  // Regen/Jahr wird normalisiert: Offset am Anfang abziehen, am 1. Juli (Stations-Reset)
-  // den bisherigen Wert als Carry weiterführen.
-  // Regen/Woche und Regen/Monat werden unverändert angezeigt.
+  // Regen/Jahr wird nur bei benutzerdefiniertem Zeitraum normalisiert:
+  // Offset am Anfang abziehen, am 1. Juli (Stations-Reset) den bisherigen Wert als Carry weiterführen.
+  // Bei Einzelmonats-Ansicht werden die Rohwerte angezeigt.
   const rainSeries: LineSeries[] = [];
   const rainColors = [COLORS[1], COLORS[3], COLORS[5]]; // Grün, Gelb, Rot
   
@@ -1463,7 +1463,7 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
       return (s.includes("rain") || s.includes("regen")) && (s.includes("year") || s.includes("jahr"));
     })();
     
-    if (isYearly) {
+    if (isYearly && isCustomRange) {
       const rawPoints = rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]), time: times[idx] }));
       let baseOffset = 0;
       let carry = 0;
