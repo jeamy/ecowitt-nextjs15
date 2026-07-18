@@ -125,8 +125,13 @@ export async function GET(req: Request) {
             const isGust = colsHints.gust === c || colsHints.gustCandidates.includes(c);
             const isDailyRain = colsHints.dailyRainCandidates.includes(c) || c.toLowerCase().includes("regen/tag") || c.toLowerCase().includes("daily rain");
             const isIntervalRain = colsHints.hourlyRainCandidates.includes(c) || colsHints.genericRainCandidates.includes(c);
+            const isAccumRain = (() => {
+              const s = c.toLowerCase();
+              if (!(s.includes("rain") || s.includes("regen"))) return false;
+              return s.includes("year") || s.includes("jahr") || s.includes("month") || s.includes("monat") || s.includes("week") || s.includes("woche");
+            })();
             const numericExpr = isWind || isGust ? speedExprFor(c) : sqlNum(quoteIdent(c));
-            const aggFunc = (isTemp || isDew || isFeels || isWind || isGust || isDailyRain) ? "max" : (isIntervalRain ? "sum" : "avg");
+            const aggFunc = (isTemp || isDew || isFeels || isWind || isGust || isDailyRain || isAccumRain) ? "max" : (isIntervalRain ? "sum" : "avg");
             return `${aggFunc}(${numericExpr}) AS "${escaped}"`;
           }).join(",\n          ");
 
@@ -218,8 +223,13 @@ export async function GET(req: Request) {
           const isGust = colsHints.gust === c || colsHints.gustCandidates.includes(c);
           const isDailyRain = colsHints.dailyRainCandidates.includes(c) || c.toLowerCase().includes("regen/tag") || c.toLowerCase().includes("daily rain");
           const isIntervalRain = colsHints.hourlyRainCandidates.includes(c) || colsHints.genericRainCandidates.includes(c);
+          const isAccumRain = (() => {
+            const s = c.toLowerCase();
+            if (!(s.includes("rain") || s.includes("regen"))) return false;
+            return s.includes("year") || s.includes("jahr") || s.includes("month") || s.includes("monat") || s.includes("week") || s.includes("woche");
+          })();
           const numericExpr = isWind || isGust ? speedExprFor(c) : sqlNum(quoteIdent(c));
-          const aggFunc = isDailyRain ? "max" : (isIntervalRain ? "sum" : "avg");
+          const aggFunc = (isDailyRain || isAccumRain) ? "max" : (isIntervalRain ? "sum" : "avg");
           return `${aggFunc}(${numericExpr}) AS "${escaped}"`;
         }).join(",\n          ");
         const unionSources = parquetPaths.map((p) => `SELECT * FROM read_parquet(${sqlLiteral(p)})`).join("\nUNION ALL\n");

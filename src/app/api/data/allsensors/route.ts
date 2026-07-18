@@ -110,8 +110,13 @@ export async function GET(req: Request) {
           const isGust = hints.gust === c || hints.gustCandidates.includes(c);
           const isDailyRain = hints.dailyRainCandidates.includes(c);
           const isIntervalRain = hints.hourlyRainCandidates.includes(c) || hints.genericRainCandidates.includes(c);
+          const isAccumRain = (() => {
+            const s = c.toLowerCase();
+            if (!(s.includes("rain") || s.includes("regen"))) return false;
+            return s.includes("year") || s.includes("jahr") || s.includes("month") || s.includes("monat") || s.includes("week") || s.includes("woche");
+          })();
           const expr = isWind || isGust ? speedExprFor(c) : sqlNum(quoteIdent(c));
-          const aggFunc = isDailyRain ? "max" : (isIntervalRain ? "sum" : "avg");
+          const aggFunc = (isDailyRain || isAccumRain) ? "max" : (isIntervalRain ? "sum" : "avg");
           return `${aggFunc}(${expr}) AS "${escaped}"`;
         }).join(",\n      ");
         const unionSources = parquetPaths.map((p) => `SELECT * FROM read_parquet(${sqlLiteral(p)})`).join("\nUNION ALL\n");
