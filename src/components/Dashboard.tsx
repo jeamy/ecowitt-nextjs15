@@ -1450,15 +1450,39 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
   }
   
   // Regendiagramm erstellen
+  // Akkumulator-Spalten (Regen/Woche, Regen/Monat, Regen/Jahr) werden normalisiert:
+  // - Erster gültiger Wert wird abgezogen (Start bei 0)
+  // - Wenn die Station den Zähler zurücksetzt (z.B. am 1. Juli), wird der Sprung
+  //   kompensiert, sodass die Linie weiter kumuliert statt negativ zu werden.
   const rainSeries: LineSeries[] = [];
   const rainColors = [COLORS[1], COLORS[3], COLORS[5]]; // Grün, Gelb, Rot
   
   for (let i = 0; i < rainColumns.length; i++) {
     const col = rainColumns[i];
+    const rawPoints = rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) }));
+    // Normalisierung mit Reset-Erkennung
+    let baseOffset = 0;
+    let carry = 0; // akkumulierter Wert vor dem Reset
+    let prevRaw: number | null = null;
+    let firstSet = false;
+    const points = rawPoints.map((p) => {
+      if (!Number.isFinite(p.y)) return { x: p.x, y: p.y };
+      if (!firstSet) {
+        baseOffset = p.y;
+        firstSet = true;
+      }
+      // Reset erkennen: Wert fällt stark (mehr als 50% oder > 30mm Abfall)
+      if (prevRaw !== null && p.y < prevRaw - 30 && p.y < prevRaw * 0.5) {
+        carry += prevRaw - baseOffset;
+        baseOffset = p.y;
+      }
+      prevRaw = p.y;
+      return { x: p.x, y: carry + (p.y - baseOffset) };
+    });
     const series: LineSeries = {
       id: col,
       color: rainColors[i % rainColors.length],
-      points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) })),
+      points,
     };
     if (series.points.some((p) => Number.isFinite(p.y))) {
       rainSeries.push(series);
