@@ -1450,42 +1450,62 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
   }
   
   // Regendiagramm erstellen
-  // Akkumulator-Spalten (Regen/Woche, Regen/Monat, Regen/Jahr) werden normalisiert:
-  // - Erster gültiger Wert wird abgezogen (Start bei 0)
-  // - Wenn die Station den Zähler zurücksetzt (z.B. am 1. Juli), wird der Sprung
-  //   kompensiert, sodass die Linie weiter kumuliert statt negativ zu werden.
+  // Regen/Jahr wird normalisiert: Offset am Anfang abziehen, am 1. Juli (Stations-Reset)
+  // den bisherigen Wert als Carry weiterführen.
+  // Regen/Woche und Regen/Monat werden unverändert angezeigt.
   const rainSeries: LineSeries[] = [];
   const rainColors = [COLORS[1], COLORS[3], COLORS[5]]; // Grün, Gelb, Rot
   
   for (let i = 0; i < rainColumns.length; i++) {
     const col = rainColumns[i];
-    const rawPoints = rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) }));
-    // Normalisierung mit Reset-Erkennung
-    let baseOffset = 0;
-    let carry = 0; // akkumulierter Wert vor dem Reset
-    let prevRaw: number | null = null;
-    let firstSet = false;
-    const points = rawPoints.map((p) => {
-      if (!Number.isFinite(p.y)) return { x: p.x, y: p.y };
-      if (!firstSet) {
-        baseOffset = p.y;
-        firstSet = true;
+    const isYearly = (() => {
+      const s = col.toLowerCase();
+      return (s.includes("rain") || s.includes("regen")) && (s.includes("year") || s.includes("jahr"));
+    })();
+    
+    if (isYearly) {
+      const rawPoints = rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]), time: times[idx] }));
+      let baseOffset = 0;
+      let carry = 0;
+      let firstSet = false;
+      let prevRaw: number | null = null;
+      let prevTime: Date | null = null;
+      const points = rawPoints.map((p) => {
+        if (!Number.isFinite(p.y)) return { x: p.x, y: p.y };
+        if (!firstSet) {
+          baseOffset = p.y;
+          firstSet = true;
+        }
+        // Am 1. Juli Reset: vorheriger Datenpunkt war vor dem 1. Juli, dieser ist am/nach 1. Juli
+        if (prevTime && p.time && prevRaw !== null) {
+          const prevJuly = prevTime.getMonth() < 6; // vor Juli (0-basiert: 6 = Juli)
+          const nowJuly = p.time.getMonth() >= 6;
+          if (prevJuly && nowJuly) {
+            carry += prevRaw - baseOffset;
+            baseOffset = p.y;
+          }
+        }
+        prevRaw = p.y;
+        prevTime = p.time;
+        return { x: p.x, y: carry + (p.y - baseOffset) };
+      });
+      const series: LineSeries = {
+        id: col,
+        color: rainColors[i % rainColors.length],
+        points,
+      };
+      if (series.points.some((p) => Number.isFinite(p.y))) {
+        rainSeries.push(series);
       }
-      // Reset erkennen: Wert fällt stark (mehr als 50% oder > 30mm Abfall)
-      if (prevRaw !== null && p.y < prevRaw - 30 && p.y < prevRaw * 0.5) {
-        carry += prevRaw - baseOffset;
-        baseOffset = p.y;
+    } else {
+      const series: LineSeries = {
+        id: col,
+        color: rainColors[i % rainColors.length],
+        points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) })),
+      };
+      if (series.points.some((p) => Number.isFinite(p.y))) {
+        rainSeries.push(series);
       }
-      prevRaw = p.y;
-      return { x: p.x, y: carry + (p.y - baseOffset) };
-    });
-    const series: LineSeries = {
-      id: col,
-      color: rainColors[i % rainColors.length],
-      points,
-    };
-    if (series.points.some((p) => Number.isFinite(p.y))) {
-      rainSeries.push(series);
     }
   }
   
