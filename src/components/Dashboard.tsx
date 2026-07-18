@@ -1450,9 +1450,10 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
   }
   
   // Regendiagramm erstellen
-  // Regen/Jahr wird nur bei benutzerdefiniertem Zeitraum normalisiert:
-  // Offset am Anfang abziehen, am 1. Juli (Stations-Reset) den bisherigen Wert als Carry weiterführen.
-  // Bei Einzelmonats-Ansicht werden die Rohwerte angezeigt.
+  // Regen/Jahr wird NICHT aus der Stations-Spalte genommen (die resettet am 1. Juli),
+  // sondern als kumulative Summe aus den Tagesdaten berechnet.
+  // Bei Monatsansicht wird yearRainBefore (Regen Jan-1 bis Monatsbeginn) addiert.
+  // Regen/Woche und Regen/Monat bleiben als Rohwerte.
   const rainSeries: LineSeries[] = [];
   const rainColors = [COLORS[1], COLORS[3], COLORS[5]]; // Grün, Gelb, Rot
   
@@ -1463,49 +1464,17 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
       return (s.includes("rain") || s.includes("regen")) && (s.includes("year") || s.includes("jahr"));
     })();
     
-    if (isYearly && isCustomRange) {
-      const rawPoints = rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]), time: times[idx] }));
-      let baseOffset = 0;
-      let carry = 0;
-      let firstSet = false;
-      let prevRaw: number | null = null;
-      let prevTime: Date | null = null;
-      const points = rawPoints.map((p) => {
-        if (!Number.isFinite(p.y)) return { x: p.x, y: p.y };
-        if (!firstSet) {
-          baseOffset = p.y;
-          firstSet = true;
-        }
-        // Am 1. Juli Reset: vorheriger Datenpunkt war vor dem 1. Juli, dieser ist am/nach 1. Juli
-        if (prevTime && p.time && prevRaw !== null) {
-          const prevJuly = prevTime.getMonth() < 6; // vor Juli (0-basiert: 6 = Juli)
-          const nowJuly = p.time.getMonth() >= 6;
-          if (prevJuly && nowJuly) {
-            carry += prevRaw - baseOffset;
-            baseOffset = p.y;
-          }
-        }
-        prevRaw = p.y;
-        prevTime = p.time;
-        return { x: p.x, y: carry + (p.y - baseOffset) };
-      });
-      const series: LineSeries = {
-        id: col,
-        color: rainColors[i % rainColors.length],
-        points,
-      };
-      if (series.points.some((p) => Number.isFinite(p.y))) {
-        rainSeries.push(series);
-      }
-    } else {
-      const series: LineSeries = {
-        id: col,
-        color: rainColors[i % rainColors.length],
-        points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) })),
-      };
-      if (series.points.some((p) => Number.isFinite(p.y))) {
-        rainSeries.push(series);
-      }
+    if (isYearly) {
+      // Regen/Jahr überspringen - wird unten als berechnete Kumulation ersetzt
+      continue;
+    }
+    const series: LineSeries = {
+      id: col,
+      color: rainColors[i % rainColors.length],
+      points: rows.map((r, idx) => ({ x: xVals[idx], y: numOrNaN(r[col]) })),
+    };
+    if (series.points.some((p) => Number.isFinite(p.y))) {
+      rainSeries.push(series);
     }
   }
   
@@ -1592,6 +1561,29 @@ function renderMainCharts(data: DataResp, xBase: number | null, minuteData: Data
   const rainStats = calculateRainStats(rows, times, hourlyRainCol || null);
   
   const totalRain = rainPoints.reduce((acc, p) => acc + (Number.isFinite(p.y) ? p.y : 0), 0);
+
+  // Kumulative Regen/Jahr-Linie: Basiert auf den täglichen Regenbalken,
+  // plus yearRainBefore (Regen seit 1. Jan bis Monatsbeginn) bei Monatsansicht.
+  if (rainPoints.length > 0) {
+    const yearRainBefore: number = (serverRangeStats?.yearRainBefore != null && Number.isFinite(serverRangeStats.yearRainBefore))
+      ? serverRangeStats.yearRainBefore
+      : 0;
+    let cumSum = yearRainBefore;
+    const cumPoints = rainPoints.map((p) => {
+      cumSum += p.y;
+      return { x: p.x, y: cumSum };
+    });
+    const yearlyLabel = header.find(h => {
+      const s = h.toLowerCase();
+      return (s.includes("rain") || s.includes("regen")) && (s.includes("year") || s.includes("jahr"));
+    }) || t('dashboard.rainYear');
+    rainSeries.push({
+      id: yearlyLabel,
+      color: COLORS[5], // Blau-ähnlich
+      points: cumPoints,
+    });
+  }
+
   const nonRainColumns = nonTempRainColumnsFiltered.filter(c => rainSel ? c !== rainSel.col : true);
   
   return (

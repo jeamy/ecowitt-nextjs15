@@ -73,7 +73,29 @@ export async function GET(req: NextRequest) {
     const endIso = toIsoMinute(end!);
     const totalPeriodDays = daysInclusive(start!, end!);
 
-    return NextResponse.json({ ok: true, start: startIso, end: endIso, totalPeriodDays, days, stats: { temp, feels, rain, wind, rainDays } });
+    // Für Monatsansichten: Berechne den akkumulierten Regen von Jan-1 bis zum Monatsbeginn,
+    // damit das Frontend die korrekte Jahreskurve anzeigen kann.
+    let yearRainBefore: number | null = null;
+    if (month) {
+      const y = Number(month.slice(0, 4));
+      const m = Number(month.slice(4, 6));
+      if (m > 1) {
+        try {
+          const janStart = new Date(y, 0, 1, 0, 0, 0);
+          const beforeMonthEnd = new Date(y, m - 1, 0, 23, 59, 59); // letzter Tag des Vormonats
+          const preParquets = await ensureMainParquetsInRange(janStart, beforeMonthEnd);
+          if (preParquets.length) {
+            const preDays = await queryDailyAggregatesInRange(preParquets, janStart, beforeMonthEnd);
+            const { rain: preRain } = computeStatsFromDaily(preDays);
+            yearRainBefore = preRain.total;
+          }
+        } catch { /* ignore - yearRainBefore bleibt null */ }
+      } else {
+        yearRainBefore = 0; // Januar: nichts davor
+      }
+    }
+
+    return NextResponse.json({ ok: true, start: startIso, end: endIso, totalPeriodDays, days, stats: { temp, feels, rain, wind, rainDays }, yearRainBefore });
   } catch (e: any) {
     console.error("[statistics/range] GET error:", e?.message || e);
     return NextResponse.json({ ok: false, error: String(e?.message || e) }, { status: 500 });
