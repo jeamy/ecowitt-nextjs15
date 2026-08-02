@@ -7,9 +7,11 @@ import {
 import type { DailyAggregateRow } from "@/lib/statistics";
 
 const rows: DailyAggregateRow[] = [
-  { day: "2024-01-01", tmax: 11, tmin: 3, tavg: 7, rain_day: 5, wind_max: null, gust_max: null, wind_avg: null },
-  { day: "2024-07-01", tmax: 29.9, tmin: 17, tavg: 23, rain_day: 0, wind_max: null, gust_max: null, wind_avg: null },
-  { day: "2024-08-01", tmax: 31.2, tmin: 19, tavg: 25, rain_day: 22, wind_max: null, gust_max: null, wind_avg: null },
+  { day: "2023-01-01", tmax: 9, tmin: 1, tavg: 5, rain_day: 1, wind_max: 12, gust_max: 20, wind_avg: 5, tfmax: 8, tfmin: 0 },
+  { day: "2023-07-15", tmax: 33.5, tmin: 19, tavg: 26, rain_day: 2, wind_max: 40, gust_max: 55, wind_avg: 14, tfmax: 35.2, tfmin: 18 },
+  { day: "2024-01-01", tmax: 11, tmin: 3, tavg: 7, rain_day: 5, wind_max: 18, gust_max: 30, wind_avg: 7, tfmax: 10, tfmin: 1 },
+  { day: "2024-07-01", tmax: 29.9, tmin: 17, tavg: 23, rain_day: 0, wind_max: 50, gust_max: 70, wind_avg: 16, tfmax: 31, tfmin: 16 },
+  { day: "2024-08-01", tmax: 31.2, tmin: 19, tavg: 25, rain_day: 22, wind_max: 22, gust_max: 35, wind_avg: 8, tfmax: 34.1, tfmin: 18 },
   { day: "2025-01-01", tmax: 10, tmin: 2, tavg: 6, rain_day: 8, wind_max: null, gust_max: null, wind_avg: null },
   { day: "2025-07-01", tmax: 30, tmin: 18, tavg: 24, rain_day: 35, wind_max: null, gust_max: null, wind_avg: null },
   { day: "2025-08-10", tmax: 37.4, tmin: 21, tavg: 29, rain_day: 0, wind_max: null, gust_max: null, wind_avg: null },
@@ -110,4 +112,56 @@ test("reports data availability for a season", () => {
   const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
   assert.equal(facts.operation, "availability");
   assert.deepEqual(facts.values?.map((item) => [item.label, item.value, item.validDays, item.expectedDays]), [["Sommer 2024", 2.17, 2, 92]]);
+});
+
+test("lists highest temperatures per year instead of one overall maximum", () => {
+  const intent = parseStatisticsQuestion("Die höchsten Temperaturen in den Jahren 2023 bis 2024.");
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
+  assert.equal(intent.operation, "rank_periods");
+  assert.equal(intent.metric, "outdoor_temperature_max");
+  assert.equal(intent.aggregation, "max");
+  assert.deepEqual(intent.periods, [
+    { label: "2023", start: "2023-01-01", end: "2023-12-31" },
+    { label: "2024", start: "2024-01-01", end: "2024-12-31" },
+  ]);
+  assert.deepEqual(facts.values?.map((item) => [item.label, item.value]), [
+    ["2023", 33.5],
+    ["2024", 31.2],
+  ]);
+});
+
+test("lists precipitation totals per year for highest precipitation wording", () => {
+  const intent = parseStatisticsQuestion("Die höchsten Niederschläge in den Jahren 2023 bis 2024.");
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
+  assert.equal(intent.operation, "rank_periods");
+  assert.equal(intent.metric, "precipitation_total");
+  assert.equal(intent.aggregation, "sum");
+  assert.deepEqual(facts.values?.map((item) => [item.label, item.value]), [
+    ["2024", 27],
+    ["2023", 3],
+  ]);
+});
+
+test("lists maximum wind speed per year", () => {
+  const intent = parseStatisticsQuestion("Die höchsten Windgeschwindigkeiten in den Jahren 2023 bis 2024.");
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
+  assert.equal(intent.operation, "rank_periods");
+  assert.equal(intent.metric, "wind_max");
+  assert.equal(intent.aggregation, "max");
+  assert.deepEqual(facts.values?.map((item) => [item.label, item.value]), [
+    ["2024", 50],
+    ["2023", 40],
+  ]);
+});
+
+test("lists maximum feels-like temperature per year", () => {
+  const intent = parseStatisticsQuestion("Die höchsten gefühlten Temperaturen in den Jahren 2023 bis 2024.");
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
+  assert.equal(intent.operation, "rank_periods");
+  assert.equal(intent.metric, "feels_like_temperature_max");
+  assert.equal(intent.aggregation, "max");
+  assert.deepEqual(facts.values?.map((item) => [item.label, item.value]), [
+    ["2023", 35.2],
+    ["2024", 34.1],
+  ]);
 });

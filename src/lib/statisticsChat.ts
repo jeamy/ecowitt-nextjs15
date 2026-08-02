@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { ensureMainParquetsInRange } from "@/lib/db/ingest";
 import {
-  computeStatsFromDaily,
   queryDailyAggregatesInRange,
   readStatistics,
   type DailyAggregateRow,
@@ -153,25 +152,57 @@ function rankingPeriods(message: string, years: number[]) {
   return years.length ? yearPeriods(years) : [defaultPeriod(message, years)];
 }
 
+function mainMetricFromQuestion(normalized: string, options: { average?: boolean; minimum?: boolean } = {}) {
+  if (/regen|geregnet|regnete|niederschlag|niederschlaeg|rainfall|rain/.test(normalized)) {
+    return { metric: "precipitation_total", unit: "mm", aggregation: "sum" as const };
+  }
+  if (/boe|böe|boeen|böen|gust/.test(normalized)) {
+    return { metric: "gust_max", unit: "km/h", aggregation: "max" as const };
+  }
+  if (/wind|windgeschwindigkeit|windgeschwindigkeiten/.test(normalized)) {
+    return { metric: options.average ? "wind_avg" : "wind_max", unit: "km/h", aggregation: options.average ? "avg" as const : "max" as const };
+  }
+  if (/gefuehlt|gefühlt|feels|windchill|heatindex/.test(normalized)) {
+    return { metric: options.minimum ? "feels_like_temperature_min" : "feels_like_temperature_max", unit: "°C", aggregation: options.minimum ? "min" as const : "max" as const };
+  }
+  if (options.minimum || /kaelteste|kälteste|niedrigste|tiefste|minimal/.test(normalized)) {
+    return { metric: "outdoor_temperature_min", unit: "°C", aggregation: "min" as const };
+  }
+  return { metric: options.average ? "outdoor_temperature_avg" : "outdoor_temperature_max", unit: "°C", aggregation: options.average ? "avg" as const : "max" as const };
+}
+
+function rankedExtremeQuestion(message: string) {
+  const normalized = normalizeQuestion(message);
+  if (/wann|zeitpunkt|gemessen|zwischen/.test(normalized)) return false;
+  return /hoechsten|höchsten|maximalen|top|liste|werte|jahren|jahre/.test(normalized);
+}
+
 export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
   const normalized = normalizeQuestion(message);
   const years = extractYears(message);
   const periods = years.length ? yearPeriods(years) : [
     { label: "alle verfügbaren Daten", start: "1900-01-01", end: "2999-12-31" },
   ];
-  const hasRain = /regen|geregnet|regnete|niederschlag|rainfall|rain/.test(normalized);
-  const hasTemp = /temperatur|temperaturen|warm|wärm|waerm|heiss|heiß|hitze|tmax|grad|°|°c/.test(normalized);
+  const hasRain = /regen|geregnet|regnete|niederschlag|niederschlaeg|rainfall|rain/.test(normalized);
+  const hasWind = /wind|windgeschwindigkeit|windgeschwindigkeiten|boe|böe|boeen|böen|gust/.test(normalized);
+  const hasFeels = /gefuehlt|gefühlt|feels|windchill|heatindex/.test(normalized);
+  const hasTemp = /temperatur|temperaturen|warm|wärm|waerm|heiss|heiß|hitze|tmax|grad|°|°c/.test(normalized) || hasFeels;
+  const hasMainWeatherMetric = hasRain || hasTemp || hasWind;
   const hasExtreme = /höchste|hoechste|maximal|maximale|wärmste|waermste|extrem|spitze|groessten|groesste|größten|größte|maximum/.test(normalized);
   const hasAverage = /durchschnitt|mittelwert|durchschn/.test(normalized);
+  const hasMinimum = /niedrigste|tiefste|minimale|kaelteste|kälteste|minimum/.test(normalized);
   const hasCount = /wie viele|anzahl|count/.test(normalized);
   const hasAmount = /wie viel|wieviel|wieviele/.test(normalized);
   const hasTotal = /summe|gesamt|insgesamt|total/.test(normalized);
-  const hasRanking = /welcher|welches|welche|ranking|rangliste|sortiere|waermste|wärmste|nasseste|meiste|meisten/.test(normalized);
+  const hasRanking = /welcher|welches|welche|ranking|rangliste|sortiere|waermste|wärmste|nasseste|meiste|meisten|hoechsten|höchsten|top/.test(normalized);
   const hasAvailability = /daten|datenabdeckung|abdeckung|verfuegbarkeit|verfügbarkeit/.test(normalized);
   const hasCompare = years.length >= 2 && /oder|vergleich|wärmer|waermer|mehr|weniger|gegenüber|gegenueber|als/.test(normalized);
   const threshold = extractThreshold(message);
   const sensor = extractSensorQuestion(message);
-  const genericSensor = Boolean(sensor && (sensor.channel || (sensor.measurement && sensor.measurement !== "precipitation")));
+  const genericSensor = Boolean(sensor && (
+    sensor.channel
+    || (sensor.measurement && !["precipitation", "wind", "gust"].includes(sensor.measurement))
+  ));
 
   if (genericSensor) {
     const operation: StatisticsChatIntent["operation"] = threshold !== null ? "threshold_days" : hasExtreme ? "extreme_day" : sensor?.measurement === "precipitation" && /groessten|groesste|nassesten|staerksten/.test(normalized) ? "top_days" : years.length >= 2 && (hasCompare || hasAverage) ? "compare_periods" : "compare_periods";
@@ -179,8 +210,13 @@ export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
     return { operation, metric: "sensor_measurement", dataset: "allsensors", measurement: sensor?.measurement || "temperature", channel: sensor?.channel, operator: operation === "threshold_days" ? (/unter|weniger als/i.test(message) ? "<" : /mindestens|ab/i.test(message) ? ">=" : ">") : undefined, value: operation === "threshold_days" ? threshold ?? undefined : undefined, unit, periods: operation === "extreme_day" && years.length >= 2 ? [inclusiveRange(years)] : [years.length ? inclusiveRange(years) : periods[0]], limit: operation === "top_days" ? 5 : 100 };
   }
 
-  if (hasRain && hasCompare) {
-    return { operation: "compare_periods", metric: "precipitation_total", unit: "mm", periods };
+  const rankingByAverage = /waermste|wärmste|waermster|wärmster/.test(normalized)
+    && /monat|monate|month|months/.test(normalized)
+    && !/hoechsten|höchsten|maximal|maximale/.test(normalized);
+  const mainMetric = mainMetricFromQuestion(normalized, { average: hasAverage || rankingByAverage, minimum: hasMinimum });
+
+  if (hasMainWeatherMetric && hasCompare) {
+    return { operation: "compare_periods", metric: mainMetric.metric, aggregation: mainMetric.aggregation, unit: mainMetric.unit, periods };
   }
   if (hasRain && years.length >= 2 && /liste|werte|vergleich|mehr|weniger/.test(normalized)) {
     return { operation: "compare_periods", metric: "precipitation_total", unit: "mm", periods };
@@ -196,9 +232,19 @@ export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
   if (hasRain && hasRanking) {
     return {
       operation: "rank_periods",
-      metric: "precipitation_total",
-      aggregation: "sum",
-      unit: "mm",
+      metric: mainMetric.metric,
+      aggregation: mainMetric.aggregation,
+      unit: mainMetric.unit,
+      periods: rankingPeriods(message, years),
+      limit: /top\s*(\d+)/.test(normalized) ? Number(normalized.match(/top\s*(\d+)/)?.[1]) : 5,
+    };
+  }
+  if (hasWind && hasRanking) {
+    return {
+      operation: "rank_periods",
+      metric: mainMetric.metric,
+      aggregation: mainMetric.aggregation,
+      unit: mainMetric.unit,
       periods: rankingPeriods(message, years),
       limit: /top\s*(\d+)/.test(normalized) ? Number(normalized.match(/top\s*(\d+)/)?.[1]) : 5,
     };
@@ -224,14 +270,24 @@ export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
     };
   }
   if (hasTemp && years.length >= 2 && (hasAverage || /wärmer|waermer|durchschnittlich/.test(normalized))) {
-    return { operation: "compare_periods", metric: "outdoor_temperature_avg", unit: "°C", periods };
+    return { operation: "compare_periods", metric: mainMetric.metric, aggregation: mainMetric.aggregation, unit: mainMetric.unit, periods };
+  }
+  if (hasTemp && hasExtreme && years.length >= 2 && rankedExtremeQuestion(message)) {
+    return {
+      operation: "rank_periods",
+      metric: mainMetric.metric,
+      aggregation: mainMetric.aggregation,
+      unit: mainMetric.unit,
+      periods: rankingPeriods(message, years),
+      limit: years.length,
+    };
   }
   if (hasTemp && hasRanking) {
     return {
       operation: "rank_periods",
-      metric: "outdoor_temperature_avg",
-      aggregation: "avg",
-      unit: "°C",
+      metric: mainMetric.metric,
+      aggregation: mainMetric.aggregation,
+      unit: mainMetric.unit,
       periods: rankingPeriods(message, years),
       limit: /top\s*(\d+)/.test(normalized) ? Number(normalized.match(/top\s*(\d+)/)?.[1]) : 5,
     };
@@ -239,23 +295,23 @@ export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
   if (hasTemp && hasAverage) {
     return {
       operation: "aggregate_period",
-      metric: "outdoor_temperature_avg",
-      aggregation: "avg",
-      unit: "°C",
+      metric: mainMetric.metric,
+      aggregation: mainMetric.aggregation,
+      unit: mainMetric.unit,
       periods: [defaultPeriod(message, years)],
     };
   }
   if (hasTemp && hasExtreme && years.length >= 2) {
-    return { operation: "extreme_day", metric: "outdoor_temperature_max", unit: "°C", periods: [inclusiveRange(years)] };
+    return { operation: "extreme_day", metric: mainMetric.metric, aggregation: mainMetric.aggregation, unit: mainMetric.unit, periods: [inclusiveRange(years)] };
   }
   if (hasTemp && hasCount && threshold !== null) {
     const operator: StatisticsChatIntent["operator"] = /unter|weniger als/i.test(message) ? "<" : /mindestens|ab/i.test(message) ? ">=" : ">";
     return {
       operation: "count_days",
-      metric: "outdoor_temperature_max",
+      metric: mainMetric.metric,
       operator,
       value: threshold,
-      unit: "°C",
+      unit: mainMetric.unit,
       periods: [defaultPeriod(message, years)],
       limit: 100,
     };
@@ -264,19 +320,19 @@ export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
     const operator: StatisticsChatIntent["operator"] = /unter|weniger als/i.test(message) ? "<" : /mindestens|ab/i.test(message) ? ">=" : ">";
     return {
       operation: "threshold_days",
-      metric: "outdoor_temperature_max",
+      metric: mainMetric.metric,
       operator,
       value: threshold,
-      unit: "°C",
+      unit: mainMetric.unit,
       periods: [defaultPeriod(message, years)],
       limit: 100,
     };
   }
-  if (hasRain || /größten|groessten|nassesten|stärksten regen|staerksten regen/.test(normalized)) {
+  if (hasMainWeatherMetric && (hasExtreme || hasRanking || /größten|groessten|nassesten|stärksten regen|staerksten regen/.test(normalized))) {
     return {
       operation: "top_days",
-      metric: "precipitation_total",
-      unit: "mm",
+      metric: mainMetric.metric,
+      unit: mainMetric.unit,
       periods: [defaultPeriod(message, years)],
       limit: 5,
     };
@@ -284,8 +340,9 @@ export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
   if (hasTemp && hasExtreme) {
     return {
       operation: "extreme_day",
-      metric: "outdoor_temperature_max",
-      unit: "°C",
+      metric: mainMetric.metric,
+      aggregation: mainMetric.aggregation,
+      unit: mainMetric.unit,
       periods: [defaultPeriod(message, years)],
     };
   }
@@ -329,6 +386,8 @@ function rowMetricValue(row: DailyAggregateRow, metric: string) {
   if (metric === "precipitation_total") return toNumber(row.rain_day);
   if (metric === "outdoor_temperature_avg") return toNumber(row.tavg);
   if (metric === "outdoor_temperature_min") return toNumber(row.tmin);
+  if (metric === "feels_like_temperature_max") return toNumber(row.tfmax);
+  if (metric === "feels_like_temperature_min") return toNumber(row.tfmin);
   if (metric === "wind_max") return toNumber(row.wind_max);
   if (metric === "gust_max") return toNumber(row.gust_max);
   if (metric === "wind_avg") return toNumber(row.wind_avg);
@@ -340,6 +399,14 @@ function compareValue(value: number, operator: StatisticsChatIntent["operator"] 
   if (operator === ">=") return value >= threshold;
   if (operator === "<=") return value <= threshold;
   return value > threshold;
+}
+
+function aggregateValues(values: number[], aggregation: StatisticsChatIntent["aggregation"] | undefined) {
+  if (!values.length) return null;
+  if (aggregation === "sum") return values.reduce((sum, item) => sum + item, 0);
+  if (aggregation === "min") return Math.min(...values);
+  if (aggregation === "max") return Math.max(...values);
+  return values.reduce((sum, item) => sum + item, 0) / values.length;
 }
 
 function round(value: number | null, digits = 2) {
@@ -423,9 +490,9 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
   if (intent.operation === "top_days") {
     const periodRows = filterRows(rows, intent.periods[0]);
     const items = periodRows
-      .map((row) => ({ date: row.day.slice(0, 10), value: toNumber(row.rain_day), unit: "mm" }))
+      .map((row) => ({ date: row.day.slice(0, 10), value: rowMetricValue(row, intent.metric), unit: intent.unit }))
       .filter((item): item is { date: string; value: number; unit: string } => item.value !== null)
-      .sort((a, b) => b.value - a.value || a.date.localeCompare(b.date));
+      .sort((a, b) => intent.aggregation === "min" ? a.value - b.value || a.date.localeCompare(b.date) : b.value - a.value || a.date.localeCompare(b.date));
     return {
       operation: intent.operation,
       metric: intent.metric,
@@ -440,9 +507,9 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
   if (intent.operation === "extreme_day") {
     const periodRows = filterRows(rows, intent.periods[0]);
     const values = periodRows
-      .map((row) => ({ date: row.day.slice(0, 10), value: toNumber(row.tmax) }))
+      .map((row) => ({ date: row.day.slice(0, 10), value: rowMetricValue(row, intent.metric) }))
       .filter((item): item is { date: string; value: number } => item.value !== null)
-      .sort((a, b) => b.value - a.value || a.date.localeCompare(b.date));
+      .sort((a, b) => intent.aggregation === "min" ? a.value - b.value || a.date.localeCompare(b.date) : b.value - a.value || a.date.localeCompare(b.date));
     const top = values[0];
     return {
       operation: intent.operation,
@@ -450,8 +517,8 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
       unit: intent.unit,
       periods: intent.periods,
       count: top ? 1 : 0,
-      items: top ? [{ ...top, unit: "°C" }] : [],
-      warnings: top ? ["Die Extremwertabfrage verwendet die vorhandenen Tagesmaxima."] : ["Keine Temperaturdaten im Zeitraum vorhanden."],
+      items: top ? [{ ...top, unit: intent.unit }] : [],
+      warnings: top ? ["Die Extremwertabfrage verwendet vorhandene Tagesaggregate."] : ["Keine gültigen Messwerte im Zeitraum vorhanden."],
     } satisfies StatisticsChatFacts;
   }
 
@@ -459,13 +526,7 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
     const values = intent.periods.map((period) => {
       const periodRows = filterRows(rows, period);
       const numeric = periodRows.map((row) => rowMetricValue(row, intent.metric)).filter((value): value is number => value !== null);
-      let value: number | null = null;
-      if (numeric.length) {
-        if (intent.aggregation === "sum") value = numeric.reduce((sum, item) => sum + item, 0);
-        else if (intent.aggregation === "min") value = Math.min(...numeric);
-        else if (intent.aggregation === "max") value = Math.max(...numeric);
-        else value = numeric.reduce((sum, item) => sum + item, 0) / numeric.length;
-      }
+      const value = aggregateValues(numeric, intent.aggregation);
       return {
         label: period.label,
         value: round(value),
@@ -519,11 +580,11 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
 
   const values = intent.periods.map((period) => {
     const periodRows = filterRows(rows, period);
-    const stats = computeStatsFromDaily(periodRows);
-    const value = intent.metric === "precipitation_total" ? stats.rain.total : stats.temp.avg;
+    const numeric = periodRows.map((row) => rowMetricValue(row, intent.metric)).filter((item): item is number => item !== null);
+    const value = aggregateValues(numeric, intent.aggregation || (intent.metric === "precipitation_total" ? "sum" : "avg"));
     const validDays = intent.metric === "precipitation_total"
       ? periodRows.filter((row) => toNumber(row.rain_day) !== null).length
-      : periodRows.filter((row) => toNumber(row.tavg) !== null).length;
+      : periodRows.filter((row) => rowMetricValue(row, intent.metric) !== null).length;
     return {
       label: period.label,
       value: round(toNumber(value)),
