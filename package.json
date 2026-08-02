@@ -8,6 +8,7 @@
     "build": "next build --webpack",
     "prestart": "tsx src/scripts/prewarm.ts",
     "start": "next start",
+    "test": "node --import tsx tests/statisticsChat.test.ts",
     "lint": "next lint",
     "prewarm": "tsx src/scripts/prewarm.ts"
   },

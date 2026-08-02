@@ -8,6 +8,7 @@ import StatisticsKpis from "@/components/StatisticsKpis";
 import StatisticsLegend from "@/components/StatisticsLegend";
 import CalendarHeatmap from "@/components/CalendarHeatmap";
 import TopExtremes from "@/components/TopExtremes";
+import StatisticsChat from "@/components/StatisticsChat";
 
 function fmtNum(n: number | null | undefined, fraction = 1) {
   if (n === null || n === undefined || !Number.isFinite(n)) return "–";
@@ -342,6 +343,7 @@ export default function Statistics() {
           </div>
         </div>
       </div>
+      <StatisticsChat />
       {selectedYearStats.map((yearStats) => (
         <section key={yearStats.year} className="mb-8" aria-labelledby={`statistics-year-${yearStats.year}`}>
           <h3 id={`statistics-year-${yearStats.year}`} className="text-lg font-semibold mb-3">

@@ -16,7 +16,7 @@ RUN npm ci
 COPY . .
 
 # Build the application
-RUN npm run build --webpack
+RUN npm run build
 
 # Set environment variables
 #EXPOSE 3010

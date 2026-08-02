@@ -10,6 +10,7 @@ Dashboard fuer Ecowitt- und DNT-WLAN-Wetterstationen mit Live-Daten, lokaler CSV
 - **Analyse**: Forecast-Genauigkeit gegen lokal gemessene Wetterdaten mit MAE/RMSE.
 - **Gespeicherte Daten**: interaktive Chart.js-Zeitreihen fuer Main- und Allsensors-CSV-Daten.
 - **Statistik**: Jahres-, Monats-, Bereichs- und Kanalstatistiken aus DuckDB/Parquet.
+- **Statistik-Chat**: lokale Vergleichs-, Schwellenwert- und Extremwertabfragen mit Verlauf/Cache sowie optionalem internem PI-Sidecar.
 - **Internationalisierung**: Deutsch und Englisch via `i18next`.
 
 ## Screenshots
@@ -80,6 +81,9 @@ server: "api.ecowitt.net"
 | `METEOBLUE_API_KEY` | Optional, aktiviert Meteoblue-Forecast und Meteogramm. |
 | `ADMIN_API_TOKEN` | Token fuer administrative API-Routen. |
 | `WEATHER_ADMIN_TOKEN` | Fallback-Name fuer denselben Admin-Token. |
+| `STATISTICS_CHAT_ENABLED` | Aktiviert optional die KI-Formulierung ueber den internen Ecowitt-PI-Sidecar; lokale Antworten bleiben als Fallback verfuegbar. |
+| `PI_SIDECAR_PROVIDER`, `PI_SIDECAR_MODEL` | Provider und Modell fuer den Sidecar. Die API-Keys werden nur ueber `.env` an den Compose-Service gegeben. |
+| `STATISTICS_CHAT_STORAGE_DIR` | Persistenter Verlauf und Antwort-Cache, standardmaessig `data/statistics_chat`. |
 
 Admin-Routen akzeptieren entweder `Authorization: Bearer <token>` oder `x-admin-token: <token>`.
 
@@ -180,6 +184,8 @@ curl 'http://localhost:3000/api/data/allsensors?start=2025-01-01T00:00&end=2025-
 - `GET /api/statistics/range?start=YYYY-MM-DDTHH:MM&end=YYYY-MM-DDTHH:MM`
 - `GET /api/statistics/channels?ch=ch1&month=YYYYMM`
 - `GET /api/statistics/channels?ch=ch1&start=YYYY-MM-DDTHH:MM&end=YYYY-MM-DDTHH:MM`
+- `POST /api/statistics/chat` - Wetterstatistik-Frage mit lokaler Berechnung und optionaler Sidecar-Formulierung
+- `GET|POST|DELETE /api/statistics/chat/history` - serverseitig persistierten Chat-Verlauf laden, zusammenfuehren oder loeschen
 
 Admin:
 
