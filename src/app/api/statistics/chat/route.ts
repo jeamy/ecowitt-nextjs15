@@ -16,7 +16,7 @@ import {
 } from "@/lib/server/statisticsChatStore";
 import { askStatisticsPiSidecar, statisticsPiSidecarConfig } from "@/lib/server/piSidecar";
 import { readStatistics } from "@/lib/statistics";
-import type { StatisticsChatAnswer, StatisticsChatDiagnostics, StatisticsChatIntent } from "@/types/statisticsChat";
+import type { StatisticsChatAnswer, StatisticsChatDiagnostics, StatisticsChatFacts, StatisticsChatIntent } from "@/types/statisticsChat";
 
 export const runtime = "nodejs";
 
@@ -66,6 +66,26 @@ function buildDiagnostics(input: {
     },
     events: input.events,
   };
+}
+
+function answerContradictsFacts(answer: string, facts: StatisticsChatFacts) {
+  const normalized = answer
+    .normalize("NFKC")
+    .toLocaleLowerCase("de-DE")
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss");
+  const sentences = normalized.split(/[.!?\n]+/).map((item) => item.trim()).filter(Boolean);
+  for (const value of facts.values || []) {
+    if (!value.label || value.validDays <= 0) continue;
+    const label = value.label.toLocaleLowerCase("de-DE");
+    const year = label.match(/\b(?:19|20)\d{2}\b/)?.[0] || label;
+    if (sentences.some((sentence) => sentence.includes(year) && /keine daten|keine messwerte|liegen keine daten|fehlen daten|nicht vorhanden/.test(sentence))) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export async function POST(req: NextRequest) {
@@ -197,8 +217,18 @@ export async function POST(req: NextRequest) {
             facts,
             conversation: history.messages,
           });
-          answerText = sidecarResult.answer;
-          mode = "sidecar";
+          if (answerContradictsFacts(sidecarResult.answer, facts)) {
+            warnings.push("Die PI-Antwort widersprach den lokal berechneten Fakten; die Antwort wurde lokal erzeugt.");
+            events.push({
+              at: nowIso(),
+              direction: "app",
+              label: "PI-Antwort verworfen",
+              detail: { reason: "contradicts_local_facts" },
+            });
+          } else {
+            answerText = sidecarResult.answer;
+            mode = "sidecar";
+          }
           sidecarDiagnostics = {
             ...sidecarDiagnostics,
             attempted: true,

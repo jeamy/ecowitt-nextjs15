@@ -130,6 +130,23 @@ test("lists highest temperatures per year instead of one overall maximum", () =>
   ]);
 });
 
+test("expands year ranges with dash for yearly highest temperature lists", () => {
+  const intent = parseStatisticsQuestion("Höchste Temperaturen 2023–2025");
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
+  assert.equal(intent.operation, "rank_periods");
+  assert.equal(intent.metric, "outdoor_temperature_max");
+  assert.deepEqual(intent.periods, [
+    { label: "2023", start: "2023-01-01", end: "2023-12-31" },
+    { label: "2024", start: "2024-01-01", end: "2024-12-31" },
+    { label: "2025", start: "2025-01-01", end: "2025-12-31" },
+  ]);
+  assert.deepEqual(facts.values?.map((item) => [item.label, item.value]), [
+    ["2025", 37.4],
+    ["2023", 33.5],
+    ["2024", 31.2],
+  ]);
+});
+
 test("lists precipitation totals per year for highest precipitation wording", () => {
   const intent = parseStatisticsQuestion("Die höchsten Niederschläge in den Jahren 2023 bis 2024.");
   const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);

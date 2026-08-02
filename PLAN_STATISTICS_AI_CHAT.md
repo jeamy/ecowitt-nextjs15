@@ -42,6 +42,8 @@ Fachfremde Fragen werden weiterhin vor dem Sidecar-Aufruf vom lokalen Parser abg
 
 Weitere fachliche Luecken sind geschlossen: Der Parser erkennt jetzt Monats- und Saisonzeitraeume wie `Sommer 2024`; der Faktenpfad berechnet `rank_periods` fuer Monats-/Jahresranglisten sowie `availability` fuer Datenabdeckung. Faktenwerte enthalten optional `expectedDays` und `coverage`, und die UI zeigt gueltige/erwartete Tage sowie Abdeckungsprozent an. Live getestet wurden `Welcher Monat war 2024 der waermste?` mit Monatsranking und `Gibt es Daten fuer Sommer 2024?` mit `100 %` Abdeckung bei `92/92` Tagen.
 
+Ranking- und Listenfragen sind nicht mehr temperaturhart. Formulierungen wie `Die hoechsten Temperaturen in den Jahren 2023 bis 2024` werden als Jahresliste mit `outdoor_temperature_max` beantwortet, nicht als einzelner Gesamt-Extremwert. Derselbe generische Pfad unterstuetzt Niederschlagssummen, Windmaximum, Boeenmaximum und gefuehlte Temperatur aus den vorhandenen Main-Tagesaggregaten. Live getestet wurden Jahreslisten fuer Temperatur, Niederschlag, Windgeschwindigkeit und gefuehlte Temperatur.
+
 ## Bestandsaufnahme
 
 Die vorhandene Anwendung bringt bereits die wesentlichen Datenbausteine mit:

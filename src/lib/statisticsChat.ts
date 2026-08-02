@@ -86,7 +86,22 @@ function normalizeQuestion(message: string) {
 }
 
 function extractYears(message: string) {
-  return Array.from(new Set(Array.from(message.matchAll(/\b(?:19|20)\d{2}\b/g), (m) => Number(m[0])))).sort((a, b) => a - b);
+  const years = new Set(Array.from(message.matchAll(/\b(?:19|20)\d{2}\b/g), (m) => Number(m[0])));
+  for (const match of message.matchAll(/\b((?:19|20)\d{2})\s*(?:-|–|—|bis|to)\s*((?:19|20)\d{2})\b/gi)) {
+    const start = Number(match[1]);
+    const end = Number(match[2]);
+    if (Number.isFinite(start) && Number.isFinite(end) && end >= start && end - start <= 30) {
+      for (let year = start; year <= end; year += 1) years.add(year);
+    }
+  }
+  for (const match of message.matchAll(/zwischen\s+((?:19|20)\d{2})\s+und\s+((?:19|20)\d{2})/gi)) {
+    const start = Number(match[1]);
+    const end = Number(match[2]);
+    if (Number.isFinite(start) && Number.isFinite(end) && end >= start && end - start <= 30) {
+      for (let year = start; year <= end; year += 1) years.add(year);
+    }
+  }
+  return Array.from(years).sort((a, b) => a - b);
 }
 
 function extractThreshold(message: string): number | null {
@@ -174,7 +189,7 @@ function mainMetricFromQuestion(normalized: string, options: { average?: boolean
 function rankedExtremeQuestion(message: string) {
   const normalized = normalizeQuestion(message);
   if (/wann|zeitpunkt|gemessen|zwischen/.test(normalized)) return false;
-  return /hoechsten|höchsten|maximalen|top|liste|werte|jahren|jahre/.test(normalized);
+  return /hoechste|höchste|hoechsten|höchsten|maximalen|top|liste|werte|jahren|jahre/.test(normalized);
 }
 
 export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
