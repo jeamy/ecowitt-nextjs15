@@ -90,6 +90,10 @@ export interface StatisticsChatDiagnostics {
     ok?: boolean;
     durationMs?: number;
     error?: string;
+    answer?: string;
+    answerLength?: number;
+    requestPayload?: unknown;
+    responsePayload?: unknown;
   };
   events: Array<{
     at: string;

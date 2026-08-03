@@ -192,6 +192,12 @@ export async function POST(req: NextRequest) {
       const stats = await readStatistics();
       const history = await readStatisticsChatHistory(conversationId);
       let answerText = formatStatisticsChatAnswer(facts);
+      events.push({
+        at: nowIso(),
+        direction: "app",
+        label: "Lokale Antwort vorbereitet",
+        detail: { answer: answerText, answerLength: answerText.length },
+      });
       let mode: StatisticsChatAnswer["mode"] = "local_fallback";
       const warnings = [...facts.warnings];
       const sidecarConfig = statisticsPiSidecarConfig();
@@ -223,7 +229,14 @@ export async function POST(req: NextRequest) {
               at: nowIso(),
               direction: "app",
               label: "PI-Antwort verworfen",
-              detail: { reason: "contradicts_local_facts" },
+              detail: {
+                reason: "contradicts_local_facts",
+                answer: sidecarResult.answer,
+                answerLength: sidecarResult.answer.length,
+                localFallbackAnswer: answerText,
+                requestPayload: sidecarResult.diagnostics.requestPayload,
+                responsePayload: sidecarResult.diagnostics.responsePayload,
+              },
             });
           } else {
             answerText = sidecarResult.answer;
@@ -237,12 +250,25 @@ export async function POST(req: NextRequest) {
             durationMs: sidecarResult.diagnostics.durationMs,
             provider: sidecarResult.diagnostics.provider,
             model: sidecarResult.diagnostics.model,
+            answer: sidecarResult.diagnostics.answer,
+            answerLength: sidecarResult.diagnostics.answerLength,
+            requestPayload: sidecarResult.diagnostics.requestPayload,
+            responsePayload: sidecarResult.diagnostics.responsePayload,
           };
           events.push({
             at: nowIso(),
             direction: "provider",
             label: "PI-Antwort erhalten",
-            detail: { httpStatus: sidecarDiagnostics.httpStatus, durationMs: sidecarDiagnostics.durationMs, provider: sidecarDiagnostics.provider, model: sidecarDiagnostics.model },
+            detail: {
+              httpStatus: sidecarDiagnostics.httpStatus,
+              durationMs: sidecarDiagnostics.durationMs,
+              provider: sidecarDiagnostics.provider,
+              model: sidecarDiagnostics.model,
+              answer: sidecarResult.answer,
+              answerLength: sidecarResult.answer.length,
+              requestPayload: sidecarResult.diagnostics.requestPayload,
+              responsePayload: sidecarResult.diagnostics.responsePayload,
+            },
           });
         } catch (sidecarError) {
           const diagnosticError = sidecarError as Error & { diagnostics?: Partial<StatisticsChatDiagnostics["sidecar"]> };
@@ -253,12 +279,20 @@ export async function POST(req: NextRequest) {
             ok: false,
             durationMs: diagnosticError.diagnostics?.durationMs,
             error: diagnosticError.diagnostics?.error || diagnosticError.message,
+            requestPayload: diagnosticError.diagnostics?.requestPayload,
+            responsePayload: diagnosticError.diagnostics?.responsePayload,
           };
           events.push({
             at: nowIso(),
             direction: "sidecar",
             label: "PI-Sidecar Fehler",
-            detail: { httpStatus: sidecarDiagnostics.httpStatus, durationMs: sidecarDiagnostics.durationMs, error: sidecarDiagnostics.error },
+            detail: {
+              httpStatus: sidecarDiagnostics.httpStatus,
+              durationMs: sidecarDiagnostics.durationMs,
+              error: sidecarDiagnostics.error,
+              requestPayload: sidecarDiagnostics.requestPayload,
+              responsePayload: sidecarDiagnostics.responsePayload,
+            },
           });
           warnings.push("Der PI-Sidecar war nicht erreichbar; die Antwort wurde lokal aus den Statistikdaten erzeugt.");
         }

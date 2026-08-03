@@ -29,6 +29,10 @@ function cachePath(key: string) {
   return path.join(storageRoot(), "cache", `${key}.json`);
 }
 
+function isSafeCacheKey(key: string) {
+  return /^[a-f0-9]{32,128}$/i.test(key);
+}
+
 function emptyHistory(conversationId: string): StatisticsChatHistory {
   const now = new Date().toISOString();
   return {
@@ -80,6 +84,46 @@ function messageKey(item: { role?: string; content?: string }) {
 
 function turnKey(turn: Partial<StatisticsChatTurn>) {
   return turn.requestFingerprint || `${turn.message || ""}\n${turn.result?.answer || ""}`;
+}
+
+function historyFromTurns(history: StatisticsChatHistory, turns: StatisticsChatTurn[]) {
+  const messages = turns.flatMap((turn) => [
+    { role: "user" as const, content: turn.message },
+    { role: "assistant" as const, content: turn.result.answer },
+  ]);
+  return {
+    ...history,
+    turns,
+    messages,
+  };
+}
+
+function stripDeletedContent(value: unknown, deletedContents: Set<string>): unknown {
+  if (typeof value === "string") {
+    let next = value;
+    for (const deleted of deletedContents) {
+      if (deleted && next.includes(deleted)) next = next.replaceAll(deleted, "[gelöscht]");
+    }
+    return next;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => {
+        if (!item || typeof item !== "object") return true;
+        const content = (item as { content?: unknown }).content;
+        return typeof content !== "string" || !deletedContents.has(content);
+      })
+      .map((item) => stripDeletedContent(item, deletedContents));
+  }
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, stripDeletedContent(item, deletedContents)]),
+  );
+}
+
+function stripDeletedTurnFromRemainingTurn(turn: StatisticsChatTurn, deletedTurn: StatisticsChatTurn): StatisticsChatTurn {
+  const deletedContents = new Set([deletedTurn.message, deletedTurn.result.answer].filter(Boolean));
+  return stripDeletedContent(turn, deletedContents) as StatisticsChatTurn;
 }
 
 export async function readStatisticsChatHistory(conversationId: string) {
@@ -139,9 +183,59 @@ export async function mergeStatisticsChatHistory(conversationId: string, incomin
   return writeStatisticsChatHistory(history);
 }
 
-export async function deleteStatisticsChatHistory(conversationId: string) {
+export async function deleteStatisticsChatCacheKeys(keys: Iterable<string>) {
+  const uniqueKeys = [...new Set([...keys].filter(Boolean))];
+  let deletedCacheEntries = 0;
+  let skippedCacheKeys = 0;
+  for (const key of uniqueKeys) {
+    if (!isSafeCacheKey(key)) {
+      skippedCacheKeys += 1;
+      continue;
+    }
+    try {
+      await fs.unlink(cachePath(key));
+      deletedCacheEntries += 1;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
+  return { deletedCacheEntries, skippedCacheKeys };
+}
+
+export async function deleteStatisticsChatHistory(conversationId: string, options: { deleteCache?: boolean } = {}) {
+  const existingHistory = await readStatisticsChatHistory(conversationId);
+  const cacheResult = options.deleteCache
+    ? await deleteStatisticsChatCacheKeys(existingHistory.turns.map((turn) => turn.requestFingerprint))
+    : { deletedCacheEntries: 0, skippedCacheKeys: 0 };
   await fs.rm(historyPath(conversationId), { force: true });
-  return emptyHistory(conversationId);
+  return { history: emptyHistory(conversationId), ...cacheResult };
+}
+
+export async function deleteStatisticsChatTurn(
+  conversationId: string,
+  selector: { requestFingerprint: string; createdAt?: string },
+  options: { deleteCache?: boolean } = {},
+) {
+  const history = await readStatisticsChatHistory(conversationId);
+  const index = history.turns.findIndex((turn) => {
+    if (turn.requestFingerprint !== selector.requestFingerprint) return false;
+    return !selector.createdAt || turn.createdAt === selector.createdAt;
+  });
+  if (index === -1) {
+    return {
+      history,
+      deletedTurns: 0,
+      deletedCacheEntries: 0,
+      skippedCacheKeys: 0,
+    };
+  }
+  const [deletedTurn] = history.turns.splice(index, 1);
+  const cacheResult = options.deleteCache
+    ? await deleteStatisticsChatCacheKeys([deletedTurn.requestFingerprint])
+    : { deletedCacheEntries: 0, skippedCacheKeys: 0 };
+  const remainingTurns = history.turns.map((turn) => stripDeletedTurnFromRemainingTurn(turn, deletedTurn));
+  const updated = await writeStatisticsChatHistory(historyFromTurns(history, remainingTurns));
+  return { history: updated, deletedTurns: 1, ...cacheResult };
 }
 
 export async function readStatisticsChatCache(key: string, dataRevision: string) {

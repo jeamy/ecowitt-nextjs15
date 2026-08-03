@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   deleteStatisticsChatHistory,
+  deleteStatisticsChatTurn,
   mergeStatisticsChatHistory,
   readStatisticsChatHistory,
 } from "@/lib/server/statisticsChatStore";
@@ -32,5 +33,14 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const id = conversationId(req);
   if (!id) return invalid();
-  return NextResponse.json({ ok: true, history: await deleteStatisticsChatHistory(id) }, { headers: { "Cache-Control": "no-store" } });
+  const url = new URL(req.url);
+  const deleteCache = url.searchParams.get("delete_cache") !== "false";
+  const requestFingerprint = url.searchParams.get("request_fingerprint")?.trim() || "";
+  const createdAt = url.searchParams.get("created_at")?.trim() || undefined;
+  if (requestFingerprint) {
+    const result = await deleteStatisticsChatTurn(id, { requestFingerprint, createdAt }, { deleteCache });
+    return NextResponse.json({ ok: true, ...result }, { headers: { "Cache-Control": "no-store" } });
+  }
+  const result = await deleteStatisticsChatHistory(id, { deleteCache });
+  return NextResponse.json({ ok: true, ...result }, { headers: { "Cache-Control": "no-store" } });
 }

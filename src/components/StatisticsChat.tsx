@@ -6,16 +6,31 @@ import { API_ENDPOINTS } from "@/constants";
 import type { StatisticsChatAnswer, StatisticsChatHistory } from "@/types/statisticsChat";
 
 const CONVERSATION_STORAGE_KEY = "ecowitt-statistics-chat-conversation-id";
+const SHARED_CONVERSATION_ID = process.env.NEXT_PUBLIC_STATISTICS_CHAT_CONVERSATION_ID || "ecowitt-statistics-chat-shared";
 
 function getConversationId() {
+  if (typeof window === "undefined") return SHARED_CONVERSATION_ID;
+  window.localStorage.setItem(CONVERSATION_STORAGE_KEY, SHARED_CONVERSATION_ID);
+  return SHARED_CONVERSATION_ID;
+}
+
+function getLegacyConversationId() {
   if (typeof window === "undefined") return "";
   const existing = window.localStorage.getItem(CONVERSATION_STORAGE_KEY);
-  if (existing) return existing;
-  const created = typeof window.crypto?.randomUUID === "function"
-    ? window.crypto.randomUUID()
-    : `conversation-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  window.localStorage.setItem(CONVERSATION_STORAGE_KEY, created);
-  return created;
+  return existing && existing !== SHARED_CONVERSATION_ID ? existing : "";
+}
+
+async function migrateLegacyHistory(legacyId: string, sharedId: string) {
+  if (!legacyId || legacyId === sharedId) return;
+  const legacyResponse = await fetch(`${API_ENDPOINTS.STATISTICS_CHAT_HISTORY}?conversation_id=${encodeURIComponent(legacyId)}`).catch(() => null);
+  const legacyPayload = await legacyResponse?.json().catch(() => null);
+  const legacyHistory = legacyPayload?.history as StatisticsChatHistory | undefined;
+  if (!legacyHistory || (!legacyHistory.turns?.length && !legacyHistory.messages?.length)) return;
+  await fetch(API_ENDPOINTS.STATISTICS_CHAT_HISTORY, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ conversation_id: sharedId, history: legacyHistory }),
+  }).catch(() => undefined);
 }
 
 function numberText(value: number | null | undefined, unit: string) {
@@ -187,14 +202,18 @@ export default function StatisticsChat() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedDebug, setExpandedDebug] = useState<string | null>(null);
+  const [deletingTurnId, setDeletingTurnId] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
   const turnRefs = useRef<Record<string, HTMLElement | null>>({});
 
   useEffect(() => {
+    const legacyId = getLegacyConversationId();
     const id = getConversationId();
     setConversationId(id);
     if (!id) return;
-    fetch(`${API_ENDPOINTS.STATISTICS_CHAT_HISTORY}?conversation_id=${encodeURIComponent(id)}`)
-      .then((response) => response.json())
+    migrateLegacyHistory(legacyId, id)
+      .then(() => fetch(`${API_ENDPOINTS.STATISTICS_CHAT_HISTORY}?conversation_id=${encodeURIComponent(id)}`))
+      .then((response) => response?.json())
       .then((payload) => { if (payload?.history) setHistory(payload.history); })
       .catch(() => undefined);
   }, []);
@@ -235,8 +254,33 @@ export default function StatisticsChat() {
 
   async function clearHistory() {
     if (!conversationId) return;
-    await fetch(`${API_ENDPOINTS.STATISTICS_CHAT_HISTORY}?conversation_id=${encodeURIComponent(conversationId)}`, { method: "DELETE" }).catch(() => undefined);
+    await fetch(`${API_ENDPOINTS.STATISTICS_CHAT_HISTORY}?conversation_id=${encodeURIComponent(conversationId)}&delete_cache=true`, { method: "DELETE" }).catch(() => undefined);
     setHistory(null);
+    setConfirmingDelete(null);
+  }
+
+  async function deleteTurn(turn: StatisticsChatHistory["turns"][number], domId: string) {
+    if (!conversationId || deletingTurnId) return;
+    setDeletingTurnId(domId);
+    setError(null);
+    try {
+      const params = new URLSearchParams({
+        conversation_id: conversationId,
+        request_fingerprint: turn.requestFingerprint,
+        created_at: turn.createdAt,
+        delete_cache: "true",
+      });
+      const response = await fetch(`${API_ENDPOINTS.STATISTICS_CHAT_HISTORY}?${params.toString()}`, { method: "DELETE" });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) throw new Error(friendlyErrorMessage(String(payload?.error || `HTTP ${response.status}`), t));
+      if (payload.history) setHistory(payload.history);
+      if (expandedDebug === domId) setExpandedDebug(null);
+      if (confirmingDelete === domId) setConfirmingDelete(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setDeletingTurnId(null);
+    }
   }
 
   return (
@@ -246,9 +290,21 @@ export default function StatisticsChat() {
           <h3 id="statistics-chat-title" className="text-lg font-semibold">{t("statistics.chat.title", "Wetterstatistik-Chat")}</h3>
           <p className="text-xs text-gray-500">{t("statistics.chat.subtitle", "Frage nach Temperaturen, Niederschlag, Vergleichen und Extremen.")}</p>
         </div>
-        <button type="button" className="text-xs underline" onClick={clearHistory} disabled={!turns.length}>
-          {t("statistics.chat.clear", "Verlauf löschen")}
-        </button>
+        {confirmingDelete === "all" ? (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-red-600">{t("statistics.chat.confirmDelete", "Wirklich löschen?")}</span>
+            <button type="button" className="rounded bg-red-600 px-2 py-1 text-white" onClick={() => void clearHistory()}>
+              {t("statistics.chat.confirmYes", "Ja")}
+            </button>
+            <button type="button" className="rounded border border-gray-300 px-2 py-1 dark:border-neutral-700" onClick={() => setConfirmingDelete(null)}>
+              {t("statistics.chat.confirmNo", "Nein")}
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="text-xs underline" onClick={() => setConfirmingDelete("all")} disabled={!turns.length}>
+            {t("statistics.chat.clear", "Verlauf und Cache löschen")}
+          </button>
+        )}
       </div>
       <div className="mb-3 grid gap-1 text-xs text-gray-600 dark:text-gray-400" aria-label={t("statistics.chat.examples", "Beispielfragen")}>
         <span>„{t("statistics.chat.exampleTemperature", "War es 2024 durchschnittlich wärmer als 2025?")}“</span>
@@ -315,6 +371,26 @@ export default function StatisticsChat() {
                       >
                         {debugOpen ? t("statistics.chat.hideTraffic", "Datenverkehr ausblenden") : t("statistics.chat.showTraffic", "Datenverkehr anzeigen")}
                       </button>
+                      {confirmingDelete === id ? (
+                        <span className="inline-flex items-center gap-1 rounded border border-red-300 px-1.5 py-0.5 text-[11px] text-red-600 dark:border-red-900">
+                          {t("statistics.chat.confirmDelete", "Wirklich löschen?")}
+                          <button type="button" className="rounded bg-red-600 px-1.5 py-0.5 text-white disabled:opacity-50" onClick={() => void deleteTurn(turn, id)} disabled={deletingTurnId === id}>
+                            {t("statistics.chat.confirmYes", "Ja")}
+                          </button>
+                          <button type="button" className="rounded border border-gray-300 px-1.5 py-0.5 text-gray-600 dark:border-neutral-700 dark:text-gray-300" onClick={() => setConfirmingDelete(null)}>
+                            {t("statistics.chat.confirmNo", "Nein")}
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="rounded border border-red-300 px-2 py-0.5 text-[11px] text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 dark:border-red-900 dark:hover:bg-red-950/30"
+                          onClick={() => setConfirmingDelete(id)}
+                          disabled={deletingTurnId === id}
+                        >
+                          {deletingTurnId === id ? t("statistics.chat.deleting", "Löscht …") : t("statistics.chat.deleteTurn", "Frage/Antwort löschen")}
+                        </button>
+                      )}
                     </div>
                     {debugOpen && (
                       <div className="mt-3 rounded border border-gray-200 bg-white p-2 text-xs dark:border-neutral-800 dark:bg-neutral-950">
@@ -333,7 +409,7 @@ export default function StatisticsChat() {
                               <summary className="cursor-pointer text-gray-700 dark:text-gray-300">
                                 <span className="font-mono">{new Date(event.at).toLocaleTimeString()}</span> · {event.direction} · {event.label}
                               </summary>
-                              {event.detail !== undefined && <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-[11px] text-gray-600 dark:text-gray-400">{compactJson(event.detail)}</pre>}
+                              {event.detail !== undefined && <pre className="mt-1 max-h-96 overflow-auto whitespace-pre-wrap text-[11px] text-gray-600 dark:text-gray-400">{compactJson(event.detail)}</pre>}
                             </details>
                           ))}
                         </div>
@@ -357,15 +433,51 @@ export default function StatisticsChat() {
               {turns.map((turn, index) => {
                 const id = turnDomId(turn, index);
                 return (
-                  <button
+                  <div
                     key={id}
-                    type="button"
-                    className="block w-full rounded px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-300 dark:hover:bg-neutral-800"
-                    onClick={() => scrollToTurn(id)}
-                    title={turn.message}
+                    className="flex items-start gap-1 rounded px-1 py-1 hover:bg-white dark:hover:bg-neutral-800"
                   >
-                    <span className="line-clamp-2">{turn.message}</span>
-                  </button>
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 rounded px-1 py-0.5 text-left text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-300"
+                      onClick={() => scrollToTurn(id)}
+                      title={turn.message}
+                    >
+                      <span className="line-clamp-2">{turn.message}</span>
+                    </button>
+                    {confirmingDelete === id ? (
+                      <span className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          className="rounded bg-red-600 px-1.5 py-0.5 text-[11px] text-white disabled:opacity-50"
+                          onClick={() => void deleteTurn(turn, id)}
+                          disabled={deletingTurnId === id}
+                          aria-label={t("statistics.chat.confirmYes", "Ja")}
+                        >
+                          {t("statistics.chat.confirmYes", "Ja")}
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded border border-gray-300 px-1.5 py-0.5 text-[11px] text-gray-600 dark:border-neutral-700 dark:text-gray-300"
+                          onClick={() => setConfirmingDelete(null)}
+                          aria-label={t("statistics.chat.confirmNo", "Nein")}
+                        >
+                          {t("statistics.chat.confirmNo", "Nein")}
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="shrink-0 rounded px-1.5 py-0.5 text-xs text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 dark:hover:bg-red-950/30"
+                        onClick={() => setConfirmingDelete(id)}
+                        disabled={deletingTurnId === id}
+                        title={t("statistics.chat.deleteTurn", "Frage/Antwort löschen")}
+                        aria-label={t("statistics.chat.deleteTurn", "Frage/Antwort löschen")}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
                 );
               })}
             </div>
