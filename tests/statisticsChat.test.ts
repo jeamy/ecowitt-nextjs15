@@ -87,6 +87,43 @@ test("rejects questions outside the weather statistics domain", () => {
   );
 });
 
+test("parses yesterday weather summary using server time", () => {
+  const intent = parseStatisticsQuestion("Wie war das Wetter gestern?", new Date("2025-08-11T10:00:00"));
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
+  assert.equal(intent.operation, "day_summary");
+  assert.deepEqual(intent.periods, [{ label: "gestern (2025-08-10)", start: "2025-08-10", end: "2025-08-10" }]);
+  assert.equal(facts.daySummary?.date, "2025-08-10");
+  assert.deepEqual(facts.daySummary?.measurements.filter((item) => item.value !== null).map((item) => [item.key, item.value]), [
+    ["tmax", 37.4],
+    ["tmin", 21],
+    ["tavg", 29],
+    ["rain_day", 0],
+  ]);
+  assert.ok(facts.daySummary?.description.includes("sehr heiß"));
+  assert.ok(facts.daySummary?.description.includes("trocken"));
+});
+
+test("parses today and day before yesterday weather summaries using server time", () => {
+  const today = parseStatisticsQuestion("Wie ist das Wetter heute?", new Date("2025-08-11T10:00:00"));
+  const dayBeforeYesterday = parseStatisticsQuestion("Wie war das Wetter vorgestern?", new Date("2025-08-11T10:00:00"));
+  assert.equal(today.operation, "day_summary");
+  assert.equal(dayBeforeYesterday.operation, "day_summary");
+  assert.deepEqual(today.periods, [{ label: "heute (2025-08-11)", start: "2025-08-11", end: "2025-08-11" }]);
+  assert.deepEqual(dayBeforeYesterday.periods, [{ label: "vorgestern (2025-08-09)", start: "2025-08-09", end: "2025-08-09" }]);
+});
+
+test("parses explicit weather day formats", () => {
+  const dotted = parseStatisticsQuestion("Wie war das Wetter am 10.10.2024?");
+  const iso = parseStatisticsQuestion("Wie war das Wetter am 2024-10-10?");
+  const named = parseStatisticsQuestion("Wie war das Wetter am 10. Oktober 2024?");
+  const abbreviated = parseStatisticsQuestion("Wie war das Wetter am 10. Okt 2024?");
+  assert.equal(dotted.operation, "day_summary");
+  assert.deepEqual(dotted.periods, [{ label: "2024-10-10", start: "2024-10-10", end: "2024-10-10" }]);
+  assert.deepEqual(iso.periods, dotted.periods);
+  assert.deepEqual(named.periods, dotted.periods);
+  assert.deepEqual(abbreviated.periods, dotted.periods);
+});
+
 test("ranks months by average temperature", () => {
   const intent = parseStatisticsQuestion("Welcher Monat war 2024 der wärmste?");
   const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);

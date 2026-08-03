@@ -6,6 +6,7 @@ export type StatisticsChatOperation =
   | "compare_periods"
   | "extreme_day"
   | "count_days"
+  | "day_summary"
   | "threshold_periods"
   | "aggregate_period"
   | "rank_periods"
@@ -53,6 +54,17 @@ export interface StatisticsChatFacts {
   differenceRelativePercent?: number | null;
   count?: number;
   warnings: string[];
+  daySummary?: {
+    date: string;
+    label: string;
+    measurements: Array<{
+      key: string;
+      label: string;
+      value: number | null;
+      unit: string;
+    }>;
+    description: string[];
+  };
 }
 
 export interface StatisticsChatAnswer {

@@ -22,27 +22,40 @@ function yearPeriod(year: number): StatisticsChatPeriod {
 
 const MONTHS: Record<string, number> = {
   januar: 1,
+  jan: 1,
   jaenner: 1,
   jänner: 1,
   january: 1,
   februar: 2,
+  feb: 2,
   february: 2,
   maerz: 3,
+  maer: 3,
   märz: 3,
+  mär: 3,
   march: 3,
   april: 4,
+  apr: 4,
   mai: 5,
   may: 5,
   juni: 6,
+  jun: 6,
   june: 6,
   juli: 7,
+  jul: 7,
   july: 7,
   august: 8,
+  aug: 8,
   september: 9,
+  sep: 9,
+  sept: 9,
   oktober: 10,
+  okt: 10,
   october: 10,
   november: 11,
+  nov: 11,
   dezember: 12,
+  dez: 12,
   december: 12,
 };
 
@@ -62,6 +75,10 @@ function pad2(value: number) {
   return String(value).padStart(2, "0");
 }
 
+function localIsoDate(date: Date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
 function monthPeriod(year: number, month: number): StatisticsChatPeriod {
   const endDay = new Date(year, month, 0).getDate();
   const label = `${year}-${pad2(month)}`;
@@ -70,6 +87,16 @@ function monthPeriod(year: number, month: number): StatisticsChatPeriod {
     start: `${year}-${pad2(month)}-01`,
     end: `${year}-${pad2(month)}-${pad2(endDay)}`,
   };
+}
+
+function dayPeriod(date: string, label = date): StatisticsChatPeriod {
+  return { label, start: date, end: date };
+}
+
+function validIsoDay(year: number, month: number, day: number) {
+  const date = new Date(year, month - 1, day, 12, 0, 0, 0);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return `${year}-${pad2(month)}-${pad2(day)}`;
 }
 
 function normalizeQuestion(message: string) {
@@ -168,6 +195,45 @@ function defaultPeriod(message: string, years: number[]) {
   return years.length ? inclusiveRange(years) : { label: "alle verfügbaren Daten", start: "1900-01-01", end: "2999-12-31" };
 }
 
+function extractDayPeriod(message: string, now = new Date()): StatisticsChatPeriod | null {
+  const normalized = normalizeQuestion(message);
+  const relativeDays: Array<{ pattern: RegExp; offset: number; label: string }> = [
+    { pattern: /\bvorgestern\b|day before yesterday/, offset: -2, label: "vorgestern" },
+    { pattern: /\bgestern\b|yesterday/, offset: -1, label: "gestern" },
+    { pattern: /\bheute\b|today/, offset: 0, label: "heute" },
+  ];
+  const relative = relativeDays.find((item) => item.pattern.test(normalized));
+  if (relative) {
+    const date = new Date(now);
+    date.setHours(12, 0, 0, 0);
+    date.setDate(date.getDate() + relative.offset);
+    return dayPeriod(localIsoDate(date), `${relative.label} (${localIsoDate(date)})`);
+  }
+
+  const isoMatch = message.match(/\b((?:19|20)\d{2})-(\d{1,2})-(\d{1,2})\b/);
+  if (isoMatch) {
+    const date = validIsoDay(Number(isoMatch[1]), Number(isoMatch[2]), Number(isoMatch[3]));
+    if (date) return dayPeriod(date);
+  }
+
+  const germanDateMatch = message.match(/\b(\d{1,2})\.(\d{1,2})\.((?:19|20)\d{2})\b/);
+  if (germanDateMatch) {
+    const date = validIsoDay(Number(germanDateMatch[3]), Number(germanDateMatch[2]), Number(germanDateMatch[1]));
+    if (date) return dayPeriod(date);
+  }
+
+  const monthNames = Object.keys(MONTHS).sort((a, b) => b.length - a.length).join("|");
+  const namedDateMatch = normalized.match(new RegExp(`\\b(\\d{1,2})\\s+(?:${monthNames})\\s+((?:19|20)\\d{2})\\b`));
+  if (namedDateMatch) {
+    const monthName = namedDateMatch[0].match(new RegExp(`(?:${monthNames})`))?.[0];
+    const month = monthName ? MONTHS[monthName] : null;
+    const date = month ? validIsoDay(Number(namedDateMatch[2]), month, Number(namedDateMatch[1])) : null;
+    if (date) return dayPeriod(date);
+  }
+
+  return null;
+}
+
 function rankingPeriods(message: string, years: number[]) {
   const normalized = normalizeQuestion(message);
   if (years.length === 1 && /monat|monate|month|months/.test(normalized)) return monthPeriods(years[0]);
@@ -212,8 +278,9 @@ function rankedExtremeQuestion(message: string) {
   return /hoechst|höchst|maximal|top|liste|werte|jahren|jahre|niedrigst|tiefst|kaeltest|kältest|minimal|minimum/.test(normalized);
 }
 
-export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
+export function parseStatisticsQuestion(message: string, now = new Date()): StatisticsChatIntent {
   const normalized = normalizeQuestion(message);
+  const requestedDay = extractDayPeriod(message, now);
   const years = extractYears(message);
   const periods = years.length ? yearPeriods(years) : [
     { label: "alle verfügbaren Daten", start: "1900-01-01", end: "2999-12-31" },
@@ -250,6 +317,15 @@ export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
     && !/hoechsten|höchsten|maximal|maximale/.test(normalized);
   const mainMetric = mainMetricFromQuestion(normalized, { average: hasAverage || rankingByAverage, minimum: hasMinimum });
   const groupedBy = groupByFromQuestion(message);
+
+  if (requestedDay && (/wetter|weather|wie war|wie ist|war es|heute|gestern|vorgestern/.test(normalized) || hasMainWeatherMetric)) {
+    return {
+      operation: "day_summary",
+      metric: "weather_summary",
+      unit: "",
+      periods: [requestedDay],
+    };
+  }
 
   if (hasMainWeatherMetric && hasCompare) {
     return { operation: "compare_periods", metric: mainMetric.metric, aggregation: mainMetric.aggregation, unit: mainMetric.unit, periods };
@@ -497,6 +573,60 @@ function aggregateValues(values: number[], aggregation: StatisticsChatIntent["ag
   return values.reduce((sum, item) => sum + item, 0) / values.length;
 }
 
+function metricLabel(metric: string) {
+  if (metric === "tmax") return "Höchsttemperatur";
+  if (metric === "tmin") return "Tiefsttemperatur";
+  if (metric === "tavg") return "Durchschnittstemperatur";
+  if (metric === "tfmax") return "Max. gefühlte Temperatur";
+  if (metric === "tfmin") return "Min. gefühlte Temperatur";
+  if (metric === "rain_day") return "Niederschlag";
+  if (metric === "wind_avg") return "Ø Wind";
+  if (metric === "wind_max") return "Max. Wind";
+  if (metric === "gust_max") return "Stärkste Böe";
+  return metric;
+}
+
+function describeDayWeather(row: DailyAggregateRow) {
+  const description: string[] = [];
+  const tmax = toNumber(row.tmax);
+  const tmin = toNumber(row.tmin);
+  const tavg = toNumber(row.tavg);
+  const tfmax = toNumber(row.tfmax);
+  const rain = toNumber(row.rain_day);
+  const windMax = toNumber(row.wind_max);
+  const gustMax = toNumber(row.gust_max);
+
+  if (tmax !== null) {
+    if (tmax >= 35) description.push("sehr heiß");
+    else if (tmax >= 30) description.push("heiß");
+    else if (tmax >= 25) description.push("sommerlich warm");
+    else if (tmax >= 20) description.push("warm");
+    else if (tmax <= 0) description.push("ganztägig frostig");
+    else if (tavg !== null && tavg < 5) description.push("kühl bis kalt");
+    else description.push("mild");
+  }
+
+  if (tmin !== null && tmin < 0 && tmax !== null && tmax > 0) description.push("mit Frost in der Nacht bzw. Früh");
+
+  if (rain !== null) {
+    if (rain >= 30) description.push("sehr nass");
+    else if (rain >= 10) description.push("deutlich regnerisch");
+    else if (rain > 0) description.push("mit etwas Niederschlag");
+    else description.push("trocken");
+  }
+
+  if (gustMax !== null) {
+    if (gustMax >= 80) description.push("stürmisch");
+    else if (gustMax >= 50) description.push("böig");
+  } else if (windMax !== null && windMax >= 30) {
+    description.push("windig");
+  }
+
+  if (tfmax !== null && tmax !== null && tfmax - tmax >= 2) description.push("gefühlt wärmer als die gemessene Lufttemperatur");
+
+  return description.length ? Array.from(new Set(description)) : ["keine eindeutige Einordnung aus den Tagesaggregaten möglich"];
+}
+
 function round(value: number | null, digits = 2) {
   if (value === null || !Number.isFinite(value)) return null;
   const factor = 10 ** digits;
@@ -534,6 +664,54 @@ export async function computeStatisticsChatFacts(intent: StatisticsChatIntent): 
 
 export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIntent, rows: DailyAggregateRow[]): StatisticsChatFacts {
   const warnings: string[] = [];
+
+  if (intent.operation === "day_summary") {
+    const period = intent.periods[0];
+    const row = filterRows(rows, period)[0];
+    if (!row) {
+      return {
+        operation: intent.operation,
+        metric: intent.metric,
+        unit: intent.unit,
+        periods: intent.periods,
+        count: 0,
+        warnings: [`Für ${period.label} wurden keine Tagesaggregate gefunden.`],
+        daySummary: {
+          date: period.start,
+          label: period.label,
+          measurements: [],
+          description: ["keine Daten vorhanden"],
+        },
+      } satisfies StatisticsChatFacts;
+    }
+
+    const measurements = [
+      { key: "tmax", value: toNumber(row.tmax), unit: "°C" },
+      { key: "tmin", value: toNumber(row.tmin), unit: "°C" },
+      { key: "tavg", value: toNumber(row.tavg), unit: "°C" },
+      { key: "tfmax", value: toNumber(row.tfmax), unit: "°C" },
+      { key: "tfmin", value: toNumber(row.tfmin), unit: "°C" },
+      { key: "rain_day", value: toNumber(row.rain_day), unit: "mm" },
+      { key: "wind_avg", value: toNumber(row.wind_avg), unit: "km/h" },
+      { key: "wind_max", value: toNumber(row.wind_max), unit: "km/h" },
+      { key: "gust_max", value: toNumber(row.gust_max), unit: "km/h" },
+    ].map((item) => ({ ...item, label: metricLabel(item.key), value: round(item.value) }));
+
+    return {
+      operation: intent.operation,
+      metric: intent.metric,
+      unit: intent.unit,
+      periods: intent.periods,
+      count: measurements.filter((item) => item.value !== null).length,
+      warnings,
+      daySummary: {
+        date: row.day.slice(0, 10),
+        label: period.label,
+        measurements,
+        description: describeDayWeather(row),
+      },
+    } satisfies StatisticsChatFacts;
+  }
 
   if (intent.operation === "threshold_days") {
     const periodRows = filterRows(rows, intent.periods[0]);
@@ -759,6 +937,16 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
 
 export function formatStatisticsChatAnswer(facts: StatisticsChatFacts) {
   const valueText = (value: number | null, unit: string) => value === null ? "keine gültigen Daten" : `${value.toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${unit}`;
+  if (facts.operation === "day_summary") {
+    const summary = facts.daySummary;
+    if (!summary || !summary.measurements.length) return `Für ${facts.periods[0]?.label || "den angefragten Tag"} wurden keine Tagesdaten gefunden.`;
+    const measurements = summary.measurements
+      .filter((item) => item.value !== null)
+      .map((item) => `- ${item.label}: ${valueText(item.value, item.unit)}`)
+      .join("\n");
+    const description = summary.description.join(", ");
+    return `## Wetter am ${summary.label}\n\n${measurements}\n\nKurz eingeordnet: ${description}.`;
+  }
   if (facts.operation === "rank_periods") {
     const values = (facts.values || []).map((item, index) => `${index + 1}. ${item.label}: ${valueText(item.value, item.unit)}`).join("; ");
     return values ? `${values}.` : "Im angefragten Zeitraum wurden keine gültigen Werte gefunden.";
