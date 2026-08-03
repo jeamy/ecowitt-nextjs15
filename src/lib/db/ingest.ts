@@ -95,9 +95,10 @@ async function ensureParquetForMonth(
 
   const csvSql = sqlLiteral(csvAbs.replace(/\\/g, "/"));
   const pqSql = sqlLiteral(pqAbs.replace(/\\/g, "/"));
+  const csvReadSql = `read_csv(${csvSql}, header=true, delim=',', nullstr='--', union_by_name=true, ignore_errors=true, strict_mode=false)`;
   const { withConn } = await import("@/lib/db/duckdb");
   await withConn(async (conn) => {
-    const desc = await conn.runAndReadAll(`DESCRIBE SELECT * FROM read_csv_auto(${csvSql}, header=true, union_by_name=true, ignore_errors=true)`);
+    const desc = await conn.runAndReadAll(`DESCRIBE SELECT * FROM ${csvReadSql}`);
     const cols = desc.getRowObjects();
     const tsCol = selectTimeColumnName(cols);
     if (!tsCol) throw new Error(`No time column found in ${path.basename(csvAbs)}`);
@@ -109,7 +110,7 @@ async function ensureParquetForMonth(
           ['%Y-%m-%d %H:%M','%Y/%m/%d %H:%M','%Y-%m-%dT%H:%M','%Y-%m-%d %H:%M:%S','%Y/%m/%d %H:%M:%S','%Y-%m-%dT%H:%M:%S','%d.%m.%Y %H:%M','%d.%m.%Y %H:%M:%S']
         ) AS ts,
         *
-      FROM read_csv_auto(${csvSql}, header=true, union_by_name=true, ignore_errors=true);
+      FROM ${csvReadSql};
       COPY (SELECT * FROM v_src) TO ${pqSql} (FORMAT PARQUET, COMPRESSION ZSTD);
     `;
     await conn.run(sql);
