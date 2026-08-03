@@ -182,3 +182,33 @@ test("lists maximum feels-like temperature per year", () => {
     ["2024", 34.1],
   ]);
 });
+
+test("lists lowest temperatures per year", () => {
+  const intent = parseStatisticsQuestion("Tiefsten Temperaturen in den Jahren 2023-2025");
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
+  assert.equal(intent.operation, "rank_periods");
+  assert.equal(intent.metric, "outdoor_temperature_min");
+  assert.equal(intent.aggregation, "min");
+  assert.deepEqual(intent.periods, [
+    { label: "2023", start: "2023-01-01", end: "2023-12-31" },
+    { label: "2024", start: "2024-01-01", end: "2024-12-31" },
+    { label: "2025", start: "2025-01-01", end: "2025-12-31" },
+  ]);
+  assert.deepEqual(facts.values?.map((item) => [item.label, item.value]), [
+    ["2023", 1],
+    ["2025", 2],
+    ["2024", 3],
+  ]);
+});
+
+test("lists lowest feels-like temperatures per year", () => {
+  const intent = parseStatisticsQuestion("Die niedrigsten gefühlten Temperaturen in den Jahren 2023 bis 2024.");
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
+  assert.equal(intent.operation, "rank_periods");
+  assert.equal(intent.metric, "feels_like_temperature_min");
+  assert.equal(intent.aggregation, "min");
+  assert.deepEqual(facts.values?.map((item) => [item.label, item.value]), [
+    ["2023", 0],
+    ["2024", 1],
+  ]);
+});

@@ -218,7 +218,7 @@ export default function StatisticsChat() {
       .catch(() => undefined);
   }, []);
 
-  const turns = useMemo(() => (history?.turns || []).slice().sort((a, b) => a.createdAt.localeCompare(b.createdAt)), [history?.turns]);
+  const turns = useMemo(() => (history?.turns || []).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [history?.turns]);
 
   function scrollToTurn(id: string) {
     turnRefs.current[id]?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -443,7 +443,7 @@ export default function StatisticsChat() {
                       onClick={() => scrollToTurn(id)}
                       title={turn.message}
                     >
-                      <span className="line-clamp-2">{turn.message}</span>
+                      <span className="whitespace-normal break-words">{turn.message}</span>
                     </button>
                     {confirmingDelete === id ? (
                       <span className="flex shrink-0 items-center gap-1">

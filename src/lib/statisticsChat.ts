@@ -180,7 +180,7 @@ function mainMetricFromQuestion(normalized: string, options: { average?: boolean
   if (/gefuehlt|gefühlt|feels|windchill|heatindex/.test(normalized)) {
     return { metric: options.minimum ? "feels_like_temperature_min" : "feels_like_temperature_max", unit: "°C", aggregation: options.minimum ? "min" as const : "max" as const };
   }
-  if (options.minimum || /kaelteste|kälteste|niedrigste|tiefste|minimal/.test(normalized)) {
+  if (options.minimum || /kaeltest|kältest|niedrigst|tiefst|minimal|minimum/.test(normalized)) {
     return { metric: "outdoor_temperature_min", unit: "°C", aggregation: "min" as const };
   }
   return { metric: options.average ? "outdoor_temperature_avg" : "outdoor_temperature_max", unit: "°C", aggregation: options.average ? "avg" as const : "max" as const };
@@ -189,7 +189,7 @@ function mainMetricFromQuestion(normalized: string, options: { average?: boolean
 function rankedExtremeQuestion(message: string) {
   const normalized = normalizeQuestion(message);
   if (/wann|zeitpunkt|gemessen|zwischen/.test(normalized)) return false;
-  return /hoechste|höchste|hoechsten|höchsten|maximalen|top|liste|werte|jahren|jahre/.test(normalized);
+  return /hoechst|höchst|maximal|top|liste|werte|jahren|jahre|niedrigst|tiefst|kaeltest|kältest|minimal|minimum/.test(normalized);
 }
 
 export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
@@ -201,15 +201,15 @@ export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
   const hasRain = /regen|geregnet|regnete|niederschlag|niederschlaeg|rainfall|rain/.test(normalized);
   const hasWind = /wind|windgeschwindigkeit|windgeschwindigkeiten|boe|böe|boeen|böen|gust/.test(normalized);
   const hasFeels = /gefuehlt|gefühlt|feels|windchill|heatindex/.test(normalized);
-  const hasTemp = /temperatur|temperaturen|warm|wärm|waerm|heiss|heiß|hitze|tmax|grad|°|°c/.test(normalized) || hasFeels;
+  const hasTemp = /temperatur|temperaturen|warm|wärm|waerm|heiss|heiß|hitze|kalt|kaelt|kält|frost|tmax|tmin|grad|°|°c|niedrigst|tiefst|minimal|minimum/.test(normalized) || hasFeels;
   const hasMainWeatherMetric = hasRain || hasTemp || hasWind;
-  const hasExtreme = /höchste|hoechste|maximal|maximale|wärmste|waermste|extrem|spitze|groessten|groesste|größten|größte|maximum/.test(normalized);
+  const hasExtreme = /höchst|hoechst|maximal|wärmst|waermst|extrem|spitze|groesst|größt|maximum|niedrigst|tiefst|kaeltest|kältest|minimal|minimum/.test(normalized);
   const hasAverage = /durchschnitt|mittelwert|durchschn/.test(normalized);
-  const hasMinimum = /niedrigste|tiefste|minimale|kaelteste|kälteste|minimum/.test(normalized);
+  const hasMinimum = /niedrigst|tiefst|minimal|kaeltest|kältest|minimum/.test(normalized);
   const hasCount = /wie viele|anzahl|count/.test(normalized);
   const hasAmount = /wie viel|wieviel|wieviele/.test(normalized);
   const hasTotal = /summe|gesamt|insgesamt|total/.test(normalized);
-  const hasRanking = /welcher|welches|welche|ranking|rangliste|sortiere|waermste|wärmste|nasseste|meiste|meisten|hoechsten|höchsten|top/.test(normalized);
+  const hasRanking = /welcher|welches|welche|ranking|rangliste|sortiere|waermst|wärmst|nassest|meiste|meisten|hoechst|höchst|niedrigst|tiefst|kaeltest|kältest|minimal|minimum|top/.test(normalized);
   const hasAvailability = /daten|datenabdeckung|abdeckung|verfuegbarkeit|verfügbarkeit/.test(normalized);
   const hasCompare = years.length >= 2 && /oder|vergleich|wärmer|waermer|mehr|weniger|gegenüber|gegenueber|als/.test(normalized);
   const threshold = extractThreshold(message);
@@ -297,6 +297,9 @@ export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
       limit: years.length,
     };
   }
+  if (hasTemp && hasExtreme && years.length >= 2) {
+    return { operation: "extreme_day", metric: mainMetric.metric, aggregation: mainMetric.aggregation, unit: mainMetric.unit, periods: [inclusiveRange(years)] };
+  }
   if (hasTemp && hasRanking) {
     return {
       operation: "rank_periods",
@@ -315,9 +318,6 @@ export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
       unit: mainMetric.unit,
       periods: [defaultPeriod(message, years)],
     };
-  }
-  if (hasTemp && hasExtreme && years.length >= 2) {
-    return { operation: "extreme_day", metric: mainMetric.metric, aggregation: mainMetric.aggregation, unit: mainMetric.unit, periods: [inclusiveRange(years)] };
   }
   if (hasTemp && hasCount && threshold !== null) {
     const operator: StatisticsChatIntent["operator"] = /unter|weniger als/i.test(message) ? "<" : /mindestens|ab/i.test(message) ? ">=" : ">";
@@ -611,9 +611,12 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
     };
   });
   const numeric = values.filter((item): item is typeof values[number] & { value: number } => item.value !== null);
-  const winner = numeric.length ? numeric.reduce((best, item) => item.value > best.value ? item : best).label : null;
-  const sorted = numeric.slice().sort((a, b) => b.value - a.value);
-  const differenceAbsolute = sorted.length >= 2 ? round(sorted[0].value - sorted[1].value) : null;
+  const isMinimumRanking = intent.aggregation === "min";
+  const winner = numeric.length
+    ? numeric.reduce((best, item) => isMinimumRanking ? item.value < best.value ? item : best : item.value > best.value ? item : best).label
+    : null;
+  const sorted = numeric.slice().sort((a, b) => isMinimumRanking ? a.value - b.value : b.value - a.value);
+  const differenceAbsolute = sorted.length >= 2 ? round(Math.abs(sorted[0].value - sorted[1].value)) : null;
   const denominator = sorted.length >= 2 ? Math.abs(sorted[1].value) : 0;
   const differenceRelativePercent = differenceAbsolute !== null && denominator > 0
     ? round((differenceAbsolute / denominator) * 100)
@@ -667,7 +670,8 @@ export function formatStatisticsChatAnswer(facts: StatisticsChatFacts) {
   }
   if (facts.operation === "extreme_day") {
     const item = facts.items?.[0];
-    return item ? `Der höchste gefundene Wert beträgt ${valueText(item.value, item.unit)} am ${item.date}.` : "Im angefragten Zeitraum wurden keine gültigen Werte gefunden.";
+    const label = /_min$/.test(facts.metric) ? "niedrigste" : "höchste";
+    return item ? `Der ${label} gefundene Wert beträgt ${valueText(item.value, item.unit)} am ${item.date}.` : "Im angefragten Zeitraum wurden keine gültigen Werte gefunden.";
   }
   if (facts.operation === "count_days") {
     return `${facts.count || 0} Tage erfüllen die angefragte Bedingung.`;
