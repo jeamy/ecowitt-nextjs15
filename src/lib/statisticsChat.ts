@@ -105,10 +105,17 @@ function extractYears(message: string) {
 }
 
 function extractThreshold(message: string): number | null {
-  const match = message.match(/(?:mehr als|ueber|über|mindestens|ab|unter|weniger als)\s*(-?\d+(?:[,.]\d+)?)/i);
+  const match = message.match(/(?:mehr als|groesser als|größer als|ueber|über|mindestens|ab|unter|weniger als|kleiner als|[<>]=?)\s*(-?\d+(?:[,.]\d+)?)/i);
   if (!match) return null;
   const value = Number(match[1].replace(",", "."));
   return Number.isFinite(value) ? value : null;
+}
+
+function thresholdOperator(message: string): StatisticsChatIntent["operator"] {
+  if (/(?:unter|weniger als|kleiner als|<)\s*-?\d/i.test(message)) return "<";
+  if (/(?:höchstens|hoechstens|maximal|<=)\s*-?\d/i.test(message)) return "<=";
+  if (/(?:mindestens|ab|>=)\s*-?\d/i.test(message)) return ">=";
+  return ">";
 }
 
 function yearPeriods(years: number[]) {
@@ -165,6 +172,19 @@ function rankingPeriods(message: string, years: number[]) {
   const normalized = normalizeQuestion(message);
   if (years.length === 1 && /monat|monate|month|months/.test(normalized)) return monthPeriods(years[0]);
   return years.length ? yearPeriods(years) : [defaultPeriod(message, years)];
+}
+
+function groupedPeriods(message: string, years: number[]) {
+  const normalized = normalizeQuestion(message);
+  if (/(?:monat|monate|month|months|tag|tage|day|days)/.test(normalized)) return [defaultPeriod(message, years)];
+  return rankingPeriods(message, years);
+}
+
+function groupByFromQuestion(message: string): StatisticsChatIntent["groupBy"] | undefined {
+  const normalized = normalizeQuestion(message);
+  if (/monat|monate|month|months/.test(normalized)) return "month";
+  if (/\btag\b|tage|day|days/.test(normalized)) return "day";
+  return undefined;
 }
 
 function mainMetricFromQuestion(normalized: string, options: { average?: boolean; minimum?: boolean } = {}) {
@@ -229,6 +249,7 @@ export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
     && /monat|monate|month|months/.test(normalized)
     && !/hoechsten|höchsten|maximal|maximale/.test(normalized);
   const mainMetric = mainMetricFromQuestion(normalized, { average: hasAverage || rankingByAverage, minimum: hasMinimum });
+  const groupedBy = groupByFromQuestion(message);
 
   if (hasMainWeatherMetric && hasCompare) {
     return { operation: "compare_periods", metric: mainMetric.metric, aggregation: mainMetric.aggregation, unit: mainMetric.unit, periods };
@@ -244,13 +265,31 @@ export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
       periods: [defaultPeriod(message, years)],
     };
   }
+  if (hasMainWeatherMetric && groupedBy === "month" && threshold !== null) {
+    const operator = thresholdOperator(message);
+    const thresholdMetric = operator?.startsWith("<") && (hasTemp || hasFeels)
+      ? mainMetricFromQuestion(normalized, { minimum: true })
+      : mainMetric;
+    return {
+      operation: "threshold_periods",
+      metric: thresholdMetric.metric,
+      aggregation: thresholdMetric.aggregation,
+      groupBy: groupedBy,
+      operator,
+      value: threshold,
+      unit: thresholdMetric.unit,
+      periods: groupedPeriods(message, years),
+      limit: 100,
+    };
+  }
   if (hasRain && hasRanking) {
     return {
       operation: "rank_periods",
       metric: mainMetric.metric,
       aggregation: mainMetric.aggregation,
+      groupBy: groupedBy,
       unit: mainMetric.unit,
-      periods: rankingPeriods(message, years),
+      periods: groupedPeriods(message, years),
       limit: /top\s*(\d+)/.test(normalized) ? Number(normalized.match(/top\s*(\d+)/)?.[1]) : 5,
     };
   }
@@ -259,8 +298,9 @@ export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
       operation: "rank_periods",
       metric: mainMetric.metric,
       aggregation: mainMetric.aggregation,
+      groupBy: groupedBy,
       unit: mainMetric.unit,
-      periods: rankingPeriods(message, years),
+      periods: groupedPeriods(message, years),
       limit: /top\s*(\d+)/.test(normalized) ? Number(normalized.match(/top\s*(\d+)/)?.[1]) : 5,
     };
   }
@@ -292,9 +332,10 @@ export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
       operation: "rank_periods",
       metric: mainMetric.metric,
       aggregation: mainMetric.aggregation,
+      groupBy: groupedBy,
       unit: mainMetric.unit,
-      periods: rankingPeriods(message, years),
-      limit: years.length,
+      periods: groupedPeriods(message, years),
+      limit: groupedBy ? 5 : years.length,
     };
   }
   if (hasTemp && hasExtreme && years.length >= 2) {
@@ -305,8 +346,9 @@ export function parseStatisticsQuestion(message: string): StatisticsChatIntent {
       operation: "rank_periods",
       metric: mainMetric.metric,
       aggregation: mainMetric.aggregation,
+      groupBy: groupedBy,
       unit: mainMetric.unit,
-      periods: rankingPeriods(message, years),
+      periods: groupedPeriods(message, years),
       limit: /top\s*(\d+)/.test(normalized) ? Number(normalized.match(/top\s*(\d+)/)?.[1]) : 5,
     };
   }
@@ -395,6 +437,37 @@ function coverage(validDays: number, expected: number) {
 function bounds(periods: StatisticsChatPeriod[]) {
   const sorted = periods.slice().sort((a, b) => a.start.localeCompare(b.start));
   return { start: sorted[0].start, end: sorted[sorted.length - 1].end };
+}
+
+function periodsContainDate(periods: StatisticsChatPeriod[], date: string) {
+  return periods.some((period) => date >= period.start && date <= period.end);
+}
+
+function monthPeriodsFromRows(rows: DailyAggregateRow[], basePeriods: StatisticsChatPeriod[]) {
+  const monthKeys = new Set<string>();
+  for (const row of rows) {
+    const date = row.day.slice(0, 10);
+    if (!periodsContainDate(basePeriods, date)) continue;
+    monthKeys.add(date.slice(0, 7));
+  }
+  return [...monthKeys].sort().map((key) => {
+    const [year, month] = key.split("-").map(Number);
+    return monthPeriod(year, month);
+  });
+}
+
+function dayPeriodsFromRows(rows: DailyAggregateRow[], basePeriods: StatisticsChatPeriod[]) {
+  return rows
+    .map((row) => row.day.slice(0, 10))
+    .filter((date, index, dates) => periodsContainDate(basePeriods, date) && dates.indexOf(date) === index)
+    .sort()
+    .map((date) => ({ label: date, start: date, end: date }));
+}
+
+function calculationPeriodsFromIntent(intent: StatisticsChatIntent, rows: DailyAggregateRow[]) {
+  if (intent.groupBy === "month") return monthPeriodsFromRows(rows, intent.periods);
+  if (intent.groupBy === "day") return dayPeriodsFromRows(rows, intent.periods);
+  return intent.periods;
 }
 
 function rowMetricValue(row: DailyAggregateRow, metric: string) {
@@ -537,6 +610,41 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
     } satisfies StatisticsChatFacts;
   }
 
+  if (intent.operation === "threshold_periods") {
+    const threshold = intent.value ?? 0;
+    const calculationPeriods = calculationPeriodsFromIntent(intent, rows);
+    const values = calculationPeriods.map((period) => {
+      const periodRows = filterRows(rows, period);
+      const numeric = periodRows.map((row) => rowMetricValue(row, intent.metric)).filter((item): item is number => item !== null);
+      const value = aggregateValues(numeric, intent.aggregation || (intent.metric === "precipitation_total" ? "sum" : "avg"));
+      const validDays = intent.metric === "precipitation_total"
+        ? periodRows.filter((row) => toNumber(row.rain_day) !== null).length
+        : periodRows.filter((row) => rowMetricValue(row, intent.metric) !== null).length;
+      return {
+        label: period.label,
+        value: round(toNumber(value)),
+        unit: intent.unit,
+        validDays,
+        availableDays: periodRows.length,
+        expectedDays: expectedDays(period),
+        coverage: coverage(validDays, expectedDays(period)),
+      };
+    });
+    const matches = values
+      .filter((item): item is typeof values[number] & { value: number } => item.value !== null && compareValue(item.value, intent.operator, threshold))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    if (!matches.length) warnings.push("Keine Zeiträume erfüllen den angefragten Grenzwert.");
+    return {
+      operation: intent.operation,
+      metric: intent.metric,
+      unit: intent.unit,
+      periods: calculationPeriods,
+      values: matches.slice(0, intent.limit || 100),
+      count: matches.length,
+      warnings,
+    } satisfies StatisticsChatFacts;
+  }
+
   if (intent.operation === "aggregate_period") {
     const values = intent.periods.map((period) => {
       const periodRows = filterRows(rows, period);
@@ -593,7 +701,8 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
     } satisfies StatisticsChatFacts;
   }
 
-  const values = intent.periods.map((period) => {
+  const calculationPeriods = calculationPeriodsFromIntent(intent, rows);
+  const values = calculationPeriods.map((period) => {
     const periodRows = filterRows(rows, period);
     const numeric = periodRows.map((row) => rowMetricValue(row, intent.metric)).filter((item): item is number => item !== null);
     const value = aggregateValues(numeric, intent.aggregation || (intent.metric === "precipitation_total" ? "sum" : "avg"));
@@ -627,7 +736,7 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
       operation: intent.operation,
       metric: intent.metric,
       unit: intent.unit,
-      periods: intent.periods,
+      periods: calculationPeriods,
       values: sorted.slice(0, intent.limit || 10),
       winner,
       differenceAbsolute,
@@ -639,7 +748,7 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
     operation: intent.operation,
     metric: intent.metric,
     unit: intent.unit,
-    periods: intent.periods,
+    periods: calculationPeriods,
     values,
     winner,
     differenceAbsolute,
@@ -675,6 +784,10 @@ export function formatStatisticsChatAnswer(facts: StatisticsChatFacts) {
   }
   if (facts.operation === "count_days") {
     return `${facts.count || 0} Tage erfüllen die angefragte Bedingung.`;
+  }
+  if (facts.operation === "threshold_periods") {
+    const values = (facts.values || []).map((item) => `${item.label}: ${valueText(item.value, item.unit)}`).join("; ");
+    return values ? `${facts.count || facts.values?.length || 0} Zeiträume erfüllen den angefragten Grenzwert: ${values}.` : "Kein Zeitraum erfüllt den angefragten Grenzwert.";
   }
   if (facts.operation === "threshold_days") {
     const first = facts.items?.[0];

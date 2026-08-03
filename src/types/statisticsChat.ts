@@ -6,6 +6,7 @@ export type StatisticsChatOperation =
   | "compare_periods"
   | "extreme_day"
   | "count_days"
+  | "threshold_periods"
   | "aggregate_period"
   | "rank_periods"
   | "availability";
@@ -25,6 +26,7 @@ export interface StatisticsChatIntent {
   operator?: ">" | ">=" | "<" | "<=";
   value?: number;
   aggregation?: "sum" | "avg" | "min" | "max";
+  groupBy?: "day" | "month";
   unit: string;
   periods: StatisticsChatPeriod[];
   limit?: number;

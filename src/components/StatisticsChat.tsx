@@ -426,10 +426,10 @@ export default function StatisticsChat() {
           })}
         </div>
 
-        <aside className="flex min-h-0 flex-col rounded border border-gray-200 bg-gray-50 p-2 dark:border-neutral-800 dark:bg-neutral-900/50" aria-label={t("statistics.chat.questionList", "Gestellte Fragen")}>
+        <aside className="flex min-h-0 flex-col overflow-hidden rounded border border-gray-200 bg-gray-50 p-2 dark:border-neutral-800 dark:bg-neutral-900/50" aria-label={t("statistics.chat.questionList", "Gestellte Fragen")}>
           <div className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-gray-500">{t("statistics.chat.questionList", "Gestellte Fragen")}</div>
           {turns.length ? (
-            <div className="max-h-48 flex-1 space-y-1 overflow-auto lg:max-h-none">
+            <div className="min-h-0 max-h-48 flex-1 space-y-1 overflow-auto lg:max-h-none">
               {turns.map((turn, index) => {
                 const id = turnDomId(turn, index);
                 return (
