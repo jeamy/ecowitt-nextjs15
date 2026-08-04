@@ -132,6 +132,9 @@ test("answers whether today was the warmest day in the records", () => {
   assert.equal(facts.recordCheck?.targetDate, "2025-08-10");
   assert.equal(facts.recordCheck?.targetValue, 37.4);
   assert.equal(facts.recordCheck?.bestDate, "2025-08-10");
+  assert.equal(facts.recordCheck?.previousBestDate, "2026-06-01");
+  assert.equal(facts.recordCheck?.previousBestValue, 34.1);
+  assert.equal(facts.recordCheck?.differenceToPreviousBest, 3.3);
   assert.equal(facts.recordCheck?.isRecord, true);
   assert.equal(facts.recordCheck?.rank, 1);
 });

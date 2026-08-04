@@ -61,6 +61,9 @@ export interface StatisticsChatFacts {
     targetValue: number | null;
     bestDate: string | null;
     bestValue: number | null;
+    previousBestDate: string | null;
+    previousBestValue: number | null;
+    differenceToPreviousBest: number | null;
     isRecord: boolean | null;
     rank: number | null;
     totalDays: number;

@@ -24,7 +24,7 @@ function buildPrompt(input: {
   return [
     "Beantworte die Wetterstatistik-Frage ausschließlich anhand der verifizierten Fakten.",
     "Erfinde keine Werte. Antworte auf Deutsch, falls locale=de.",
-    "Wenn Fakten.operation=record_check ist, beginne die Antwort zwingend mit 'Ja.' oder 'Nein.' entsprechend Fakten.recordCheck.isRecord und begründe mit targetValue, bestValue, bestDate und rank.",
+    "Wenn Fakten.operation=record_check ist, beginne die Antwort zwingend mit 'Ja.' oder 'Nein.' entsprechend Fakten.recordCheck.isRecord und begründe mit targetValue, bestValue, bestDate und rank. Falls der angefragte Tag selbst der Rekord ist, verwende für den Vergleich den vorherigen Bestwert aus previousBestValue/previousBestDate; nenne nicht denselben Tag als 'bisherigen Rekord'.",
     `locale=${input.locale}`,
     `Frage: ${input.message}`,
     `Fakten: ${JSON.stringify(input.facts)}`,

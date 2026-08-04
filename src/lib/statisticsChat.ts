@@ -699,6 +699,8 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
     const isMinimum = intent.aggregation === "min";
     const sorted = values.slice().sort((a, b) => isMinimum ? a.value - b.value || a.date.localeCompare(b.date) : b.value - a.value || a.date.localeCompare(b.date));
     const best = sorted[0];
+    const sortedWithoutTarget = sorted.filter((item) => item.date !== targetDate);
+    const previousBest = sortedWithoutTarget[0];
     const betterCount = targetValue === null
       ? 0
       : values.filter((item) => isMinimum ? item.value < targetValue : item.value > targetValue).length;
@@ -737,7 +739,7 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
       items: sorted.slice(0, intent.limit || 5),
       count: values.length,
       winner: best?.date || null,
-      differenceAbsolute: targetValue !== null && best ? round(Math.abs(best.value - targetValue)) : null,
+      differenceAbsolute: targetValue !== null && previousBest ? round(Math.abs(previousBest.value - targetValue)) : targetValue !== null && best ? round(Math.abs(best.value - targetValue)) : null,
       warnings,
       recordCheck: {
         targetDate,
@@ -745,6 +747,9 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
         targetValue: round(targetValue),
         bestDate: best?.date || null,
         bestValue: round(best?.value ?? null),
+        previousBestDate: previousBest?.date || null,
+        previousBestValue: round(previousBest?.value ?? null),
+        differenceToPreviousBest: targetValue !== null && previousBest ? round(Math.abs(targetValue - previousBest.value)) : null,
         isRecord,
         rank,
         totalDays: values.length,
@@ -1037,7 +1042,10 @@ export function formatStatisticsChatAnswer(facts: StatisticsChatFacts) {
       .join("; ");
     if (check.isRecord) {
       const tied = check.tiedRecordDays > 1 ? ` Es gibt ${check.tiedRecordDays} Tage mit diesem Rekordwert.` : "";
-      return `Ja. ${check.targetLabel} ist nach den gespeicherten Aufzeichnungen der ${recordKind} Tag für diesen Messwert: ${valueText(check.targetValue, facts.unit)}. Der historische Bestwert liegt bei ${valueText(check.bestValue, facts.unit)} am ${check.bestDate}.${tied}${topList ? ` Top-Werte: ${topList}.` : ""}`;
+      const previous = check.previousBestValue !== null && check.previousBestDate
+        ? ` Der vorherige Bestwert ohne den angefragten Tag war ${valueText(check.previousBestValue, facts.unit)} am ${check.previousBestDate}${check.differenceToPreviousBest === null ? "" : `; Abstand: ${valueText(check.differenceToPreviousBest, facts.unit)}`}.`
+        : " Es gibt keinen anderen gültigen Vergleichstag mit diesem Messwert.";
+      return `Ja. ${check.targetLabel} ist nach den gespeicherten Aufzeichnungen der ${recordKind} Tag für diesen Messwert: ${valueText(check.targetValue, facts.unit)}.${previous}${tied}${topList ? ` Top-Werte: ${topList}.` : ""}`;
     }
     const diff = facts.differenceAbsolute == null ? "" : ` Differenz zum Rekord: ${valueText(facts.differenceAbsolute, facts.unit)}.`;
     return `Nein. ${check.targetLabel} liegt mit ${valueText(check.targetValue, facts.unit)} auf Rang ${check.rank} von ${check.totalDays} gültigen Tagen. Der Rekord ist ${valueText(check.bestValue, facts.unit)} am ${check.bestDate}.${diff}${topList ? ` Top-Werte: ${topList}.` : ""}`;
