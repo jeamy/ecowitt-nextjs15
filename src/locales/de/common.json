@@ -44,7 +44,11 @@
     "rawData": "Rohdaten",
     "maxTemp": "Max",
     "minTemp": "Min",
-    "todayMinMax": "Heute Min/Max"
+    "todayMinMax": "Heute Min/Max",
+    "clickToToggleProgression": "Klicken wechselt zu Tagesverlauf, erneuter Klick zurück zur Grafik",
+    "dailyProgression": "Tagesverlauf",
+    "loadingProgression": "Verlauf wird geladen…",
+    "noProgressionData": "Keine Verlaufsdaten verfügbar"
   },
   "realtime": {
     "indoor": "Innen",

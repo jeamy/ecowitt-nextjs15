@@ -44,7 +44,11 @@
     "rawData": "Raw Data",
     "maxTemp": "Max",
     "minTemp": "Min",
-    "todayMinMax": "Today Min/Max"
+    "todayMinMax": "Today Min/Max",
+    "clickToToggleProgression": "Click to switch to daily progression, click again to return to the gauge",
+    "dailyProgression": "Daily progression",
+    "loadingProgression": "Loading progression…",
+    "noProgressionData": "No progression data available"
   },
   "realtime": {
     "indoor": "Indoor",

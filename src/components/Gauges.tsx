@@ -6,6 +6,7 @@ import { API_ENDPOINTS } from "@/constants";
 import { useRealtime } from "@/contexts/RealtimeContext";
 import { computeAstro, formatTime } from "@/lib/astro";
 import { calculateDewPoint, calculateHeatIndex, fmtVU, numVal, tryRead, valueAndUnit } from "@/components/realtimeUtils";
+import { ProgressionToggle } from "@/components/GaugeProgression";
 
 /**
  * Determines the color for a given temperature value based on a predefined scale.
@@ -800,7 +801,14 @@ export default function Gauges() {
 
       {/* Top row: Outdoor Temp, Humidity, Wind */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
+        <ProgressionToggle
+          className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center"
+          cardTitle={t('gauges.outdoorTemp')}
+          series={[
+            { label: t('gauges.outdoorTemp'), color: tempColor(outdoorT), yUnit: '°C', match: (n) => n.includes('temp') && (n.includes('aussen') || n.includes('auss') || n.includes('outdoor') || n.includes('outside')) && !n.includes('innen') && !n.includes('indoor') && !n.includes('gefuehlte') && !n.includes('taupunkt') && !n.includes('dewpoint') },
+            { label: t('fields.feelsLike'), color: '#3b82f6', yUnit: '°C', match: (n) => n.includes('gefuehlte') && n.includes('temp') }
+          ]}
+        >
           <div className="flex items-center gap-3">
             <TempGradientBar min={-20} max={45} step={5} height={200} />
             <DonutGauge
@@ -820,8 +828,14 @@ export default function Gauges() {
               tempMinMax={tempMinMax}
             />
           </div>
-        </div>
-        <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
+        </ProgressionToggle>
+        <ProgressionToggle
+          className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center"
+          cardTitle={t('gauges.outdoorHumidity')}
+          series={[
+            { label: t('gauges.outdoorHumidity'), color: humColor(outdoorH), yUnit: '%', match: (n) => (n.includes('feucht') || n.includes('humid')) && (n.includes('aussen') || n.includes('auss') || n.includes('outdoor') || n.includes('outside')) && !n.includes('innen') && !n.includes('indoor') }
+          ]}
+        >
           <div className="flex items-center gap-3">
             <DonutGauge
               label={t('gauges.outdoorHumidity')}
@@ -841,18 +855,38 @@ export default function Gauges() {
             />
             <HumGradientBar min={1} max={100} step={10} height={200} />
           </div>
-        </div>
-        <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
+        </ProgressionToggle>
+        <ProgressionToggle
+          className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center"
+          cardTitle={t('gauges.wind')}
+          series={[
+            { label: t('gauges.wind'), color: '#0ea5e9', yUnit: windUnit || 'km/h', match: (n) => n.includes('wind') && !n.includes('boe') && !n.includes('gust') && !n.includes('richtung') && !n.includes('direction') && !n.includes('degree') },
+            { label: t('gauges.gust'), color: '#ef4444', yUnit: windUnit || 'km/h', match: (n) => n.includes('wind') && (n.includes('boe') || n.includes('gust')) }
+          ]}
+        >
           <CompassWind dir={windDir} speed={windSpd} gust={windGust} unit={windUnit} />
-        </div>
+        </ProgressionToggle>
       </div>
 
       {/* Second row: Pressure, Rain, Solar/UV */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
+        <ProgressionToggle
+          className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center"
+          cardTitle={t('gauges.pressureRel')}
+          series={[
+            { label: t('gauges.pressureRel'), color: '#8b5cf6', yUnit: 'hPa', match: (n) => n.includes('druck') || n.includes('pressure') || n.includes('barometer') }
+          ]}
+        >
           <DonutGauge label={t('gauges.pressureRel')} value={numVal(pressureRel.value)} min={950} max={1050} unit="hPa" color="#8b5cf6" showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
-        </div>
-        <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex flex-col gap-2">
+        </ProgressionToggle>
+        <ProgressionToggle
+          className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex flex-col gap-2"
+          cardTitle={t('gauges.precipitation')}
+          series={[
+            { label: t('gauges.rate'), color: '#0ea5e9', yUnit: rainRate.unit || 'mm/h', match: (n) => (n.includes('rain') || n.includes('regen')) && n.includes('rate') },
+            { label: t('gauges.hourly'), color: '#3b82f6', yUnit: 'mm', match: (n) => (n.includes('rain') || n.includes('regen')) && (n.includes('hour') || n.includes('stunde')) }
+          ]}
+        >
           <div className="text-sm text-sky-700 text-center w-full">{t('gauges.precipitation')}</div>
           <div className="grid grid-cols-2 gap-3 items-center">
             <div className="flex items-center justify-center">
@@ -867,23 +901,46 @@ export default function Gauges() {
               <KPI label={t('gauges.yearly')} value={fmtVU(rainYearly, "mm")} />
             </div>
           </div>
-        </div>
-        <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 grid grid-cols-2 gap-3 items-center">
-          <DonutGauge label={t('gauges.solar')} value={numVal(solar.value)} min={0} max={1200} unit="W/m²" color="#f59e0b" size={180} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
-          <DonutGauge label={t('gauges.uvIndex')} value={numVal(uvi.value)} min={0} max={12} unit="" color="#22c55e" size={180} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
-        </div>
+        </ProgressionToggle>
+        <ProgressionToggle
+          className="rounded border border-gray-200 dark:border-neutral-800 p-3"
+          progressionClassName="rounded border border-gray-200 dark:border-neutral-800 p-3"
+          cardTitle={`${t('gauges.solar')} / ${t('gauges.uvIndex')}`}
+          series={[
+            { label: t('gauges.solar'), color: '#f59e0b', yUnit: 'W/m²', match: (n) => (n.includes('solar') || n.includes('sonne') || n.includes('sun') || n.includes('strahlung') || n.includes('radiation')) && !n.includes('uv'), yAxisID: 'y' },
+            { label: t('gauges.uvIndex'), color: '#22c55e', yUnit: '', match: (n) => n.includes('uv') || n.includes('uvi'), yAxisID: 'y1' }
+          ]}
+          yScales={{ y1: { position: 'right', title: 'UVI', min: 0, max: 12 } }}
+        >
+          <div className="grid grid-cols-2 gap-3 items-center">
+            <DonutGauge label={t('gauges.solar')} value={numVal(solar.value)} min={0} max={1200} unit="W/m²" color="#f59e0b" size={180} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
+            <DonutGauge label={t('gauges.uvIndex')} value={numVal(uvi.value)} min={0} max={12} unit="" color="#22c55e" size={180} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
+          </div>
+        </ProgressionToggle>
       </div>
 
       {/* Sun & Moon moved below Indoor */}
 
       {/* Third row: Indoor */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
+        <ProgressionToggle
+          className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center"
+          cardTitle={t('gauges.indoorTemp')}
+          series={[
+            { label: t('gauges.indoorTemp'), color: tempColor(indoorT), yUnit: '°C', match: (n) => n.includes('temp') && (n.includes('innen') || n.includes('indoor') || n.includes('inside')) && !n.includes('aussen') && !n.includes('auss') && !n.includes('outdoor') && !n.includes('outside') && !n.includes('gefuehlte') && !n.includes('taupunkt') && !n.includes('dewpoint') }
+          ]}
+        >
           <DonutGauge label={t('gauges.indoorTemp')} value={indoorT} min={10} max={35} unit="°C" color={tempColor(indoorT)} valuePrecision={1} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} sensorKey="indoor" tempMinMax={tempMinMax} />
-        </div>
-        <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center">
+        </ProgressionToggle>
+        <ProgressionToggle
+          className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center"
+          cardTitle={t('gauges.indoorHumidity')}
+          series={[
+            { label: t('gauges.indoorHumidity'), color: humColor(indoorH), yUnit: '%', match: (n) => (n.includes('feucht') || n.includes('humid')) && (n.includes('innen') || n.includes('indoor') || n.includes('inside')) && !n.includes('aussen') && !n.includes('auss') && !n.includes('outdoor') }
+          ]}
+        >
           <DonutGauge label={t('gauges.indoorHumidity')} value={indoorH} min={0} max={100} unit="%" color={humColor(indoorH)} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} sensorKey="indoor" tempMinMax={tempMinMax} isHumidity={true} />
-        </div>
+        </ProgressionToggle>
       </div>
 
       {/* Sun & Moon (icons, no rings) */}

@@ -43,7 +43,7 @@ export type LinePoint = { x: number; y: number; label?: string };
  * Represents a series of data for the line chart.
  * This type is compatible with the other LineChart component.
  */
-export type LineSeries = { id: string; color: string; points: LinePoint[] };
+export type LineSeries = { id: string; color: string; points: LinePoint[]; yAxisID?: string };
 
 /**
  * Props for the LineChart component, powered by Chart.js.
@@ -55,6 +55,8 @@ type Props = {
   height?: number;
   /** The label for the Y-axis. */
   yLabel?: string;
+  /** Optional extra Y-axes keyed by axis ID (e.g. { y1: { position: 'right', title: 'UVI' } }). */
+  yScales?: Record<string, { position?: 'left' | 'right'; title?: string; min?: number; max?: number; suggestedMin?: number; suggestedMax?: number }>;
   /** A function to format the X-axis tick labels. */
   xTickFormatter?: (v: number) => string;
   /** A dedicated formatter for the time displayed in the hover tooltip. */
@@ -88,6 +90,7 @@ export default function LineChart({
   series,
   height = 220,
   yLabel,
+  yScales,
   xTickFormatter,
   hoverTimeFormatter,
   xLabel,
@@ -192,8 +195,8 @@ export default function LineChart({
   const datasets = useMemo(() => {
     const base = series.map((s) => {
       const data = s.points.filter((p) => Number.isFinite(p.y)).map((p) => ({ x: p.x, y: p.y as number }));
-      if (bars) {
-        return {
+      const base = bars
+        ? {
           type: "bar" as const,
           label: s.id,
           data,
@@ -202,18 +205,18 @@ export default function LineChart({
           borderWidth: 1,
           barThickness: barWidthPx ?? undefined,
           // for linear x scale, bar thickness is in px
+        }
+        : {
+          type: "line" as const,
+          label: s.id,
+          data,
+          borderColor: s.color,
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0,
+          fill: false,
         };
-      }
-      return {
-        type: "line" as const,
-        label: s.id,
-        data,
-        borderColor: s.color,
-        borderWidth: 2,
-        pointRadius: 0,
-        tension: 0,
-        fill: false,
-      };
+      return s.yAxisID ? { ...base, yAxisID: s.yAxisID } : base;
     });
 
     // Helper horizontal lines (avg temp, 0°C, 30°C) as additional line datasets, hidden from legend
@@ -298,6 +301,30 @@ export default function LineChart({
 
   // Options
   const options = useMemo(() => {
+    const extraYScales: Record<string, any> = {};
+    if (yScales) {
+      for (const [id, cfg] of Object.entries(yScales)) {
+        const scale: any = {
+          type: "linear",
+          position: cfg.position || (id === "y1" ? "right" : "left"),
+          grid: { drawOnChartArea: false },
+          ticks: {
+            callback: (val: any) => {
+              const v = typeof val === "number" ? val : Number(val);
+              return Number.isFinite(v) ? v.toFixed(1) : String(val);
+            },
+          },
+          title: cfg.title
+            ? { display: true, text: cfg.title }
+            : undefined,
+        };
+        if (cfg.min != null) scale.min = cfg.min;
+        if (cfg.max != null) scale.max = cfg.max;
+        if (cfg.suggestedMin != null) scale.suggestedMin = cfg.suggestedMin;
+        if (cfg.suggestedMax != null) scale.suggestedMax = cfg.suggestedMax;
+        extraYScales[id] = scale;
+      }
+    }
     const opts: any = {
       responsive: true,
       maintainAspectRatio: false,
@@ -348,6 +375,7 @@ export default function LineChart({
               }
             : undefined,
         },
+        ...extraYScales,
       },
       plugins: {
         legend: {
@@ -414,7 +442,7 @@ export default function LineChart({
       },
     };
     return opts;
-  }, [xTickFormatter, hoverTimeFormatter, xLabel, yLabel, showLegend, showHover, valueFormatter, yUnit, bars, minX, maxX]);
+  }, [xTickFormatter, hoverTimeFormatter, xLabel, yLabel, yScales, showLegend, showHover, valueFormatter, yUnit, bars, minX, maxX]);
 
   // Create/update chart
   useEffect(() => {

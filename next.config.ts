@@ -3,6 +3,9 @@ const nextConfig = {
   // Turbopack configuration (Next.js 16+)
   // Empty config to acknowledge Turbopack usage and silence migration warning
   turbopack: {},
+
+  // Allow the local browser-preview proxy origin for HMR in development
+  allowedDevOrigins: ['127.0.0.1', 'localhost'],
   
   // Ensure native DuckDB modules are treated as externals in the server runtime
   // Note: experimental.serverComponentsExternalPackages was moved in Next.js
