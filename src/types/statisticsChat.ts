@@ -7,6 +7,7 @@ export type StatisticsChatOperation =
   | "extreme_day"
   | "count_days"
   | "day_summary"
+  | "record_check"
   | "threshold_periods"
   | "aggregate_period"
   | "rank_periods"
@@ -54,6 +55,18 @@ export interface StatisticsChatFacts {
   differenceRelativePercent?: number | null;
   count?: number;
   warnings: string[];
+  recordCheck?: {
+    targetDate: string;
+    targetLabel: string;
+    targetValue: number | null;
+    bestDate: string | null;
+    bestValue: number | null;
+    isRecord: boolean | null;
+    rank: number | null;
+    totalDays: number;
+    tiedRecordDays: number;
+    comparison: "max" | "min";
+  };
   daySummary?: {
     date: string;
     label: string;

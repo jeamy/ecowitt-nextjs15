@@ -257,7 +257,7 @@ function mainMetricFromQuestion(normalized: string, options: { average?: boolean
   if (/regen|geregnet|regnete|niederschlag|niederschlaeg|rainfall|rain/.test(normalized)) {
     return { metric: "precipitation_total", unit: "mm", aggregation: "sum" as const };
   }
-  if (/boe|böe|boeen|böen|gust/.test(normalized)) {
+  if (/\b(?:boe|böe|boeen|böen|gust)\b/.test(normalized)) {
     return { metric: "gust_max", unit: "km/h", aggregation: "max" as const };
   }
   if (/wind|windgeschwindigkeit|windgeschwindigkeiten/.test(normalized)) {
@@ -278,6 +278,13 @@ function rankedExtremeQuestion(message: string) {
   return /hoechst|höchst|maximal|top|liste|werte|jahren|jahre|niedrigst|tiefst|kaeltest|kältest|minimal|minimum/.test(normalized);
 }
 
+function asksRecordCheck(normalized: string, requestedDay: StatisticsChatPeriod | null) {
+  if (!requestedDay) return false;
+  if (!/(?:aufzeichnungen|rekord|jemals|bisher|historisch|aller zeiten|seit beginn)/.test(normalized)) return false;
+  return /(?:war|ist|wurde|hatte)/.test(normalized)
+    && /(?:tag|wert|temperatur|regen|niederschlag|wind|boe|boeen|böe|böen)/.test(normalized);
+}
+
 export function parseStatisticsQuestion(message: string, now = new Date()): StatisticsChatIntent {
   const normalized = normalizeQuestion(message);
   const requestedDay = extractDayPeriod(message, now);
@@ -286,7 +293,7 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
     { label: "alle verfügbaren Daten", start: "1900-01-01", end: "2999-12-31" },
   ];
   const hasRain = /regen|geregnet|regnete|niederschlag|niederschlaeg|rainfall|rain/.test(normalized);
-  const hasWind = /wind|windgeschwindigkeit|windgeschwindigkeiten|boe|böe|boeen|böen|gust/.test(normalized);
+  const hasWind = /wind|windgeschwindigkeit|windgeschwindigkeiten|\b(?:boe|böe|boeen|böen|gust)\b/.test(normalized);
   const hasFeels = /gefuehlt|gefühlt|feels|windchill|heatindex/.test(normalized);
   const hasTemp = /temperatur|temperaturen|warm|wärm|waerm|heiss|heiß|hitze|kalt|kaelt|kält|frost|tmax|tmin|grad|°|°c|niedrigst|tiefst|minimal|minimum/.test(normalized) || hasFeels;
   const hasMainWeatherMetric = hasRain || hasTemp || hasWind;
@@ -317,6 +324,21 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
     && !/hoechsten|höchsten|maximal|maximale/.test(normalized);
   const mainMetric = mainMetricFromQuestion(normalized, { average: hasAverage || rankingByAverage, minimum: hasMinimum });
   const groupedBy = groupByFromQuestion(message);
+
+  if (asksRecordCheck(normalized, requestedDay) && (hasMainWeatherMetric || hasExtreme || hasRanking)) {
+    const recordMetric = mainMetricFromQuestion(normalized, { minimum: hasMinimum });
+    return {
+      operation: "record_check",
+      metric: recordMetric.metric,
+      aggregation: recordMetric.aggregation,
+      unit: recordMetric.unit,
+      periods: [
+        requestedDay!,
+        { label: "alle verfügbaren Daten", start: "1900-01-01", end: "2999-12-31" },
+      ],
+      limit: 5,
+    };
+  }
 
   if (requestedDay && (/wetter|weather|wie war|wie ist|war es|heute|gestern|vorgestern/.test(normalized) || hasMainWeatherMetric)) {
     return {
@@ -665,6 +687,73 @@ export async function computeStatisticsChatFacts(intent: StatisticsChatIntent): 
 export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIntent, rows: DailyAggregateRow[]): StatisticsChatFacts {
   const warnings: string[] = [];
 
+  if (intent.operation === "record_check") {
+    const targetPeriod = intent.periods[0];
+    const scopePeriod = intent.periods[1] || { label: "alle verfügbaren Daten", start: "1900-01-01", end: "2999-12-31" };
+    const targetDate = targetPeriod.start;
+    const targetRow = filterRows(rows, targetPeriod)[0];
+    const targetValue = targetRow ? rowMetricValue(targetRow, intent.metric) : null;
+    const values = filterRows(rows, scopePeriod)
+      .map((row) => ({ date: row.day.slice(0, 10), value: rowMetricValue(row, intent.metric), unit: intent.unit }))
+      .filter((item): item is { date: string; value: number; unit: string } => item.value !== null);
+    const isMinimum = intent.aggregation === "min";
+    const sorted = values.slice().sort((a, b) => isMinimum ? a.value - b.value || a.date.localeCompare(b.date) : b.value - a.value || a.date.localeCompare(b.date));
+    const best = sorted[0];
+    const betterCount = targetValue === null
+      ? 0
+      : values.filter((item) => isMinimum ? item.value < targetValue : item.value > targetValue).length;
+    const rank = targetValue === null ? null : betterCount + 1;
+    const tiedRecordDays = best
+      ? values.filter((item) => item.value === best.value).length
+      : 0;
+    const isRecord = targetValue === null || !best ? null : betterCount === 0;
+    if (targetValue === null) warnings.push(`Für ${targetPeriod.label} liegt kein gültiger Messwert für diesen Rekordvergleich vor.`);
+    if (!best) warnings.push("In den Aufzeichnungen wurden keine gültigen Vergleichswerte gefunden.");
+    return {
+      operation: intent.operation,
+      metric: intent.metric,
+      unit: intent.unit,
+      periods: intent.periods,
+      values: [
+        {
+          label: targetPeriod.label,
+          value: round(targetValue),
+          unit: intent.unit,
+          validDays: targetValue === null ? 0 : 1,
+          availableDays: targetRow ? 1 : 0,
+          expectedDays: 1,
+          coverage: targetValue === null ? 0 : 100,
+        },
+        {
+          label: best?.date || "historischer Bestwert",
+          value: round(best?.value ?? null),
+          unit: intent.unit,
+          validDays: best ? 1 : 0,
+          availableDays: best ? 1 : 0,
+          expectedDays: 1,
+          coverage: best ? 100 : 0,
+        },
+      ],
+      items: sorted.slice(0, intent.limit || 5),
+      count: values.length,
+      winner: best?.date || null,
+      differenceAbsolute: targetValue !== null && best ? round(Math.abs(best.value - targetValue)) : null,
+      warnings,
+      recordCheck: {
+        targetDate,
+        targetLabel: targetPeriod.label,
+        targetValue: round(targetValue),
+        bestDate: best?.date || null,
+        bestValue: round(best?.value ?? null),
+        isRecord,
+        rank,
+        totalDays: values.length,
+        tiedRecordDays,
+        comparison: isMinimum ? "min" : "max",
+      },
+    } satisfies StatisticsChatFacts;
+  }
+
   if (intent.operation === "day_summary") {
     const period = intent.periods[0];
     const row = filterRows(rows, period)[0];
@@ -937,6 +1026,22 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
 
 export function formatStatisticsChatAnswer(facts: StatisticsChatFacts) {
   const valueText = (value: number | null, unit: string) => value === null ? "keine gültigen Daten" : `${value.toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${unit}`;
+  if (facts.operation === "record_check") {
+    const check = facts.recordCheck;
+    if (!check || check.targetValue === null) return `Nein. Für ${facts.periods[0]?.label || "den angefragten Tag"} liegt kein gültiger Messwert für diesen Rekordvergleich vor.`;
+    if (check.bestValue === null || !check.bestDate) return "Nein. Es liegen keine gültigen historischen Vergleichswerte vor.";
+    const recordKind = check.comparison === "min" ? "niedrigste" : "höchste";
+    const topList = (facts.items || [])
+      .slice(0, 5)
+      .map((item, index) => `${index + 1}. ${item.date}: ${valueText(item.value, item.unit)}`)
+      .join("; ");
+    if (check.isRecord) {
+      const tied = check.tiedRecordDays > 1 ? ` Es gibt ${check.tiedRecordDays} Tage mit diesem Rekordwert.` : "";
+      return `Ja. ${check.targetLabel} ist nach den gespeicherten Aufzeichnungen der ${recordKind} Tag für diesen Messwert: ${valueText(check.targetValue, facts.unit)}. Der historische Bestwert liegt bei ${valueText(check.bestValue, facts.unit)} am ${check.bestDate}.${tied}${topList ? ` Top-Werte: ${topList}.` : ""}`;
+    }
+    const diff = facts.differenceAbsolute == null ? "" : ` Differenz zum Rekord: ${valueText(facts.differenceAbsolute, facts.unit)}.`;
+    return `Nein. ${check.targetLabel} liegt mit ${valueText(check.targetValue, facts.unit)} auf Rang ${check.rank} von ${check.totalDays} gültigen Tagen. Der Rekord ist ${valueText(check.bestValue, facts.unit)} am ${check.bestDate}.${diff}${topList ? ` Top-Werte: ${topList}.` : ""}`;
+  }
   if (facts.operation === "day_summary") {
     const summary = facts.daySummary;
     if (!summary || !summary.measurements.length) return `Für ${facts.periods[0]?.label || "den angefragten Tag"} wurden keine Tagesdaten gefunden.`;

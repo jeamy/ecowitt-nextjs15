@@ -77,6 +77,12 @@ function answerContradictsFacts(answer: string, facts: StatisticsChatFacts) {
     .replace(/ü/g, "ue")
     .replace(/ß/g, "ss");
   const sentences = normalized.split(/[.!?\n]+/).map((item) => item.trim()).filter(Boolean);
+  if (facts.operation === "record_check" && facts.recordCheck?.isRecord !== null && facts.recordCheck?.isRecord !== undefined) {
+    const expectedPrefix = facts.recordCheck.isRecord ? "ja" : "nein";
+    const startsCorrectly = normalized.trim().startsWith(expectedPrefix);
+    const deniesComparison = /keine vergleichsdaten|keine historischen vergleichsdaten|ausschliesslich.*tagesdaten|ausschlieslich.*tagesdaten|nur.*tagesdaten/.test(normalized);
+    if (!startsCorrectly || deniesComparison) return true;
+  }
   for (const value of facts.values || []) {
     if (!value.label || value.validDays <= 0) continue;
     const label = value.label.toLocaleLowerCase("de-DE");

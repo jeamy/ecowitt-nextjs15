@@ -124,6 +124,30 @@ test("parses explicit weather day formats", () => {
   assert.deepEqual(abbreviated.periods, dotted.periods);
 });
 
+test("answers whether today was the warmest day in the records", () => {
+  const intent = parseStatisticsQuestion("War heute der wärmste Tag in den Aufzeichnungen?", new Date("2025-08-10T10:00:00"));
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
+  assert.equal(intent.operation, "record_check");
+  assert.equal(intent.metric, "outdoor_temperature_max");
+  assert.equal(facts.recordCheck?.targetDate, "2025-08-10");
+  assert.equal(facts.recordCheck?.targetValue, 37.4);
+  assert.equal(facts.recordCheck?.bestDate, "2025-08-10");
+  assert.equal(facts.recordCheck?.isRecord, true);
+  assert.equal(facts.recordCheck?.rank, 1);
+});
+
+test("answers why a specific day was not the warmest day in the records", () => {
+  const intent = parseStatisticsQuestion("War der 1. August 2024 der wärmste Tag in den Aufzeichnungen?");
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
+  assert.equal(intent.operation, "record_check");
+  assert.equal(facts.recordCheck?.targetDate, "2024-08-01");
+  assert.equal(facts.recordCheck?.targetValue, 31.2);
+  assert.equal(facts.recordCheck?.bestDate, "2025-08-10");
+  assert.equal(facts.recordCheck?.bestValue, 37.4);
+  assert.equal(facts.recordCheck?.isRecord, false);
+  assert.equal(facts.recordCheck?.rank, 4);
+});
+
 test("ranks months by average temperature", () => {
   const intent = parseStatisticsQuestion("Welcher Monat war 2024 der wärmste?");
   const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
