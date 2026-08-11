@@ -57,17 +57,25 @@ test("counts multiple weather day classes in one question", () => {
     "wie viele hitzetage und wüstentage hat es bisher im jahr 2026 gegeben?",
     new Date("2026-08-11T10:00:00"),
   );
-  const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
+  const rowsWithDesertDay: DailyAggregateRow[] = [
+    ...rows,
+    { day: "2026-07-01", tmax: 35.2, tmin: 22, tavg: 29, rain_day: null, wind_max: null, gust_max: null, wind_avg: null },
+  ];
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, rowsWithDesertDay);
   assert.equal(intent.operation, "count_conditions");
   assert.equal(intent.metric, "weather_day_classes");
   assert.deepEqual(intent.periods, [{ label: "2026 bisher", start: "2026-01-01", end: "2026-08-11" }]);
   assert.deepEqual(intent.conditions?.map((item) => [item.label, item.metric, item.operator, item.value]), [
-    ["Wüstentage", "outdoor_temperature_max", ">=", 35],
     ["Hitzetage/Tropentage", "outdoor_temperature_max", ">=", 30],
+    ["Wüstentage", "outdoor_temperature_max", ">=", 35],
   ]);
   assert.deepEqual(facts.values?.map((item) => [item.label, item.value]), [
-    ["Wüstentage", 0],
-    ["Hitzetage/Tropentage", 1],
+    ["Hitzetage/Tropentage", 2],
+    ["Wüstentage", 1],
+  ]);
+  assert.deepEqual(facts.conditionItems?.map((group) => [group.label, group.items.map((item) => [item.date, item.value])]), [
+    ["Hitzetage/Tropentage", [["2026-06-01", 34.1], ["2026-07-01", 35.2]]],
+    ["Wüstentage", [["2026-07-01", 35.2]]],
   ]);
 });
 

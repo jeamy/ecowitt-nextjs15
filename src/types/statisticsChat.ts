@@ -65,6 +65,12 @@ export interface StatisticsChatFacts {
     coverage?: number | null;
   }>;
   items?: Array<{ date: string; value: number; unit: string }>;
+  conditionItems?: Array<{
+    key: string;
+    label: string;
+    conditionLabel?: string;
+    items: Array<{ date: string; value: number; unit: string }>;
+  }>;
   winner?: string | null;
   differenceAbsolute?: number | null;
   differenceRelativePercent?: number | null;

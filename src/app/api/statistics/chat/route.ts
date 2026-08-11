@@ -128,6 +128,8 @@ export async function POST(req: NextRequest) {
     const dataRevision = await getStatisticsChatDataRevision();
     const cacheKey = statisticsChatFingerprint({
       schemaVersion: "ecowitt.statistics-chat-answer.v1",
+      promptVersion: "statistics-chat-prompt-v2-condition-items",
+      message,
       intent,
       locale,
       model: process.env.PI_SIDECAR_MODEL || "local",

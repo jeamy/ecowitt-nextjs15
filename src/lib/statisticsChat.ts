@@ -365,6 +365,7 @@ const FIXED_WEATHER_DAY_CLASSES: Array<WeatherDayClassCondition & { pattern: Reg
 function fixedWeatherDayClassesFromQuestion(normalized: string) {
   return FIXED_WEATHER_DAY_CLASSES
     .filter((item) => item.pattern.test(normalized))
+    .sort((a, b) => normalized.search(a.pattern) - normalized.search(b.pattern))
     .map(({ pattern: _pattern, ...item }) => item);
 }
 
@@ -933,6 +934,18 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
   if (intent.operation === "count_conditions") {
     const period = intent.periods[0];
     const periodRows = filterRows(rows, period);
+    const conditionItems = (intent.conditions || []).map((condition) => {
+      const items = periodRows
+        .map((row) => ({ date: row.day.slice(0, 10), value: rowMetricValue(row, condition.metric), unit: condition.unit }))
+        .filter((item): item is { date: string; value: number; unit: string } => item.value !== null && compareValue(item.value, condition.operator, condition.value))
+        .sort((a, b) => a.date.localeCompare(b.date));
+      return {
+        key: condition.key,
+        label: condition.label,
+        conditionLabel: condition.conditionLabel,
+        items: items.slice(0, intent.limit || 100),
+      };
+    });
     const values = (intent.conditions || []).map((condition) => {
       const matchingDays = periodRows.filter((row) => {
         const value = rowMetricValue(row, condition.metric);
@@ -958,6 +971,7 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
       count: values.length,
       warnings,
       conditions: intent.conditions,
+      conditionItems,
     } satisfies StatisticsChatFacts;
   }
 
@@ -1249,7 +1263,13 @@ export function formatStatisticsChatAnswer(facts: StatisticsChatFacts) {
   if (facts.operation === "count_conditions") {
     const values = (facts.values || []).map((item) => `${item.label}: ${valueText(item.value, item.unit)}`).join("; ");
     const definitions = (facts.conditions || []).map((item) => item.conditionLabel).filter(Boolean).join("; ");
-    return values ? `${values}.${definitions ? ` Definitionen: ${definitions}.` : ""}` : "Im angefragten Zeitraum wurden keine passenden Tagesklassen gefunden.";
+    const lists = (facts.conditionItems || [])
+      .filter((group) => group.items.length)
+      .map((group) => `${group.label}: ${group.items.map((item) => `${item.date} ${valueText(item.value, item.unit)}`).join(", ")}`)
+      .join("; ");
+    return values
+      ? `${values}.${definitions ? ` Definitionen: ${definitions}.` : ""}${lists ? ` Trefferlisten: ${lists}.` : ""}`
+      : "Im angefragten Zeitraum wurden keine passenden Tagesklassen gefunden.";
   }
   if (facts.operation === "count_days") {
     const condition = facts.conditionLabel ? ` (${facts.conditionLabel})` : "";
