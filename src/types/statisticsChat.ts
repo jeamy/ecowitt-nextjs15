@@ -27,6 +27,7 @@ export interface StatisticsChatIntent {
   channel?: string;
   operator?: ">" | ">=" | "<" | "<=";
   value?: number;
+  conditionLabel?: string;
   aggregation?: "sum" | "avg" | "min" | "max";
   groupBy?: "day" | "month";
   unit: string;
@@ -39,6 +40,9 @@ export interface StatisticsChatFacts {
   metric: string;
   unit: string;
   dataset?: "main" | "allsensors";
+  operator?: ">" | ">=" | "<" | "<=";
+  value?: number;
+  conditionLabel?: string;
   periods: StatisticsChatPeriod[];
   values?: Array<{
     label: string;

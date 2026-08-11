@@ -35,6 +35,45 @@ test("counts threshold days without including exact boundary", () => {
   assert.deepEqual(facts.items?.map((item) => item.date), ["2025-08-10"]);
 });
 
+test("counts heat days in the current year to date", () => {
+  const intent = parseStatisticsQuestion(
+    "wieviele hitzetage hat es bisher im jahre 2026 gegeben?",
+    new Date("2026-08-11T10:00:00"),
+  );
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
+  assert.equal(intent.operation, "count_days");
+  assert.equal(intent.metric, "outdoor_temperature_max");
+  assert.equal(intent.operator, ">=");
+  assert.equal(intent.value, 30);
+  assert.equal(intent.conditionLabel, "Hitzetag/Tropentag: Tagesmaximum mindestens 30 °C");
+  assert.deepEqual(intent.periods, [{ label: "2026 bisher", start: "2026-01-01", end: "2026-08-11" }]);
+  assert.equal(facts.count, 1);
+  assert.deepEqual(facts.items?.map((item) => item.date), ["2026-06-01"]);
+  assert.equal(facts.conditionLabel, intent.conditionLabel);
+});
+
+test("counts summer days, tropical days, tropical nights, frost days and ice days", () => {
+  const summerDays = computeStatisticsChatFactsFromDailyRows(parseStatisticsQuestion("Wie viele Sommertage gab es 2024?"), rows);
+  const tropicalDays = computeStatisticsChatFactsFromDailyRows(parseStatisticsQuestion("Wie viele Tropentage gab es 2025?"), rows);
+  const tropicalNights = computeStatisticsChatFactsFromDailyRows(parseStatisticsQuestion("Wie viele Tropennächte gab es 2025?"), rows);
+  const frostDays = computeStatisticsChatFactsFromDailyRows(parseStatisticsQuestion("Wie viele Frosttage gab es 2023?"), rows);
+  const iceDays = computeStatisticsChatFactsFromDailyRows(parseStatisticsQuestion("Wie viele Eistage gab es 2023?"), rows);
+
+  assert.equal(summerDays.count, 2);
+  assert.equal(summerDays.value, 25);
+  assert.equal(summerDays.operator, ">=");
+  assert.equal(tropicalDays.count, 2);
+  assert.equal(tropicalDays.metric, "outdoor_temperature_max");
+  assert.equal(tropicalDays.value, 30);
+  assert.equal(tropicalNights.count, 1);
+  assert.equal(tropicalNights.metric, "outdoor_temperature_min");
+  assert.equal(tropicalNights.value, 20);
+  assert.equal(frostDays.count, 0);
+  assert.equal(frostDays.metric, "outdoor_temperature_min");
+  assert.equal(iceDays.count, 0);
+  assert.equal(iceDays.metric, "outdoor_temperature_max");
+});
+
 test("sorts precipitation top days descending", () => {
   const intent = parseStatisticsQuestion("Wann waren die Niederschläge am größten?");
   const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);

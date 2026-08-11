@@ -195,6 +195,25 @@ function defaultPeriod(message: string, years: number[]) {
   return years.length ? inclusiveRange(years) : { label: "alle verfügbaren Daten", start: "1900-01-01", end: "2999-12-31" };
 }
 
+function currentProgressPeriod(message: string, years: number[], now: Date): StatisticsChatPeriod | null {
+  const normalized = normalizeQuestion(message);
+  if (!/\b(?:bisher|bis heute|bis jetzt|seit jahresbeginn|laufendes jahr|laufenden jahr|dieses jahr|heuriges jahr|aktuellen jahr)\b/.test(normalized)) {
+    return null;
+  }
+  const currentYear = now.getFullYear();
+  const year = years.length === 1 ? years[0] : years.length === 0 ? currentYear : null;
+  if (!year || year !== currentYear) return null;
+  return {
+    label: `${year} bisher`,
+    start: `${year}-01-01`,
+    end: localIsoDate(now),
+  };
+}
+
+function defaultPeriodForQuestion(message: string, years: number[], now: Date) {
+  return currentProgressPeriod(message, years, now) || defaultPeriod(message, years);
+}
+
 function extractDayPeriod(message: string, now = new Date()): StatisticsChatPeriod | null {
   const normalized = normalizeQuestion(message);
   const relativeDays: Array<{ pattern: RegExp; offset: number; label: string }> = [
@@ -272,6 +291,70 @@ function mainMetricFromQuestion(normalized: string, options: { average?: boolean
   return { metric: options.average ? "outdoor_temperature_avg" : "outdoor_temperature_max", unit: "°C", aggregation: options.average ? "avg" as const : "max" as const };
 }
 
+function fixedWeatherDayClassFromQuestion(normalized: string): Pick<StatisticsChatIntent, "metric" | "operator" | "value" | "unit" | "aggregation" | "conditionLabel"> | null {
+  if (/\b(?:tropennacht|tropennaechte|tropennaechten)\b/.test(normalized)) {
+    return {
+      metric: "outdoor_temperature_min",
+      aggregation: "min",
+      operator: ">=",
+      value: 20,
+      unit: "°C",
+      conditionLabel: "Tropennacht: Tagesminimum mindestens 20 °C",
+    };
+  }
+  if (/\b(?:wuestentag|wuestentage|wuestentagen|sehr heisser tag|sehr heisse tage|sehr heissen tage)\b/.test(normalized)) {
+    return {
+      metric: "outdoor_temperature_max",
+      aggregation: "max",
+      operator: ">=",
+      value: 35,
+      unit: "°C",
+      conditionLabel: "Wüstentag: Tagesmaximum mindestens 35 °C",
+    };
+  }
+  if (/\b(?:sommertag|sommertage|sommertagen)\b/.test(normalized)) {
+    return {
+      metric: "outdoor_temperature_max",
+      aggregation: "max",
+      operator: ">=",
+      value: 25,
+      unit: "°C",
+      conditionLabel: "Sommertag: Tagesmaximum mindestens 25 °C",
+    };
+  }
+  if (/\b(?:hitzetag|hitzetage|hitzetagen|tropentag|tropentage|tropentagen|heisser tag|heisse tage|heissen tage)\b/.test(normalized)) {
+    return {
+      metric: "outdoor_temperature_max",
+      aggregation: "max",
+      operator: ">=",
+      value: 30,
+      unit: "°C",
+      conditionLabel: "Hitzetag/Tropentag: Tagesmaximum mindestens 30 °C",
+    };
+  }
+  if (/\b(?:frosttag|frosttage|frosttagen)\b/.test(normalized)) {
+    return {
+      metric: "outdoor_temperature_min",
+      aggregation: "min",
+      operator: "<",
+      value: 0,
+      unit: "°C",
+      conditionLabel: "Frosttag: Tagesminimum unter 0 °C",
+    };
+  }
+  if (/\b(?:eistag|eistage|eistagen)\b/.test(normalized)) {
+    return {
+      metric: "outdoor_temperature_max",
+      aggregation: "max",
+      operator: "<",
+      value: 0,
+      unit: "°C",
+      conditionLabel: "Eistag: Tagesmaximum unter 0 °C",
+    };
+  }
+  return null;
+}
+
 function rankedExtremeQuestion(message: string) {
   const normalized = normalizeQuestion(message);
   if (/wann|zeitpunkt|gemessen|zwischen/.test(normalized)) return false;
@@ -295,12 +378,13 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
   const hasRain = /regen|geregnet|regnete|niederschlag|niederschlaeg|rainfall|rain/.test(normalized);
   const hasWind = /wind|windgeschwindigkeit|windgeschwindigkeiten|\b(?:boe|böe|boeen|böen|gust)\b/.test(normalized);
   const hasFeels = /gefuehlt|gefühlt|feels|windchill|heatindex/.test(normalized);
-  const hasTemp = /temperatur|temperaturen|warm|wärm|waerm|heiss|heiß|hitze|kalt|kaelt|kält|frost|tmax|tmin|grad|°|°c|niedrigst|tiefst|minimal|minimum/.test(normalized) || hasFeels;
+  const fixedWeatherDayClass = fixedWeatherDayClassFromQuestion(normalized);
+  const hasTemp = /temperatur|temperaturen|warm|wärm|waerm|heiss|heiß|hitze|kalt|kaelt|kält|frost|tmax|tmin|grad|°|°c|niedrigst|tiefst|minimal|minimum/.test(normalized) || hasFeels || Boolean(fixedWeatherDayClass);
   const hasMainWeatherMetric = hasRain || hasTemp || hasWind;
   const hasExtreme = /höchst|hoechst|maximal|wärmst|waermst|extrem|spitze|groesst|größt|maximum|niedrigst|tiefst|kaeltest|kältest|minimal|minimum/.test(normalized);
   const hasAverage = /durchschnitt|mittelwert|durchschn/.test(normalized);
   const hasMinimum = /niedrigst|tiefst|minimal|kaeltest|kältest|minimum/.test(normalized);
-  const hasCount = /wie viele|anzahl|count/.test(normalized);
+  const hasCount = /wie viele|wieviele|anzahl|count/.test(normalized);
   const hasAmount = /wie viel|wieviel|wieviele/.test(normalized);
   const hasTotal = /summe|gesamt|insgesamt|total/.test(normalized);
   const hasRanking = /welcher|welches|welche|ranking|rangliste|sortiere|waermst|wärmst|nassest|meiste|meisten|hoechst|höchst|niedrigst|tiefst|kaeltest|kältest|minimal|minimum|top/.test(normalized);
@@ -324,6 +408,20 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
     && !/hoechsten|höchsten|maximal|maximale/.test(normalized);
   const mainMetric = mainMetricFromQuestion(normalized, { average: hasAverage || rankingByAverage, minimum: hasMinimum });
   const groupedBy = groupByFromQuestion(message);
+
+  if (fixedWeatherDayClass) {
+    return {
+      operation: hasCount || hasAmount ? "count_days" : "threshold_days",
+      metric: fixedWeatherDayClass.metric!,
+      aggregation: fixedWeatherDayClass.aggregation,
+      operator: fixedWeatherDayClass.operator,
+      value: fixedWeatherDayClass.value,
+      conditionLabel: fixedWeatherDayClass.conditionLabel,
+      unit: fixedWeatherDayClass.unit!,
+      periods: [defaultPeriodForQuestion(message, years, now)],
+      limit: 100,
+    };
+  }
 
   if (asksRecordCheck(normalized, requestedDay) && (hasMainWeatherMetric || hasExtreme || hasRanking)) {
     const recordMetric = mainMetricFromQuestion(normalized, { minimum: hasMinimum });
@@ -822,6 +920,9 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
       operation: intent.operation,
       metric: intent.metric,
       unit: intent.unit,
+      operator: intent.operator,
+      value: intent.value,
+      conditionLabel: intent.conditionLabel,
       periods: intent.periods,
       count: items.length,
       items: items.slice(0, intent.limit || 100),
@@ -840,6 +941,9 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
       operation: intent.operation,
       metric: intent.metric,
       unit: intent.unit,
+      operator: intent.operator,
+      value: intent.value,
+      conditionLabel: intent.conditionLabel,
       periods: intent.periods,
       count: items.length,
       items: items.slice(0, intent.limit || 100),
@@ -910,6 +1014,9 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
       operation: intent.operation,
       metric: intent.metric,
       unit: intent.unit,
+      operator: intent.operator,
+      value: intent.value,
+      conditionLabel: intent.conditionLabel,
       periods: calculationPeriods,
       values: matches.slice(0, intent.limit || 100),
       count: matches.length,
@@ -1084,7 +1191,8 @@ export function formatStatisticsChatAnswer(facts: StatisticsChatFacts) {
     return item ? `Der ${label} gefundene Wert beträgt ${valueText(item.value, item.unit)} am ${item.date}.` : "Im angefragten Zeitraum wurden keine gültigen Werte gefunden.";
   }
   if (facts.operation === "count_days") {
-    return `${facts.count || 0} Tage erfüllen die angefragte Bedingung.`;
+    const condition = facts.conditionLabel ? ` (${facts.conditionLabel})` : "";
+    return `${facts.count || 0} Tage erfüllen die angefragte Bedingung${condition}.`;
   }
   if (facts.operation === "threshold_periods") {
     const values = (facts.values || []).map((item) => `${item.label}: ${valueText(item.value, item.unit)}`).join("; ");
@@ -1092,7 +1200,8 @@ export function formatStatisticsChatAnswer(facts: StatisticsChatFacts) {
   }
   if (facts.operation === "threshold_days") {
     const first = facts.items?.[0];
-    return `${facts.count || 0} Tage erfüllen den angefragten Grenzwert${first ? `; der erste Treffer ist am ${first.date} mit ${valueText(first.value, first.unit)}` : ""}.`;
+    const condition = facts.conditionLabel ? ` (${facts.conditionLabel})` : "";
+    return `${facts.count || 0} Tage erfüllen den angefragten Grenzwert${condition}${first ? `; der erste Treffer ist am ${first.date} mit ${valueText(first.value, first.unit)}` : ""}.`;
   }
   if (facts.dataset === "allsensors") { const first = facts.items?.[0]; return first ? `Die größten Messwerte beginnen am ${first.date} mit ${valueText(first.value, first.unit)}.` : "Im angefragten Zeitraum wurden keine gültigen Messwerte gefunden."; }
   const first = facts.items?.[0];
