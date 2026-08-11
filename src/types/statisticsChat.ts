@@ -6,6 +6,7 @@ export type StatisticsChatOperation =
   | "compare_periods"
   | "extreme_day"
   | "count_days"
+  | "count_conditions"
   | "day_summary"
   | "record_check"
   | "threshold_periods"
@@ -33,6 +34,16 @@ export interface StatisticsChatIntent {
   unit: string;
   periods: StatisticsChatPeriod[];
   limit?: number;
+  conditions?: Array<{
+    key: string;
+    label: string;
+    metric: string;
+    operator: ">" | ">=" | "<" | "<=";
+    value: number;
+    unit: string;
+    aggregation?: "sum" | "avg" | "min" | "max";
+    conditionLabel?: string;
+  }>;
 }
 
 export interface StatisticsChatFacts {
@@ -59,6 +70,16 @@ export interface StatisticsChatFacts {
   differenceRelativePercent?: number | null;
   count?: number;
   warnings: string[];
+  conditions?: Array<{
+    key: string;
+    label: string;
+    metric: string;
+    operator: ">" | ">=" | "<" | "<=";
+    value: number;
+    unit: string;
+    aggregation?: "sum" | "avg" | "min" | "max";
+    conditionLabel?: string;
+  }>;
   recordCheck?: {
     targetDate: string;
     targetLabel: string;

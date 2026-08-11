@@ -291,68 +291,81 @@ function mainMetricFromQuestion(normalized: string, options: { average?: boolean
   return { metric: options.average ? "outdoor_temperature_avg" : "outdoor_temperature_max", unit: "°C", aggregation: options.average ? "avg" as const : "max" as const };
 }
 
-function fixedWeatherDayClassFromQuestion(normalized: string): Pick<StatisticsChatIntent, "metric" | "operator" | "value" | "unit" | "aggregation" | "conditionLabel"> | null {
-  if (/\b(?:tropennacht|tropennaechte|tropennaechten)\b/.test(normalized)) {
-    return {
-      metric: "outdoor_temperature_min",
-      aggregation: "min",
-      operator: ">=",
-      value: 20,
-      unit: "°C",
-      conditionLabel: "Tropennacht: Tagesminimum mindestens 20 °C",
-    };
-  }
-  if (/\b(?:wuestentag|wuestentage|wuestentagen|sehr heisser tag|sehr heisse tage|sehr heissen tage)\b/.test(normalized)) {
-    return {
-      metric: "outdoor_temperature_max",
-      aggregation: "max",
-      operator: ">=",
-      value: 35,
-      unit: "°C",
-      conditionLabel: "Wüstentag: Tagesmaximum mindestens 35 °C",
-    };
-  }
-  if (/\b(?:sommertag|sommertage|sommertagen)\b/.test(normalized)) {
-    return {
-      metric: "outdoor_temperature_max",
-      aggregation: "max",
-      operator: ">=",
-      value: 25,
-      unit: "°C",
-      conditionLabel: "Sommertag: Tagesmaximum mindestens 25 °C",
-    };
-  }
-  if (/\b(?:hitzetag|hitzetage|hitzetagen|tropentag|tropentage|tropentagen|heisser tag|heisse tage|heissen tage)\b/.test(normalized)) {
-    return {
-      metric: "outdoor_temperature_max",
-      aggregation: "max",
-      operator: ">=",
-      value: 30,
-      unit: "°C",
-      conditionLabel: "Hitzetag/Tropentag: Tagesmaximum mindestens 30 °C",
-    };
-  }
-  if (/\b(?:frosttag|frosttage|frosttagen)\b/.test(normalized)) {
-    return {
-      metric: "outdoor_temperature_min",
-      aggregation: "min",
-      operator: "<",
-      value: 0,
-      unit: "°C",
-      conditionLabel: "Frosttag: Tagesminimum unter 0 °C",
-    };
-  }
-  if (/\b(?:eistag|eistage|eistagen)\b/.test(normalized)) {
-    return {
-      metric: "outdoor_temperature_max",
-      aggregation: "max",
-      operator: "<",
-      value: 0,
-      unit: "°C",
-      conditionLabel: "Eistag: Tagesmaximum unter 0 °C",
-    };
-  }
-  return null;
+type WeatherDayClassCondition = NonNullable<StatisticsChatIntent["conditions"]>[number];
+
+const FIXED_WEATHER_DAY_CLASSES: Array<WeatherDayClassCondition & { pattern: RegExp }> = [
+  {
+    key: "tropical_nights",
+    label: "Tropennächte",
+    metric: "outdoor_temperature_min",
+    aggregation: "min",
+    operator: ">=",
+    value: 20,
+    unit: "°C",
+    conditionLabel: "Tropennacht: Tagesminimum mindestens 20 °C",
+    pattern: /\b(?:tropennacht|tropennaechte|tropennaechten)\b/,
+  },
+  {
+    key: "desert_days",
+    label: "Wüstentage",
+    metric: "outdoor_temperature_max",
+    aggregation: "max",
+    operator: ">=",
+    value: 35,
+    unit: "°C",
+    conditionLabel: "Wüstentag: Tagesmaximum mindestens 35 °C",
+    pattern: /\b(?:wuestentag|wuestentage|wuestentagen|sehr heisser tag|sehr heisse tage|sehr heissen tage)\b/,
+  },
+  {
+    key: "summer_days",
+    label: "Sommertage",
+    metric: "outdoor_temperature_max",
+    aggregation: "max",
+    operator: ">=",
+    value: 25,
+    unit: "°C",
+    conditionLabel: "Sommertag: Tagesmaximum mindestens 25 °C",
+    pattern: /\b(?:sommertag|sommertage|sommertagen)\b/,
+  },
+  {
+    key: "heat_days",
+    label: "Hitzetage/Tropentage",
+    metric: "outdoor_temperature_max",
+    aggregation: "max",
+    operator: ">=",
+    value: 30,
+    unit: "°C",
+    conditionLabel: "Hitzetag/Tropentag: Tagesmaximum mindestens 30 °C",
+    pattern: /\b(?:hitzetag|hitzetage|hitzetagen|tropentag|tropentage|tropentagen|heisser tag|heisse tage|heissen tage)\b/,
+  },
+  {
+    key: "frost_days",
+    label: "Frosttage",
+    metric: "outdoor_temperature_min",
+    aggregation: "min",
+    operator: "<",
+    value: 0,
+    unit: "°C",
+    conditionLabel: "Frosttag: Tagesminimum unter 0 °C",
+    pattern: /\b(?:frosttag|frosttage|frosttagen)\b/,
+  },
+  {
+    key: "ice_days",
+    label: "Eistage",
+    metric: "outdoor_temperature_max",
+    aggregation: "max",
+    operator: "<",
+    value: 0,
+    unit: "°C",
+    conditionLabel: "Eistag: Tagesmaximum unter 0 °C",
+    pattern: /\b(?:eistag|eistage|eistagen)\b/,
+  },
+];
+
+function fixedWeatherDayClassesFromQuestion(normalized: string) {
+  return FIXED_WEATHER_DAY_CLASSES
+    .filter((item) => item.pattern.test(normalized))
+    .map(({ pattern: _pattern, ...item }) => item);
 }
 
 function rankedExtremeQuestion(message: string) {
@@ -378,8 +391,9 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
   const hasRain = /regen|geregnet|regnete|niederschlag|niederschlaeg|rainfall|rain/.test(normalized);
   const hasWind = /wind|windgeschwindigkeit|windgeschwindigkeiten|\b(?:boe|böe|boeen|böen|gust)\b/.test(normalized);
   const hasFeels = /gefuehlt|gefühlt|feels|windchill|heatindex/.test(normalized);
-  const fixedWeatherDayClass = fixedWeatherDayClassFromQuestion(normalized);
-  const hasTemp = /temperatur|temperaturen|warm|wärm|waerm|heiss|heiß|hitze|kalt|kaelt|kält|frost|tmax|tmin|grad|°|°c|niedrigst|tiefst|minimal|minimum/.test(normalized) || hasFeels || Boolean(fixedWeatherDayClass);
+  const fixedWeatherDayClasses = fixedWeatherDayClassesFromQuestion(normalized);
+  const fixedWeatherDayClass = fixedWeatherDayClasses[0] || null;
+  const hasTemp = /temperatur|temperaturen|warm|wärm|waerm|heiss|heiß|hitze|kalt|kaelt|kält|frost|tmax|tmin|grad|°|°c|niedrigst|tiefst|minimal|minimum/.test(normalized) || hasFeels || fixedWeatherDayClasses.length > 0;
   const hasMainWeatherMetric = hasRain || hasTemp || hasWind;
   const hasExtreme = /höchst|hoechst|maximal|wärmst|waermst|extrem|spitze|groesst|größt|maximum|niedrigst|tiefst|kaeltest|kältest|minimal|minimum/.test(normalized);
   const hasAverage = /durchschnitt|mittelwert|durchschn/.test(normalized);
@@ -409,15 +423,26 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
   const mainMetric = mainMetricFromQuestion(normalized, { average: hasAverage || rankingByAverage, minimum: hasMinimum });
   const groupedBy = groupByFromQuestion(message);
 
+  if (fixedWeatherDayClasses.length > 1) {
+    return {
+      operation: "count_conditions",
+      metric: "weather_day_classes",
+      unit: "Tage",
+      periods: [defaultPeriodForQuestion(message, years, now)],
+      conditions: fixedWeatherDayClasses,
+      limit: 100,
+    };
+  }
+
   if (fixedWeatherDayClass) {
     return {
       operation: hasCount || hasAmount ? "count_days" : "threshold_days",
-      metric: fixedWeatherDayClass.metric!,
+      metric: fixedWeatherDayClass.metric,
       aggregation: fixedWeatherDayClass.aggregation,
       operator: fixedWeatherDayClass.operator,
       value: fixedWeatherDayClass.value,
       conditionLabel: fixedWeatherDayClass.conditionLabel,
-      unit: fixedWeatherDayClass.unit!,
+      unit: fixedWeatherDayClass.unit,
       periods: [defaultPeriodForQuestion(message, years, now)],
       limit: 100,
     };
@@ -905,6 +930,37 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
     } satisfies StatisticsChatFacts;
   }
 
+  if (intent.operation === "count_conditions") {
+    const period = intent.periods[0];
+    const periodRows = filterRows(rows, period);
+    const values = (intent.conditions || []).map((condition) => {
+      const matchingDays = periodRows.filter((row) => {
+        const value = rowMetricValue(row, condition.metric);
+        if (value === null) return false;
+        return compareValue(value, condition.operator, condition.value);
+      }).length;
+      return {
+        label: condition.label,
+        value: matchingDays,
+        unit: "Tage",
+        validDays: matchingDays,
+        availableDays: periodRows.length,
+        expectedDays: expectedDays(period),
+        coverage: coverage(periodRows.length, expectedDays(period)),
+      };
+    });
+    return {
+      operation: intent.operation,
+      metric: intent.metric,
+      unit: intent.unit,
+      periods: intent.periods,
+      values,
+      count: values.length,
+      warnings,
+      conditions: intent.conditions,
+    } satisfies StatisticsChatFacts;
+  }
+
   if (intent.operation === "threshold_days") {
     const periodRows = filterRows(rows, intent.periods[0]);
     const threshold = intent.value ?? 0;
@@ -1189,6 +1245,11 @@ export function formatStatisticsChatAnswer(facts: StatisticsChatFacts) {
     const item = facts.items?.[0];
     const label = /_min$/.test(facts.metric) ? "niedrigste" : "höchste";
     return item ? `Der ${label} gefundene Wert beträgt ${valueText(item.value, item.unit)} am ${item.date}.` : "Im angefragten Zeitraum wurden keine gültigen Werte gefunden.";
+  }
+  if (facts.operation === "count_conditions") {
+    const values = (facts.values || []).map((item) => `${item.label}: ${valueText(item.value, item.unit)}`).join("; ");
+    const definitions = (facts.conditions || []).map((item) => item.conditionLabel).filter(Boolean).join("; ");
+    return values ? `${values}.${definitions ? ` Definitionen: ${definitions}.` : ""}` : "Im angefragten Zeitraum wurden keine passenden Tagesklassen gefunden.";
   }
   if (facts.operation === "count_days") {
     const condition = facts.conditionLabel ? ` (${facts.conditionLabel})` : "";

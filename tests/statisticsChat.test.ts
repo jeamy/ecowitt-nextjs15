@@ -52,6 +52,25 @@ test("counts heat days in the current year to date", () => {
   assert.equal(facts.conditionLabel, intent.conditionLabel);
 });
 
+test("counts multiple weather day classes in one question", () => {
+  const intent = parseStatisticsQuestion(
+    "wie viele hitzetage und wüstentage hat es bisher im jahr 2026 gegeben?",
+    new Date("2026-08-11T10:00:00"),
+  );
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
+  assert.equal(intent.operation, "count_conditions");
+  assert.equal(intent.metric, "weather_day_classes");
+  assert.deepEqual(intent.periods, [{ label: "2026 bisher", start: "2026-01-01", end: "2026-08-11" }]);
+  assert.deepEqual(intent.conditions?.map((item) => [item.label, item.metric, item.operator, item.value]), [
+    ["Wüstentage", "outdoor_temperature_max", ">=", 35],
+    ["Hitzetage/Tropentage", "outdoor_temperature_max", ">=", 30],
+  ]);
+  assert.deepEqual(facts.values?.map((item) => [item.label, item.value]), [
+    ["Wüstentage", 0],
+    ["Hitzetage/Tropentage", 1],
+  ]);
+});
+
 test("counts summer days, tropical days, tropical nights, frost days and ice days", () => {
   const summerDays = computeStatisticsChatFactsFromDailyRows(parseStatisticsQuestion("Wie viele Sommertage gab es 2024?"), rows);
   const tropicalDays = computeStatisticsChatFactsFromDailyRows(parseStatisticsQuestion("Wie viele Tropentage gab es 2025?"), rows);
