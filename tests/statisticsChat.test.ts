@@ -7,7 +7,7 @@ import {
   parseStatisticsQuestion,
 } from "@/lib/statisticsChat";
 import type { DailyAggregateRow } from "@/lib/statistics";
-import type { StatisticsChatHistory } from "@/types/statisticsChat";
+import type { StatisticsChatHistory, StatisticsChatIntent } from "@/types/statisticsChat";
 
 const rows: DailyAggregateRow[] = [
   { day: "2023-01-01", tmax: 9, tmin: 1, tavg: 5, rain_day: 1, wind_max: 12, gust_max: 20, wind_avg: 5, tfmax: 8, tfmin: 0 },
@@ -516,6 +516,65 @@ test("converts previous turn rain value to liters via follow-up question", () =>
   const answer = formatStatisticsChatAnswer(facts);
   assert.match(answer, /43 mm entsprechen 43 Liter\/m²/);
   assert.match(answer, /Bezugswert:/);
+});
+
+test("chained conversion questions skip prior conversion turns to find rain value", () => {
+  const rainIntent = parseStatisticsQuestion("Wie viel Niederschlag gab es insgesamt 2025?");
+  const rainFacts = computeStatisticsChatFactsFromDailyRows(rainIntent, rows);
+  const literIntent: StatisticsChatIntent = {
+    operation: "unit_conversion",
+    metric: "unit_conversion",
+    unit: "L",
+    periods: [],
+    conversion: { fromValue: 43, fromUnit: "mm", toUnit: "L", source: "previous_turn", previousTurnSummary: "43 mm" },
+  };
+  const literFacts = computeStatisticsChatFactsFromDailyRows(literIntent, []);
+  const history: StatisticsChatHistory = {
+    schemaVersion: "ecowitt.statistics-chat-history.v1",
+    conversationId: "test-conv-chained",
+    messages: [],
+    turns: [
+      {
+        message: "Wie viel Niederschlag gab es insgesamt 2025?",
+        result: {
+          schema_version: "ecowitt.statistics-chat-answer.v1",
+          answer: formatStatisticsChatAnswer(rainFacts),
+          facts: rainFacts,
+          source: { granularity: "day", dataset: "main", statisticsUpdatedAt: null, dataRevision: "rev" },
+          warnings: [],
+          mode: "local_fallback",
+        },
+        createdAt: new Date().toISOString(),
+        requestFingerprint: "fp1",
+        dataRevision: "rev",
+      },
+      {
+        message: "wieviele liter sind das",
+        result: {
+          schema_version: "ecowitt.statistics-chat-answer.v1",
+          answer: formatStatisticsChatAnswer(literFacts),
+          facts: literFacts,
+          source: { granularity: "day", dataset: "main", statisticsUpdatedAt: null, dataRevision: "rev" },
+          warnings: [],
+          mode: "local_fallback",
+        },
+        createdAt: new Date().toISOString(),
+        requestFingerprint: "fp2",
+        dataRevision: "rev",
+      },
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    dataRevision: "rev",
+  };
+  const cmIntent = parseConversionQuestion("wieviele cm sind das", history);
+  assert.equal(cmIntent?.operation, "unit_conversion");
+  assert.equal(cmIntent?.conversion?.source, "previous_turn");
+  assert.equal(cmIntent?.conversion?.fromUnit, "mm");
+  assert.equal(cmIntent?.conversion?.fromValue, 43);
+  assert.equal(cmIntent?.conversion?.toUnit, "cm");
+  const cmFacts = computeStatisticsChatFactsFromDailyRows(cmIntent!, []);
+  assert.equal(cmFacts.conversion?.toValue, 4.3);
 });
 
 test("returns null for conversion question without previous rain value", () => {

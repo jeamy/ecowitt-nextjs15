@@ -719,22 +719,26 @@ function extractExplicitValueWithUnit(message: string): { value: number; unit: s
 
 function extractPreviousRainValue(history: StatisticsChatHistory | null): { value: number; summary: string } | null {
   if (!history || !history.turns?.length) return null;
-  const lastTurn = history.turns[history.turns.length - 1];
-  const facts = lastTurn.result?.facts;
-  if (!facts) return null;
-  const mmValues: number[] = [];
-  const collect = (entries: Array<{ unit?: string; value: number | null }>) => {
-    for (const entry of entries) {
-      if (entry.unit === "mm" && entry.value !== null && Number.isFinite(entry.value)) mmValues.push(entry.value);
-    }
-  };
-  if (Array.isArray(facts.values)) collect(facts.values);
-  if (!mmValues.length && Array.isArray(facts.items)) collect(facts.items);
-  if (!mmValues.length && facts.daySummary?.measurements) collect(facts.daySummary.measurements);
-  if (!mmValues.length) return null;
-  const total = mmValues.reduce((sum, v) => sum + v, 0);
-  const rounded = round(total) ?? 0;
-  return { value: rounded, summary: `${rounded} mm (aus der vorherigen Frage: „${lastTurn.message}")` };
+  for (let i = history.turns.length - 1; i >= 0; i -= 1) {
+    const turn = history.turns[i];
+    const facts = turn.result?.facts;
+    if (!facts) continue;
+    if (facts.operation === "unit_conversion") continue;
+    const mmValues: number[] = [];
+    const collect = (entries: Array<{ unit?: string; value: number | null }>) => {
+      for (const entry of entries) {
+        if (entry.unit === "mm" && entry.value !== null && Number.isFinite(entry.value)) mmValues.push(entry.value);
+      }
+    };
+    if (Array.isArray(facts.values)) collect(facts.values);
+    if (!mmValues.length && Array.isArray(facts.items)) collect(facts.items);
+    if (!mmValues.length && facts.daySummary?.measurements) collect(facts.daySummary.measurements);
+    if (!mmValues.length) continue;
+    const total = mmValues.reduce((sum, v) => sum + v, 0);
+    const rounded = round(total) ?? 0;
+    return { value: rounded, summary: `${rounded} mm (aus der vorherigen Frage: „${turn.message}")` };
+  }
+  return null;
 }
 
 export function parseConversionQuestion(
