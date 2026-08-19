@@ -26,6 +26,7 @@ function buildPrompt(input: {
     "Erfinde keine Werte. Antworte auf Deutsch, falls locale=de.",
     "Wenn Fakten.operation=record_check ist, beginne die Antwort zwingend mit 'Ja.' oder 'Nein.' entsprechend Fakten.recordCheck.isRecord und begründe mit targetValue, bestValue, bestDate und rank. Falls der angefragte Tag selbst der Rekord ist, verwende für den Vergleich den vorherigen Bestwert aus previousBestValue/previousBestDate; nenne nicht denselben Tag als 'bisherigen Rekord'.",
     "Wenn Fakten.operation=count_conditions ist, beantworte alle angefragten Bedingungen aus Fakten.values. Falls nach Listen/Details gefragt wird, verwende Fakten.conditionItems mit Datum und Wert; behaupte nicht, dass Einzelauflistungen fehlen, wenn conditionItems vorhanden ist.",
+    "Wenn Fakten.operation=unit_conversion ist, gib die Umrechnung mit Fakten.conversion.fromValue, fromUnit, toValue und toUnit wieder. Erwähne bei Liter-Umrechnungen den Bezug 1 mm = 1 Liter/m². Bei source='previous_turn' beziehe dich auf Fakten.conversion.previousTurnSummary und nenne den Bezugswert.",
     `locale=${input.locale}`,
     `Frage: ${input.message}`,
     `Fakten: ${JSON.stringify(input.facts)}`,

@@ -8,6 +8,7 @@ import {
 import { computeSensorStatisticsChatFacts, extractSensorQuestion } from "@/lib/statisticsChatSensors";
 import type {
   StatisticsChatFacts,
+  StatisticsChatHistory,
   StatisticsChatIntent,
   StatisticsChatPeriod,
 } from "@/types/statisticsChat";
@@ -171,6 +172,14 @@ function extractMonthPeriod(message: string, years: number[]): StatisticsChatPer
   return monthPeriod(years[0], found[1]);
 }
 
+function extractMonthPeriods(message: string, years: number[]): StatisticsChatPeriod[] | null {
+  if (!years.length) return null;
+  const normalized = normalizeQuestion(message);
+  const found = Object.entries(MONTHS).find(([name]) => normalized.includes(name));
+  if (!found) return null;
+  return years.map((year) => monthPeriod(year, found[1]));
+}
+
 function extractSeasonPeriod(message: string, years: number[]): StatisticsChatPeriod | null {
   if (!years.length) return null;
   const normalized = normalizeQuestion(message);
@@ -187,12 +196,37 @@ function extractSeasonPeriod(message: string, years: number[]): StatisticsChatPe
   };
 }
 
+function extractSeasonPeriods(message: string, years: number[]): StatisticsChatPeriod[] | null {
+  if (!years.length) return null;
+  const normalized = normalizeQuestion(message);
+  const found = Object.entries(SEASONS).find(([name]) => normalized.includes(name));
+  if (!found) return null;
+  const season = found[1];
+  return years.map((year) => {
+    const endYear = season.endMonth < season.startMonth ? year + 1 : year;
+    const endDay = season.endMonth === 2 ? new Date(endYear, 2, 0).getDate() : season.endDay;
+    return {
+      label: `${season.label} ${year}`,
+      start: `${year}-${pad2(season.startMonth)}-${pad2(season.startDay)}`,
+      end: `${endYear}-${pad2(season.endMonth)}-${pad2(endDay)}`,
+    };
+  });
+}
+
 function defaultPeriod(message: string, years: number[]) {
   const month = extractMonthPeriod(message, years);
   if (month) return month;
   const season = extractSeasonPeriod(message, years);
   if (season) return season;
   return years.length ? inclusiveRange(years) : { label: "alle verfügbaren Daten", start: "1900-01-01", end: "2999-12-31" };
+}
+
+function defaultPeriods(message: string, years: number[]): StatisticsChatPeriod[] {
+  const months = extractMonthPeriods(message, years);
+  if (months) return months;
+  const seasons = extractSeasonPeriods(message, years);
+  if (seasons) return seasons;
+  return years.length ? [inclusiveRange(years)] : [{ label: "alle verfügbaren Daten", start: "1900-01-01", end: "2999-12-31" }];
 }
 
 function currentProgressPeriod(message: string, years: number[], now: Date): StatisticsChatPeriod | null {
@@ -212,6 +246,12 @@ function currentProgressPeriod(message: string, years: number[], now: Date): Sta
 
 function defaultPeriodForQuestion(message: string, years: number[], now: Date) {
   return currentProgressPeriod(message, years, now) || defaultPeriod(message, years);
+}
+
+function defaultPeriodsForQuestion(message: string, years: number[], now: Date): StatisticsChatPeriod[] {
+  const progress = currentProgressPeriod(message, years, now);
+  if (progress) return [progress];
+  return defaultPeriods(message, years);
 }
 
 function extractDayPeriod(message: string, now = new Date()): StatisticsChatPeriod | null {
@@ -256,12 +296,12 @@ function extractDayPeriod(message: string, now = new Date()): StatisticsChatPeri
 function rankingPeriods(message: string, years: number[]) {
   const normalized = normalizeQuestion(message);
   if (years.length === 1 && /monat|monate|month|months/.test(normalized)) return monthPeriods(years[0]);
-  return years.length ? yearPeriods(years) : [defaultPeriod(message, years)];
+  return years.length ? yearPeriods(years) : defaultPeriods(message, years);
 }
 
 function groupedPeriods(message: string, years: number[]) {
   const normalized = normalizeQuestion(message);
-  if (/(?:monat|monate|month|months|tag|tage|day|days)/.test(normalized)) return [defaultPeriod(message, years)];
+  if (/(?:monat|monate|month|months|tag|tage|day|days)/.test(normalized)) return defaultPeriods(message, years);
   return rankingPeriods(message, years);
 }
 
@@ -429,7 +469,7 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
       operation: "count_conditions",
       metric: "weather_day_classes",
       unit: "Tage",
-      periods: [defaultPeriodForQuestion(message, years, now)],
+      periods: defaultPeriodsForQuestion(message, years, now),
       conditions: fixedWeatherDayClasses,
       limit: 100,
     };
@@ -444,7 +484,7 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
       value: fixedWeatherDayClass.value,
       conditionLabel: fixedWeatherDayClass.conditionLabel,
       unit: fixedWeatherDayClass.unit,
-      periods: [defaultPeriodForQuestion(message, years, now)],
+      periods: defaultPeriodsForQuestion(message, years, now),
       limit: 100,
     };
   }
@@ -484,7 +524,7 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
       operation: "availability",
       metric: hasRain ? "precipitation_total" : hasTemp ? "outdoor_temperature_avg" : "available_days",
       unit: "%",
-      periods: [defaultPeriod(message, years)],
+      periods: defaultPeriods(message, years),
     };
   }
   if (hasMainWeatherMetric && groupedBy === "month" && threshold !== null) {
@@ -533,7 +573,7 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
       operator: ">",
       value: 0,
       unit: "mm",
-      periods: [defaultPeriod(message, years)],
+      periods: defaultPeriods(message, years),
       limit: 100,
     };
   }
@@ -543,7 +583,7 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
       metric: "precipitation_total",
       aggregation: "sum",
       unit: "mm",
-      periods: [defaultPeriod(message, years)],
+      periods: defaultPeriods(message, years),
     };
   }
   if (hasTemp && years.length >= 2 && (hasAverage || /wärmer|waermer|durchschnittlich/.test(normalized))) {
@@ -580,7 +620,7 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
       metric: mainMetric.metric,
       aggregation: mainMetric.aggregation,
       unit: mainMetric.unit,
-      periods: [defaultPeriod(message, years)],
+      periods: defaultPeriods(message, years),
     };
   }
   if (hasTemp && hasCount && threshold !== null) {
@@ -591,7 +631,7 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
       operator,
       value: threshold,
       unit: mainMetric.unit,
-      periods: [defaultPeriod(message, years)],
+      periods: defaultPeriods(message, years),
       limit: 100,
     };
   }
@@ -603,7 +643,7 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
       operator,
       value: threshold,
       unit: mainMetric.unit,
-      periods: [defaultPeriod(message, years)],
+      periods: defaultPeriods(message, years),
       limit: 100,
     };
   }
@@ -612,7 +652,7 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
       operation: "top_days",
       metric: mainMetric.metric,
       unit: mainMetric.unit,
-      periods: [defaultPeriod(message, years)],
+      periods: defaultPeriods(message, years),
       limit: 5,
     };
   }
@@ -622,11 +662,132 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
       metric: mainMetric.metric,
       aggregation: mainMetric.aggregation,
       unit: mainMetric.unit,
-      periods: [defaultPeriod(message, years)],
+      periods: defaultPeriods(message, years),
     };
   }
 
   throw new Error("UNSUPPORTED_STATISTICS_QUESTION");
+}
+
+const UNIT_ALIASES: Record<string, string> = {
+  mm: "mm",
+  millimeter: "mm",
+  millimetern: "mm",
+  cm: "cm",
+  centimeter: "cm",
+  zentimeter: "cm",
+  zentimetern: "cm",
+  l: "L",
+  liter: "L",
+  litern: "L",
+  litres: "L",
+  liter_pro_quadratmeter: "L",
+  "l/m2": "L",
+  "l/m²": "L",
+  "liter/m2": "L",
+  "liter/m²": "L",
+};
+
+const CONVERSIONS: Record<string, { factor: number; formula: (v: number) => string }> = {
+  "mm->cm": { factor: 0.1, formula: (v) => `${v} mm ÷ 10` },
+  "cm->mm": { factor: 10, formula: (v) => `${v} cm × 10` },
+  "mm->L": { factor: 1, formula: (v) => `${v} mm × 1 L/m²` },
+  "L->mm": { factor: 1, formula: (v) => `${v} L/m² ÷ 1` },
+  "cm->L": { factor: 10, formula: (v) => `${v} cm × 10 L/m²` },
+  "L->cm": { factor: 0.1, formula: (v) => `${v} L/m² ÷ 10` },
+};
+
+const UNIT_LABEL: Record<string, string> = {
+  mm: "mm",
+  cm: "cm",
+  L: "Liter/m²",
+};
+
+function normalizeUnit(word: string): string | null {
+  const cleaned = word.trim().toLocaleLowerCase("de-DE").replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss");
+  return UNIT_ALIASES[cleaned] || null;
+}
+
+function extractExplicitValueWithUnit(message: string): { value: number; unit: string } | null {
+  const match = message.match(/(-?\d+(?:[.,]\d+)?)\s*(mm|millimeter|millimetern|cm|centimeter|zentimeter|zentimetern|l|liter|litern|litres|l\/m2|l\/m²|liter\/m2|liter\/m²)\b/i);
+  if (!match) return null;
+  const value = Number(match[1].replace(",", "."));
+  const unit = normalizeUnit(match[2]);
+  if (!Number.isFinite(value) || !unit) return null;
+  return { value, unit };
+}
+
+function extractPreviousRainValue(history: StatisticsChatHistory | null): { value: number; summary: string } | null {
+  if (!history || !history.turns?.length) return null;
+  const lastTurn = history.turns[history.turns.length - 1];
+  const facts = lastTurn.result?.facts;
+  if (!facts) return null;
+  const mmValues: number[] = [];
+  const collect = (entries: Array<{ unit?: string; value: number | null }>) => {
+    for (const entry of entries) {
+      if (entry.unit === "mm" && entry.value !== null && Number.isFinite(entry.value)) mmValues.push(entry.value);
+    }
+  };
+  if (Array.isArray(facts.values)) collect(facts.values);
+  if (!mmValues.length && Array.isArray(facts.items)) collect(facts.items);
+  if (!mmValues.length && facts.daySummary?.measurements) collect(facts.daySummary.measurements);
+  if (!mmValues.length) return null;
+  const total = mmValues.reduce((sum, v) => sum + v, 0);
+  const rounded = round(total) ?? 0;
+  return { value: rounded, summary: `${rounded} mm (aus der vorherigen Frage: „${lastTurn.message}")` };
+}
+
+export function parseConversionQuestion(
+  message: string,
+  history: StatisticsChatHistory | null = null,
+): StatisticsChatIntent | null {
+  const normalized = normalizeQuestion(message);
+  if (!/wieviele|wieviel|wie viele|wie viel|rechne|umrechnen|umrechnung|entspricht/.test(normalized)) return null;
+
+  const targetMatch = normalized.match(/(?:wieviele|wieviel|wie viele|wie viel|rechne in|umrechnen in|entspricht)\s+(?:sind\s+)?(?:das|der|die|es\s+in\s+)?(liter|litern|litres|l|cm|centimeter|zentimeter|zentimetern|mm|millimeter|millimetern|l\/m2|l\/m²|liter\/m2|liter\/m²)/);
+  if (!targetMatch) return null;
+  const toUnit = normalizeUnit(targetMatch[1]);
+  if (!toUnit) return null;
+
+  const explicit = extractExplicitValueWithUnit(message);
+  if (explicit) {
+    const key = `${explicit.unit}->${toUnit}`;
+    if (!CONVERSIONS[key]) return null;
+    return {
+      operation: "unit_conversion",
+      metric: "unit_conversion",
+      unit: toUnit,
+      periods: [],
+      conversion: {
+        fromValue: explicit.value,
+        fromUnit: explicit.unit,
+        toUnit,
+        source: "explicit",
+      },
+    };
+  }
+
+  if (/\b(?:das|der|die|es|diese|dieser|dieses|wert|menge|betrag|ergebnis|vorherige|vorherigen|vorhergehende|vorhergehenden)\b/.test(normalized)) {
+    const previous = extractPreviousRainValue(history);
+    if (!previous) return null;
+    const key = `mm->${toUnit}`;
+    if (!CONVERSIONS[key]) return null;
+    return {
+      operation: "unit_conversion",
+      metric: "unit_conversion",
+      unit: toUnit,
+      periods: [],
+      conversion: {
+        fromValue: previous.value,
+        fromUnit: "mm",
+        toUnit,
+        source: "previous_turn",
+        previousTurnSummary: previous.summary,
+      },
+    };
+  }
+
+  return null;
 }
 
 function toNumber(value: unknown): number | null {
@@ -637,6 +798,14 @@ function toNumber(value: unknown): number | null {
 
 function filterRows(rows: DailyAggregateRow[], period: StatisticsChatPeriod) {
   return rows.filter((row) => row.day.slice(0, 10) >= period.start && row.day.slice(0, 10) <= period.end);
+}
+
+function rowsInPeriods(rows: DailyAggregateRow[], periods: StatisticsChatPeriod[]) {
+  if (periods.length <= 1) return filterRows(rows, periods[0]);
+  return rows.filter((row) => {
+    const d = row.day.slice(0, 10);
+    return periods.some((period) => d >= period.start && d <= period.end);
+  });
 }
 
 function expectedDays(period: StatisticsChatPeriod) {
@@ -799,6 +968,7 @@ export async function getStatisticsChatDataRevision() {
 
 export async function computeStatisticsChatFacts(intent: StatisticsChatIntent): Promise<StatisticsChatFacts> {
   if (intent.dataset === "allsensors") return computeSensorStatisticsChatFacts(intent);
+  if (intent.operation === "unit_conversion") return computeStatisticsChatFactsFromDailyRows(intent, []);
   const range = bounds(intent.periods);
   const broadStart = new Date(`${range.start}T00:00:00`);
   const broadEnd = new Date(`${range.end}T23:59:59`);
@@ -810,6 +980,49 @@ export async function computeStatisticsChatFacts(intent: StatisticsChatIntent): 
 
 export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIntent, rows: DailyAggregateRow[]): StatisticsChatFacts {
   const warnings: string[] = [];
+
+  if (intent.operation === "unit_conversion") {
+    const conv = intent.conversion;
+    if (!conv) {
+      return {
+        operation: intent.operation,
+        metric: intent.metric,
+        unit: intent.unit,
+        periods: intent.periods,
+        warnings: ["Keine Umrechnungsparameter vorhanden."],
+      };
+    }
+    const key = `${conv.fromUnit}->${conv.toUnit}`;
+    const rule = CONVERSIONS[key];
+    if (!rule) {
+      return {
+        operation: intent.operation,
+        metric: intent.metric,
+        unit: intent.unit,
+        periods: intent.periods,
+        warnings: [`Umrechnung von ${UNIT_LABEL[conv.fromUnit] || conv.fromUnit} nach ${UNIT_LABEL[conv.toUnit] || conv.toUnit} wird nicht unterstützt.`],
+        conversion: { ...conv, toValue: NaN, factor: NaN, formula: "nicht unterstützt" },
+      };
+    }
+    const toValue = round(conv.fromValue * rule.factor) ?? 0;
+    return {
+      operation: intent.operation,
+      metric: intent.metric,
+      unit: conv.toUnit,
+      periods: intent.periods,
+      warnings,
+      conversion: {
+        fromValue: round(conv.fromValue) ?? 0,
+        fromUnit: conv.fromUnit,
+        toValue,
+        toUnit: conv.toUnit,
+        factor: rule.factor,
+        formula: rule.formula(conv.fromValue),
+        source: conv.source,
+        previousTurnSummary: conv.previousTurnSummary,
+      },
+    };
+  }
 
   if (intent.operation === "record_check") {
     const targetPeriod = intent.periods[0];
@@ -932,8 +1145,8 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
   }
 
   if (intent.operation === "count_conditions") {
-    const period = intent.periods[0];
-    const periodRows = filterRows(rows, period);
+    const periodRows = rowsInPeriods(rows, intent.periods);
+    const expected = intent.periods.reduce((sum, period) => sum + expectedDays(period), 0);
     const conditionItems = (intent.conditions || []).map((condition) => {
       const items = periodRows
         .map((row) => ({ date: row.day.slice(0, 10), value: rowMetricValue(row, condition.metric), unit: condition.unit }))
@@ -958,8 +1171,8 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
         unit: "Tage",
         validDays: matchingDays,
         availableDays: periodRows.length,
-        expectedDays: expectedDays(period),
-        coverage: coverage(periodRows.length, expectedDays(period)),
+        expectedDays: expected,
+        coverage: coverage(periodRows.length, expected),
       };
     });
     return {
@@ -976,7 +1189,7 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
   }
 
   if (intent.operation === "threshold_days") {
-    const periodRows = filterRows(rows, intent.periods[0]);
+    const periodRows = rowsInPeriods(rows, intent.periods);
     const threshold = intent.value ?? 0;
     const matches = periodRows.filter((row) => {
       const value = rowMetricValue(row, intent.metric);
@@ -1001,7 +1214,7 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
   }
 
   if (intent.operation === "count_days") {
-    const periodRows = filterRows(rows, intent.periods[0]);
+    const periodRows = rowsInPeriods(rows, intent.periods);
     const threshold = intent.value ?? 0;
     const items = periodRows
       .map((row) => ({ date: row.day.slice(0, 10), value: rowMetricValue(row, intent.metric), unit: intent.unit }))
@@ -1022,7 +1235,7 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
   }
 
   if (intent.operation === "top_days") {
-    const periodRows = filterRows(rows, intent.periods[0]);
+    const periodRows = rowsInPeriods(rows, intent.periods);
     const items = periodRows
       .map((row) => ({ date: row.day.slice(0, 10), value: rowMetricValue(row, intent.metric), unit: intent.unit }))
       .filter((item): item is { date: string; value: number; unit: string } => item.value !== null)
@@ -1039,7 +1252,7 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
   }
 
   if (intent.operation === "extreme_day") {
-    const periodRows = filterRows(rows, intent.periods[0]);
+    const periodRows = rowsInPeriods(rows, intent.periods);
     const values = periodRows
       .map((row) => ({ date: row.day.slice(0, 10), value: rowMetricValue(row, intent.metric) }))
       .filter((item): item is { date: string; value: number } => item.value !== null)
@@ -1208,6 +1421,19 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
 
 export function formatStatisticsChatAnswer(facts: StatisticsChatFacts) {
   const valueText = (value: number | null, unit: string) => value === null ? "keine gültigen Daten" : `${value.toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${unit}`;
+  if (facts.operation === "unit_conversion") {
+    const conv = facts.conversion;
+    if (!conv || !Number.isFinite(conv.toValue)) return "Diese Umrechnung wird nicht unterstützt.";
+    const fromLabel = UNIT_LABEL[conv.fromUnit] || conv.fromUnit;
+    const toLabel = UNIT_LABEL[conv.toUnit] || conv.toUnit;
+    const fromText = `${conv.fromValue.toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${fromLabel}`;
+    const toText = `${conv.toValue.toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${toLabel}`;
+    const refNote = conv.toUnit === "L" || conv.fromUnit === "L" ? " (Bezug: 1 mm Niederschlag = 1 Liter pro Quadratmeter)" : "";
+    const sourceNote = conv.source === "previous_turn" && conv.previousTurnSummary
+      ? ` Bezugswert: ${conv.previousTurnSummary}.`
+      : "";
+    return `${fromText} entsprechen ${toText}${refNote}.${sourceNote} Rechnung: ${conv.formula} = ${toText}.`;
+  }
   if (facts.operation === "record_check") {
     const check = facts.recordCheck;
     if (!check || check.targetValue === null) return `Nein. Für ${facts.periods[0]?.label || "den angefragten Tag"} liegt kein gültiger Messwert für diesen Rekordvergleich vor.`;

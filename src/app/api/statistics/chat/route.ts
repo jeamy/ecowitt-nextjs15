@@ -4,6 +4,7 @@ import {
   computeStatisticsChatFacts,
   formatStatisticsChatAnswer,
   getStatisticsChatDataRevision,
+  parseConversionQuestion,
   parseStatisticsQuestion,
   statisticsChatFingerprint,
 } from "@/lib/statisticsChat";
@@ -112,9 +113,10 @@ export async function POST(req: NextRequest) {
       ? body.conversation_id.trim()
       : randomUUID();
     const locale = body?.locale === "en" ? "en" : "de";
+    const preHistory = await readStatisticsChatHistory(conversationId);
     let intent;
     try {
-      intent = parseStatisticsQuestion(message);
+      intent = parseConversionQuestion(message, preHistory) || parseStatisticsQuestion(message);
     } catch {
       return errorResponse("UNSUPPORTED_STATISTICS_QUESTION", 422);
     }

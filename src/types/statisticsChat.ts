@@ -12,7 +12,8 @@ export type StatisticsChatOperation =
   | "threshold_periods"
   | "aggregate_period"
   | "rank_periods"
-  | "availability";
+  | "availability"
+  | "unit_conversion";
 
 export interface StatisticsChatPeriod {
   label: string;
@@ -44,6 +45,13 @@ export interface StatisticsChatIntent {
     aggregation?: "sum" | "avg" | "min" | "max";
     conditionLabel?: string;
   }>;
+  conversion?: {
+    fromValue: number;
+    fromUnit: string;
+    toUnit: string;
+    source: "explicit" | "previous_turn";
+    previousTurnSummary?: string;
+  };
 }
 
 export interface StatisticsChatFacts {
@@ -111,6 +119,16 @@ export interface StatisticsChatFacts {
       unit: string;
     }>;
     description: string[];
+  };
+  conversion?: {
+    fromValue: number;
+    fromUnit: string;
+    toValue: number;
+    toUnit: string;
+    factor: number;
+    formula: string;
+    source: "explicit" | "previous_turn";
+    previousTurnSummary?: string;
   };
 }
 

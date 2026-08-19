@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   computeStatisticsChatFactsFromDailyRows,
+  formatStatisticsChatAnswer,
+  parseConversionQuestion,
   parseStatisticsQuestion,
 } from "@/lib/statisticsChat";
 import type { DailyAggregateRow } from "@/lib/statistics";
+import type { StatisticsChatHistory } from "@/types/statisticsChat";
 
 const rows: DailyAggregateRow[] = [
   { day: "2023-01-01", tmax: 9, tmin: 1, tavg: 5, rain_day: 1, wind_max: 12, gust_max: 20, wind_avg: 5, tfmax: 8, tfmin: 0 },
@@ -136,6 +139,26 @@ test("aggregates yearly precipitation sum", () => {
   const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
   assert.equal(facts.operation, "aggregate_period");
   assert.deepEqual(facts.values?.map((item) => [item.label, item.value, item.validDays]), [["2025-2025", 43, 3]]);
+});
+
+test("aggregates precipitation per month across multiple years", () => {
+  const rowsWithJuly2026: DailyAggregateRow[] = [
+    ...rows,
+    { day: "2026-07-01", tmax: 32, tmin: 19, tavg: 25, rain_day: 12, wind_max: null, gust_max: null, wind_avg: null, tfmax: null, tfmin: null },
+    { day: "2026-07-15", tmax: 30, tmin: 18, tavg: 24, rain_day: 5, wind_max: null, gust_max: null, wind_avg: null, tfmax: null, tfmin: null },
+  ];
+  const intent = parseStatisticsQuestion("Wie viel Regen war im Juli 2025 und 2026?");
+  assert.equal(intent.operation, "aggregate_period");
+  assert.equal(intent.metric, "precipitation_total");
+  assert.deepEqual(intent.periods, [
+    { label: "2025-07", start: "2025-07-01", end: "2025-07-31" },
+    { label: "2026-07", start: "2026-07-01", end: "2026-07-31" },
+  ]);
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, rowsWithJuly2026);
+  assert.deepEqual(facts.values?.map((item) => [item.label, item.value, item.validDays]), [
+    ["2025-07", 35, 1],
+    ["2026-07", 17, 2],
+  ]);
 });
 
 test("parses colloquial yearly rain amount", () => {
@@ -413,4 +436,103 @@ test("lists lowest feels-like temperatures per year", () => {
     ["2023", 0],
     ["2024", 1],
   ]);
+});
+
+test("converts explicit mm to liters per m²", () => {
+  const intent = parseConversionQuestion("wieviele liter sind 40mm");
+  assert.equal(intent?.operation, "unit_conversion");
+  assert.equal(intent?.conversion?.fromValue, 40);
+  assert.equal(intent?.conversion?.fromUnit, "mm");
+  assert.equal(intent?.conversion?.toUnit, "L");
+  assert.equal(intent?.conversion?.source, "explicit");
+  const facts = computeStatisticsChatFactsFromDailyRows(intent!, []);
+  assert.equal(facts.conversion?.toValue, 40);
+  assert.equal(facts.conversion?.toUnit, "L");
+  const answer = formatStatisticsChatAnswer(facts);
+  assert.match(answer, /40 mm entsprechen 40 Liter\/m²/);
+  assert.match(answer, /1 mm Niederschlag = 1 Liter pro Quadratmeter/);
+});
+
+test("converts explicit mm to cm", () => {
+  const intent = parseConversionQuestion("wieviele cm sind 44 mm");
+  assert.equal(intent?.operation, "unit_conversion");
+  assert.equal(intent?.conversion?.fromValue, 44);
+  assert.equal(intent?.conversion?.fromUnit, "mm");
+  assert.equal(intent?.conversion?.toUnit, "cm");
+  const facts = computeStatisticsChatFactsFromDailyRows(intent!, []);
+  assert.equal(facts.conversion?.toValue, 4.4);
+  const answer = formatStatisticsChatAnswer(facts);
+  assert.match(answer, /44 mm entsprechen 4,4 cm/);
+});
+
+test("converts explicit cm to liters per m²", () => {
+  const intent = parseConversionQuestion("wieviel liter sind 2 cm");
+  assert.equal(intent?.conversion?.fromValue, 2);
+  assert.equal(intent?.conversion?.fromUnit, "cm");
+  assert.equal(intent?.conversion?.toUnit, "L");
+  const facts = computeStatisticsChatFactsFromDailyRows(intent!, []);
+  assert.equal(facts.conversion?.toValue, 20);
+});
+
+test("converts previous turn rain value to liters via follow-up question", () => {
+  const previousIntent = parseStatisticsQuestion("Wie viel Niederschlag gab es insgesamt 2025?");
+  const previousFacts = computeStatisticsChatFactsFromDailyRows(previousIntent, rows);
+  const history: StatisticsChatHistory = {
+    schemaVersion: "ecowitt.statistics-chat-history.v1",
+    conversationId: "test-conv",
+    messages: [
+      { role: "user", content: "Wie viel Niederschlag gab es insgesamt 2025?" },
+      { role: "assistant", content: formatStatisticsChatAnswer(previousFacts) },
+    ],
+    turns: [
+      {
+        message: "Wie viel Niederschlag gab es insgesamt 2025?",
+        result: {
+          schema_version: "ecowitt.statistics-chat-answer.v1",
+          answer: formatStatisticsChatAnswer(previousFacts),
+          facts: previousFacts,
+          source: { granularity: "day", dataset: "main", statisticsUpdatedAt: null, dataRevision: "rev" },
+          warnings: [],
+          mode: "local_fallback",
+        },
+        createdAt: new Date().toISOString(),
+        requestFingerprint: "fp",
+        dataRevision: "rev",
+      },
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    dataRevision: "rev",
+  };
+  const intent = parseConversionQuestion("wieviele liter sind das bezugnehmend auf die vorhergehende frage", history);
+  assert.equal(intent?.operation, "unit_conversion");
+  assert.equal(intent?.conversion?.source, "previous_turn");
+  assert.equal(intent?.conversion?.fromUnit, "mm");
+  assert.equal(intent?.conversion?.fromValue, 43);
+  assert.equal(intent?.conversion?.toUnit, "L");
+  const facts = computeStatisticsChatFactsFromDailyRows(intent!, []);
+  assert.equal(facts.conversion?.toValue, 43);
+  assert.ok(facts.conversion?.previousTurnSummary?.includes("43 mm"));
+  const answer = formatStatisticsChatAnswer(facts);
+  assert.match(answer, /43 mm entsprechen 43 Liter\/m²/);
+  assert.match(answer, /Bezugswert:/);
+});
+
+test("returns null for conversion question without previous rain value", () => {
+  const emptyHistory: StatisticsChatHistory = {
+    schemaVersion: "ecowitt.statistics-chat-history.v1",
+    conversationId: "test-conv-empty",
+    messages: [],
+    turns: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    dataRevision: "rev",
+  };
+  const intent = parseConversionQuestion("wieviele liter sind das", emptyHistory);
+  assert.equal(intent, null);
+});
+
+test("returns null for non-conversion questions", () => {
+  assert.equal(parseConversionQuestion("Wie viel Regen gab es im Juli 2025?"), null);
+  assert.equal(parseConversionQuestion("Was ist die Hauptstadt von Frankreich?"), null);
 });
