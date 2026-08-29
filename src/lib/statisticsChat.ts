@@ -180,10 +180,14 @@ function extractMonthPeriods(message: string, years: number[]): StatisticsChatPe
   return years.map((year) => monthPeriod(year, found[1]));
 }
 
+function findSeasonWord(normalized: string): [string, { label: string; startMonth: number; startDay: number; endMonth: number; endDay: number }] | null {
+  return Object.entries(SEASONS).find(([name]) => new RegExp(`\\b${name}\\b`).test(normalized)) || null;
+}
+
 function extractSeasonPeriod(message: string, years: number[]): StatisticsChatPeriod | null {
   if (!years.length) return null;
   const normalized = normalizeQuestion(message);
-  const found = Object.entries(SEASONS).find(([name]) => normalized.includes(name));
+  const found = findSeasonWord(normalized);
   if (!found) return null;
   const [year] = years;
   const season = found[1];
@@ -199,7 +203,7 @@ function extractSeasonPeriod(message: string, years: number[]): StatisticsChatPe
 function extractSeasonPeriods(message: string, years: number[]): StatisticsChatPeriod[] | null {
   if (!years.length) return null;
   const normalized = normalizeQuestion(message);
-  const found = Object.entries(SEASONS).find(([name]) => normalized.includes(name));
+  const found = findSeasonWord(normalized);
   if (!found) return null;
   const season = found[1];
   return years.map((year) => {
@@ -213,19 +217,29 @@ function extractSeasonPeriods(message: string, years: number[]): StatisticsChatP
   });
 }
 
+function asksFullYear(message: string): boolean {
+  const normalized = normalizeQuestion(message);
+  return /\b(?:gesamtes jahr|gesamten jahr|gesamte jahr|ganze jahr|ganzen jahr|ganzer jahr|ueber das jahr|ueber den jahr|uebers jahr|im laufe des jahres|im laufe des jahr|whole year|entire year|full year|over the year|across the year)\b/.test(normalized)
+    || /\b(?:nicht nur im sommer|nicht nur sommer|nicht nur im winter|nicht nur winter|nicht nur im fruehling|nicht nur fruehling|nicht nur im herbst|nicht nur herbst)\b/.test(normalized);
+}
+
 function defaultPeriod(message: string, years: number[]) {
   const month = extractMonthPeriod(message, years);
   if (month) return month;
-  const season = extractSeasonPeriod(message, years);
-  if (season) return season;
+  if (!asksFullYear(message)) {
+    const season = extractSeasonPeriod(message, years);
+    if (season) return season;
+  }
   return years.length ? inclusiveRange(years) : { label: "alle verfügbaren Daten", start: "1900-01-01", end: "2999-12-31" };
 }
 
 function defaultPeriods(message: string, years: number[]): StatisticsChatPeriod[] {
   const months = extractMonthPeriods(message, years);
   if (months) return months;
-  const seasons = extractSeasonPeriods(message, years);
-  if (seasons) return seasons;
+  if (!asksFullYear(message)) {
+    const seasons = extractSeasonPeriods(message, years);
+    if (seasons) return seasons;
+  }
   return years.length ? [inclusiveRange(years)] : [{ label: "alle verfügbaren Daten", start: "1900-01-01", end: "2999-12-31" }];
 }
 

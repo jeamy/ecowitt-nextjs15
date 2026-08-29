@@ -55,6 +55,28 @@ test("counts heat days in the current year to date", () => {
   assert.equal(facts.conditionLabel, intent.conditionLabel);
 });
 
+test("weather day classes over entire year do not collapse to summer period", () => {
+  const intent = parseStatisticsQuestion(
+    "Wie viele Sommertage, Hitzetage, Wüstentage hat es im gesamten Jahr 2026 gegeben, nicht nur im Sommer?",
+  );
+  assert.equal(intent.operation, "count_conditions");
+  assert.equal(intent.metric, "weather_day_classes");
+  assert.deepEqual(intent.periods, [{ label: "2026-2026", start: "2026-01-01", end: "2026-12-31" }]);
+});
+
+test("Sommertage without explicit season defaults to full year", () => {
+  const intent = parseStatisticsQuestion("Wie viele Sommertage hat es 2024 gegeben?");
+  assert.equal(intent.operation, "count_days");
+  assert.equal(intent.metric, "outdoor_temperature_max");
+  assert.deepEqual(intent.periods, [{ label: "2024-2024", start: "2024-01-01", end: "2024-12-31" }]);
+});
+
+test("Sommertage with explicit Sommer still uses summer period", () => {
+  const intent = parseStatisticsQuestion("Wie viele Sommertage hat es im Sommer 2024 gegeben?");
+  assert.equal(intent.operation, "count_days");
+  assert.deepEqual(intent.periods, [{ label: "Sommer 2024", start: "2024-06-01", end: "2024-08-31" }]);
+});
+
 test("counts multiple weather day classes in one question", () => {
   const intent = parseStatisticsQuestion(
     "wie viele hitzetage und wüstentage hat es bisher im jahr 2026 gegeben?",
