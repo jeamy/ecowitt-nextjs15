@@ -457,6 +457,7 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
   const hasAmount = /wie viel|wieviel|wieviele/.test(normalized);
   const hasTotal = /summe|gesamt|insgesamt|total/.test(normalized);
   const hasRanking = /welcher|welches|welche|ranking|rangliste|sortiere|waermst|wärmst|nassest|meiste|meisten|hoechst|höchst|niedrigst|tiefst|kaeltest|kältest|minimal|minimum|top/.test(normalized);
+  const hasMinimumRanking = /wenig|niedrigst|tiefst|minimal|minimum|kaeltest|kältest|gering/.test(normalized);
   const hasAvailability = /daten|datenabdeckung|abdeckung|verfuegbarkeit|verfügbarkeit/.test(normalized);
   const hasCompare = years.length >= 2 && /oder|vergleich|wärmer|waermer|mehr|weniger|gegenüber|gegenueber|als/.test(normalized);
   const threshold = extractThreshold(message);
@@ -564,6 +565,7 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
       metric: mainMetric.metric,
       aggregation: mainMetric.aggregation,
       groupBy: groupedBy,
+      rankAscending: hasMinimumRanking,
       unit: mainMetric.unit,
       periods: groupedPeriods(message, years),
       limit: /top\s*(\d+)/.test(normalized) ? Number(normalized.match(/top\s*(\d+)/)?.[1]) : 5,
@@ -575,6 +577,7 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
       metric: mainMetric.metric,
       aggregation: mainMetric.aggregation,
       groupBy: groupedBy,
+      rankAscending: hasMinimumRanking,
       unit: mainMetric.unit,
       periods: groupedPeriods(message, years),
       limit: /top\s*(\d+)/.test(normalized) ? Number(normalized.match(/top\s*(\d+)/)?.[1]) : 5,
@@ -609,6 +612,7 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
       metric: mainMetric.metric,
       aggregation: mainMetric.aggregation,
       groupBy: groupedBy,
+      rankAscending: hasMinimumRanking,
       unit: mainMetric.unit,
       periods: groupedPeriods(message, years),
       limit: groupedBy ? 5 : years.length,
@@ -623,6 +627,7 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
       metric: mainMetric.metric,
       aggregation: mainMetric.aggregation,
       groupBy: groupedBy,
+      rankAscending: hasMinimumRanking,
       unit: mainMetric.unit,
       periods: groupedPeriods(message, years),
       limit: /top\s*(\d+)/.test(normalized) ? Number(normalized.match(/top\s*(\d+)/)?.[1]) : 5,
@@ -1400,7 +1405,7 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
     };
   });
   const numeric = values.filter((item): item is typeof values[number] & { value: number } => item.value !== null);
-  const isMinimumRanking = intent.aggregation === "min";
+  const isMinimumRanking = intent.aggregation === "min" || intent.rankAscending === true;
   const winner = numeric.length
     ? numeric.reduce((best, item) => isMinimumRanking ? item.value < best.value ? item : best : item.value > best.value ? item : best).label
     : null;

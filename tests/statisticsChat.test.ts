@@ -375,6 +375,35 @@ test("ranks rainiest days across all records", () => {
   ]);
 });
 
+test("ranks months with least rain in a single year ascending", () => {
+  const intent = parseStatisticsQuestion("In welchem Monat war am wenigsten Regen im Jahr 2025?");
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
+  assert.equal(intent.operation, "rank_periods");
+  assert.equal(intent.metric, "precipitation_total");
+  assert.equal(intent.groupBy, "month");
+  assert.equal(intent.rankAscending, true);
+  assert.deepEqual(facts.values?.map((item) => [item.label, item.value]), [
+    ["2025-08", 0],
+    ["2025-01", 8],
+    ["2025-07", 35],
+  ]);
+});
+
+test("ranks months with least rain across a multi-year range ascending", () => {
+  const intent = parseStatisticsQuestion("In welchem Monat zwischen 2023 und 2025 hat es am wenigsten geregnet?");
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
+  assert.equal(intent.operation, "rank_periods");
+  assert.equal(intent.groupBy, "month");
+  assert.equal(intent.rankAscending, true);
+  assert.deepEqual(facts.values?.slice(0, 5).map((item) => [item.label, item.value]), [
+    ["2024-07", 0],
+    ["2025-08", 0],
+    ["2023-01", 1],
+    ["2023-07", 2],
+    ["2024-01", 5],
+  ]);
+});
+
 test("lists months where temperatures exceeded a threshold", () => {
   const intent = parseStatisticsQuestion("In welchen Monaten im gesamten Zeitraum waren die Temperaturen > 30 Grad?");
   const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);

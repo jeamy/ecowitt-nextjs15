@@ -32,6 +32,7 @@ export interface StatisticsChatIntent {
   conditionLabel?: string;
   aggregation?: "sum" | "avg" | "min" | "max";
   groupBy?: "day" | "month";
+  rankAscending?: boolean;
   unit: string;
   periods: StatisticsChatPeriod[];
   limit?: number;
