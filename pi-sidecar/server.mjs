@@ -20,7 +20,7 @@ function providerConfig(body) {
   const provider = String(body.provider || process.env.PI_SIDECAR_PROVIDER || "").toLowerCase()
     || (process.env.OPENAI_API_KEY ? "openai" : process.env.ANTHROPIC_API_KEY ? "anthropic" : "");
   const model = String(body.model || process.env.PI_SIDECAR_MODEL || process.env.AI_AGENT_MODEL || "")
-    || (provider === "anthropic" ? "claude-3-5-haiku-latest" : "gpt-4o-mini");
+    || (provider === "anthropic" ? "claude-haiku-4-5" : "gpt-4o-mini");
   return { provider, model };
 }
 

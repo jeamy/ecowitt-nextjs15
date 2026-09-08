@@ -456,8 +456,8 @@ export function parseStatisticsQuestion(message: string, now = new Date()): Stat
   const hasCount = /wie viele|wieviele|anzahl|count/.test(normalized);
   const hasAmount = /wie viel|wieviel|wieviele/.test(normalized);
   const hasTotal = /summe|gesamt|insgesamt|total/.test(normalized);
-  const hasRanking = /welcher|welches|welche|ranking|rangliste|sortiere|waermst|wärmst|nassest|meiste|meisten|hoechst|höchst|niedrigst|tiefst|kaeltest|kältest|minimal|minimum|top/.test(normalized);
-  const hasMinimumRanking = /wenig|niedrigst|tiefst|minimal|minimum|kaeltest|kältest|gering/.test(normalized);
+  const hasRanking = /welcher|welches|welche|ranking|rangliste|sortiere|waermst|wärmst|nassest|meiste|meisten|hoechst|höchst|niedrigst|tiefst|kaeltest|kältest|minimal|minimum|wenigst|geringst|top/.test(normalized);
+  const hasMinimumRanking = /wenigst|niedrigst|tiefst|minimal|minimum|kaeltest|kältest|geringst/.test(normalized);
   const hasAvailability = /daten|datenabdeckung|abdeckung|verfuegbarkeit|verfügbarkeit/.test(normalized);
   const hasCompare = years.length >= 2 && /oder|vergleich|wärmer|waermer|mehr|weniger|gegenüber|gegenueber|als/.test(normalized);
   const threshold = extractThreshold(message);
@@ -870,6 +870,24 @@ function monthPeriodsFromRows(rows: DailyAggregateRow[], basePeriods: Statistics
   });
 }
 
+function allMonthPeriodsInRange(basePeriods: StatisticsChatPeriod[]) {
+  const periods: StatisticsChatPeriod[] = [];
+  for (const base of basePeriods) {
+    const startYear = Number(base.start.slice(0, 4));
+    const startMonth = Number(base.start.slice(5, 7));
+    const endYear = Number(base.end.slice(0, 4));
+    const endMonth = Number(base.end.slice(5, 7));
+    for (let year = startYear; year <= endYear; year += 1) {
+      const firstMonth = year === startYear ? startMonth : 1;
+      const lastMonth = year === endYear ? endMonth : 12;
+      for (let month = firstMonth; month <= lastMonth; month += 1) {
+        periods.push(monthPeriod(year, month));
+      }
+    }
+  }
+  return periods;
+}
+
 function dayPeriodsFromRows(rows: DailyAggregateRow[], basePeriods: StatisticsChatPeriod[]) {
   return rows
     .map((row) => row.day.slice(0, 10))
@@ -879,7 +897,17 @@ function dayPeriodsFromRows(rows: DailyAggregateRow[], basePeriods: StatisticsCh
 }
 
 function calculationPeriodsFromIntent(intent: StatisticsChatIntent, rows: DailyAggregateRow[]) {
-  if (intent.groupBy === "month") return monthPeriodsFromRows(rows, intent.periods);
+  if (intent.groupBy === "month") {
+    if (intent.operation === "rank_periods") {
+      const spanYears = intent.periods.reduce((max, period) => {
+        const startYear = Number(period.start.slice(0, 4));
+        const endYear = Number(period.end.slice(0, 4));
+        return Math.max(max, endYear - startYear + 1);
+      }, 0);
+      if (spanYears <= 5) return allMonthPeriodsInRange(intent.periods);
+    }
+    return monthPeriodsFromRows(rows, intent.periods);
+  }
   if (intent.groupBy === "day") return dayPeriodsFromRows(rows, intent.periods);
   return intent.periods;
 }
@@ -1409,20 +1437,23 @@ export function computeStatisticsChatFactsFromDailyRows(intent: StatisticsChatIn
   const winner = numeric.length
     ? numeric.reduce((best, item) => isMinimumRanking ? item.value < best.value ? item : best : item.value > best.value ? item : best).label
     : null;
-  const sorted = numeric.slice().sort((a, b) => isMinimumRanking ? a.value - b.value : b.value - a.value);
-  const differenceAbsolute = sorted.length >= 2 ? round(Math.abs(sorted[0].value - sorted[1].value)) : null;
-  const denominator = sorted.length >= 2 ? Math.abs(sorted[1].value) : 0;
+  const numericSorted = numeric.slice().sort((a, b) => isMinimumRanking ? a.value - b.value : b.value - a.value);
+  const differenceAbsolute = numericSorted.length >= 2 ? round(Math.abs(numericSorted[0].value - numericSorted[1].value)) : null;
+  const denominator = numericSorted.length >= 2 ? Math.abs(numericSorted[1].value) : 0;
   const differenceRelativePercent = differenceAbsolute !== null && denominator > 0
     ? round((differenceAbsolute / denominator) * 100)
     : null;
   if (values.some((item) => item.value === null)) warnings.push("Für mindestens einen Vergleichszeitraum fehlen gültige Messwerte.");
   if (intent.operation === "rank_periods") {
+    const nullPeriods = values.filter((item) => item.value === null);
+    const rankedValues = [...numericSorted, ...nullPeriods];
+    const rankLimit = intent.groupBy === "month" ? calculationPeriods.length : intent.limit || 10;
     return {
       operation: intent.operation,
       metric: intent.metric,
       unit: intent.unit,
       periods: calculationPeriods,
-      values: sorted.slice(0, intent.limit || 10),
+      values: rankedValues.slice(0, rankLimit),
       winner,
       differenceAbsolute,
       differenceRelativePercent,

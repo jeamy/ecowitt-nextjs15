@@ -382,10 +382,20 @@ test("ranks months with least rain in a single year ascending", () => {
   assert.equal(intent.metric, "precipitation_total");
   assert.equal(intent.groupBy, "month");
   assert.equal(intent.rankAscending, true);
+  assert.equal(facts.values?.length, 12);
   assert.deepEqual(facts.values?.map((item) => [item.label, item.value]), [
     ["2025-08", 0],
     ["2025-01", 8],
     ["2025-07", 35],
+    ["2025-02", null],
+    ["2025-03", null],
+    ["2025-04", null],
+    ["2025-05", null],
+    ["2025-06", null],
+    ["2025-09", null],
+    ["2025-10", null],
+    ["2025-11", null],
+    ["2025-12", null],
   ]);
 });
 
@@ -401,6 +411,91 @@ test("ranks months with least rain across a multi-year range ascending", () => {
     ["2023-01", 1],
     ["2023-07", 2],
     ["2024-01", 5],
+  ]);
+});
+
+test("ranks months with lowest precipitation using 'geringsten' wording", () => {
+  const intent = parseStatisticsQuestion("monat mit dem geringsten niederschlag in 2025");
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
+  assert.equal(intent.operation, "rank_periods");
+  assert.equal(intent.metric, "precipitation_total");
+  assert.equal(intent.groupBy, "month");
+  assert.equal(intent.rankAscending, true);
+  assert.equal(facts.values?.length, 12);
+  assert.deepEqual(facts.values?.map((item) => [item.label, item.value]), [
+    ["2025-08", 0],
+    ["2025-01", 8],
+    ["2025-07", 35],
+    ["2025-02", null],
+    ["2025-03", null],
+    ["2025-04", null],
+    ["2025-05", null],
+    ["2025-06", null],
+    ["2025-09", null],
+    ["2025-10", null],
+    ["2025-11", null],
+    ["2025-12", null],
+  ]);
+});
+
+test("ranks all months by precipitation amount for a single year including missing data", () => {
+  const intent = parseStatisticsQuestion("Erstelle eine rangliste der niederschlagsmenge aller monate 2025");
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, rows);
+  assert.equal(intent.operation, "rank_periods");
+  assert.equal(intent.metric, "precipitation_total");
+  assert.equal(intent.groupBy, "month");
+  assert.equal(facts.values?.length, 12);
+  assert.deepEqual(facts.values?.map((item) => [item.label, item.value]), [
+    ["2025-07", 35],
+    ["2025-01", 8],
+    ["2025-08", 0],
+    ["2025-02", null],
+    ["2025-03", null],
+    ["2025-04", null],
+    ["2025-05", null],
+    ["2025-06", null],
+    ["2025-09", null],
+    ["2025-10", null],
+    ["2025-11", null],
+    ["2025-12", null],
+  ]);
+});
+
+test("ranks all months by precipitation with full year data", () => {
+  const fullYearRows: DailyAggregateRow[] = [
+    { day: "2025-01-15", tmax: 5, tmin: 1, tavg: 3, rain_day: 50, wind_max: 10, gust_max: 15, wind_avg: 5, tfmax: 4, tfmin: 0 },
+    { day: "2025-02-15", tmax: 6, tmin: 2, tavg: 4, rain_day: 40, wind_max: 12, gust_max: 18, wind_avg: 6, tfmax: 5, tfmin: 1 },
+    { day: "2025-03-15", tmax: 10, tmin: 3, tavg: 6, rain_day: 77, wind_max: 14, gust_max: 20, wind_avg: 7, tfmax: 9, tfmin: 2 },
+    { day: "2025-04-15", tmax: 14, tmin: 5, tavg: 9, rain_day: 30, wind_max: 16, gust_max: 22, wind_avg: 8, tfmax: 13, tfmin: 4 },
+    { day: "2025-05-15", tmax: 18, tmin: 8, tavg: 13, rain_day: 55, wind_max: 18, gust_max: 25, wind_avg: 9, tfmax: 17, tfmin: 7 },
+    { day: "2025-06-15", tmax: 22, tmin: 12, tavg: 17, rain_day: 20, wind_max: 20, gust_max: 28, wind_avg: 10, tfmax: 21, tfmin: 11 },
+    { day: "2025-07-15", tmax: 26, tmin: 15, tavg: 20, rain_day: 131, wind_max: 22, gust_max: 30, wind_avg: 11, tfmax: 25, tfmin: 14 },
+    { day: "2025-08-15", tmax: 25, tmin: 14, tavg: 19, rain_day: 10, wind_max: 21, gust_max: 29, wind_avg: 10, tfmax: 24, tfmin: 13 },
+    { day: "2025-09-15", tmax: 21, tmin: 11, tavg: 16, rain_day: 136, wind_max: 19, gust_max: 27, wind_avg: 9, tfmax: 20, tfmin: 10 },
+    { day: "2025-10-15", tmax: 15, tmin: 7, tavg: 11, rain_day: 25, wind_max: 17, gust_max: 24, wind_avg: 8, tfmax: 14, tfmin: 6 },
+    { day: "2025-11-15", tmax: 9, tmin: 3, tavg: 6, rain_day: 68, wind_max: 15, gust_max: 21, wind_avg: 7, tfmax: 8, tfmin: 2 },
+    { day: "2025-12-15", tmax: 4, tmin: 0, tavg: 2, rain_day: 60, wind_max: 13, gust_max: 19, wind_avg: 6, tfmax: 3, tfmin: -1 },
+  ];
+  const intent = parseStatisticsQuestion("Erstelle eine rangliste der niederschlagsmenge aller monate 2025");
+  const facts = computeStatisticsChatFactsFromDailyRows(intent, fullYearRows);
+  assert.equal(intent.operation, "rank_periods");
+  assert.equal(intent.metric, "precipitation_total");
+  assert.equal(intent.groupBy, "month");
+  assert.equal(facts.values?.length, 12);
+  assert.ok(facts.values?.every((item) => item.value !== null), "every month should have a valid precipitation value");
+  assert.deepEqual(facts.values?.map((item) => [item.label, item.value]), [
+    ["2025-09", 136],
+    ["2025-07", 131],
+    ["2025-03", 77],
+    ["2025-11", 68],
+    ["2025-12", 60],
+    ["2025-05", 55],
+    ["2025-01", 50],
+    ["2025-02", 40],
+    ["2025-04", 30],
+    ["2025-10", 25],
+    ["2025-06", 20],
+    ["2025-08", 10],
   ]);
 });
 
