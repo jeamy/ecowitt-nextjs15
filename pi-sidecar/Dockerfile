@@ -1,7 +1,8 @@
 FROM node:24-alpine
 
 WORKDIR /app
-COPY pi-sidecar/package.json ./package.json
+COPY pi-sidecar/package.json pi-sidecar/package-lock.json ./
+RUN npm ci --omit=dev
 COPY pi-sidecar/server.mjs ./server.mjs
 
 ENV AI_AGENT_HOST=0.0.0.0

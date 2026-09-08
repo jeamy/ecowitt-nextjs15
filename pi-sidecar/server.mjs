@@ -1,4 +1,5 @@
 import http from "node:http";
+import { createAgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 
 const host = process.env.AI_AGENT_HOST || "0.0.0.0";
 const port = Number(process.env.AI_AGENT_PORT || 3001);
@@ -34,44 +35,86 @@ function promptFrom(body) {
   ].join("\n");
 }
 
-async function callOpenAI(model, prompt) {
-  const response = await fetch(process.env.PI_SIDECAR_OPENAI_BASE_URL || "https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "content-type": "application/json" },
-    body: JSON.stringify({ model, temperature: 0, max_tokens: 1200, messages: [
-      { role: "system", content: "Du bist ein präziser Assistent für lokale Wetterstatistiken. Verwende nur die gelieferten Fakten." },
-      { role: "user", content: prompt },
-    ] }),
+let runtimePromise;
+
+function providerBaseUrl(provider) {
+  const configured = provider === "anthropic"
+    ? process.env.PI_SIDECAR_ANTHROPIC_BASE_URL
+    : provider === "openai" ? process.env.PI_SIDECAR_OPENAI_BASE_URL : undefined;
+  if (!configured) return undefined;
+  return configured
+    .replace(/\/v1\/messages\/?$/, "")
+    .replace(/\/chat\/completions\/?$/, "")
+    .replace(/\/$/, "");
+}
+
+async function piRuntime() {
+  if (!runtimePromise) {
+    runtimePromise = ModelRuntime.create().then((runtime) => {
+      for (const provider of ["anthropic", "openai"]) {
+        const baseUrl = providerBaseUrl(provider);
+        if (baseUrl) runtime.registerProvider(provider, { baseUrl });
+      }
+      return runtime;
+    });
+  }
+  return runtimePromise;
+}
+
+function isTransientError(error) {
+  const message = (error instanceof Error ? error.message : String(error || "")).toLowerCase();
+  if (/no api key|not found in pi registry|not found in registry/.test(message)) return false;
+  return /429|rate.?limit|too many requests|overloaded|capacity|50[0239]|timeout|timed out|etimedout|econnreset|socket|network|fetch failed|other side closed|empty response/.test(message);
+}
+
+async function runPiPromptOnce(provider, modelId, prompt) {
+  const modelRuntime = await piRuntime();
+  const model = modelRuntime.getModel(provider, modelId);
+  if (!model) throw new Error(`Model ${provider}/${modelId} not found in Pi registry`);
+  const available = await modelRuntime.getAvailable();
+  if (!available.some((item) => item.provider === model.provider && item.id === model.id)) {
+    throw new Error(`No API key configured for ${model.provider}`);
+  }
+  const maxTokens = Math.max(1, Number(process.env.PI_SIDECAR_MAX_TOKENS || 1200));
+  const { session } = await createAgentSession({
+    model: { ...model, maxTokens },
+    modelRuntime,
+    sessionManager: SessionManager.inMemory(),
+    tools: [],
   });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(`OPENAI_HTTP_${response.status}`);
-  const answer = payload?.choices?.[0]?.message?.content;
-  if (typeof answer !== "string" || !answer.trim()) throw new Error("OPENAI_EMPTY_ANSWER");
+  let answer = "";
+  const unsubscribe = session.subscribe((event) => {
+    if (event.type === "message_update" && event.assistantMessageEvent?.type === "text_delta") {
+      answer += event.assistantMessageEvent.delta;
+    }
+  });
+  try {
+    await session.prompt(prompt);
+  } finally {
+    unsubscribe();
+    session.dispose();
+  }
+  if (!answer.trim()) throw new Error("PI_EMPTY_ANSWER");
   return answer.trim();
 }
 
-async function callAnthropic(model, prompt) {
-  const response = await fetch(process.env.PI_SIDECAR_ANTHROPIC_BASE_URL || "https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": process.env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ model, max_tokens: 1200, temperature: 0, system: "Du bist ein präziser Assistent für lokale Wetterstatistiken. Verwende nur die gelieferten Fakten.", messages: [{ role: "user", content: prompt }] }),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(`ANTHROPIC_HTTP_${response.status}`);
-  const answer = payload?.content?.find((item) => item?.type === "text")?.text;
-  if (typeof answer !== "string" || !answer.trim()) throw new Error("ANTHROPIC_EMPTY_ANSWER");
-  return answer.trim();
+async function runPiPrompt(provider, model, prompt) {
+  const maxRetries = Math.max(0, Number(process.env.PI_SIDECAR_MAX_RETRIES || 3));
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await runPiPromptOnce(provider, model, prompt);
+    } catch (error) {
+      if (attempt >= maxRetries || !isTransientError(error)) throw error;
+      const backoffMs = Math.min(30000, 2000 * 2 ** attempt) + Math.floor(Math.random() * 500);
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    }
+  }
 }
 
 async function runChat(body) {
   const { provider, model } = providerConfig(body);
   if (!provider) throw new Error("PI_PROVIDER_NOT_CONFIGURED");
-  const prompt = promptFrom(body);
-  const answer = provider === "anthropic" ? await callAnthropic(model, prompt) : await callOpenAI(model, prompt);
+  const answer = await runPiPrompt(provider, model, promptFrom(body));
   return { answer, summary: answer, mode: "sidecar", provider, model };
 }
 
