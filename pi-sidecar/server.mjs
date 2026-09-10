@@ -20,8 +20,11 @@ async function readBody(req) {
 function providerConfig(body) {
   const provider = String(body.provider || process.env.PI_SIDECAR_PROVIDER || "").toLowerCase()
     || (process.env.OPENAI_API_KEY ? "openai" : process.env.ANTHROPIC_API_KEY ? "anthropic" : "");
+  const fallbackModel = provider === "anthropic" ? "claude-haiku-4-5"
+    : provider === "ollama" ? "llama3.1:8b"
+    : "gpt-4o-mini";
   const model = String(body.model || process.env.PI_SIDECAR_MODEL || process.env.AI_AGENT_MODEL || "")
-    || (provider === "anthropic" ? "claude-haiku-4-5" : "gpt-4o-mini");
+    || fallbackModel;
   return { provider, model };
 }
 
@@ -48,6 +51,58 @@ function providerBaseUrl(provider) {
     .replace(/\/$/, "");
 }
 
+function ollamaBaseUrl() {
+  return (process.env.PI_SIDECAR_OLLAMA_BASE_URL || "http://localhost:11434/v1")
+    .replace(/\/chat\/completions\/?$/, "")
+    .replace(/\/$/, "");
+}
+
+function ollamaEnabled() {
+  return Boolean(process.env.PI_SIDECAR_OLLAMA_BASE_URL)
+    || String(process.env.PI_SIDECAR_PROVIDER || "").toLowerCase() === "ollama";
+}
+
+function ollamaModelDef(modelId) {
+  return {
+    id: modelId,
+    name: modelId,
+    reasoning: /reason|think|gpt-oss|deepseek-r1|qwen3|:r1|-r1/i.test(modelId),
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: Math.max(4096, Number(process.env.PI_SIDECAR_OLLAMA_CONTEXT_WINDOW || 131072)),
+    maxTokens: Math.max(1, Number(process.env.PI_SIDECAR_MAX_TOKENS || 1200)),
+    // Ollama's OpenAI-compatible endpoint does not understand the `developer`
+    // role or `reasoning_effort`; send a plain system message instead.
+    compat: { supportsDeveloperRole: false, supportsReasoningEffort: false },
+  };
+}
+
+function ollamaModelIds(extra) {
+  const ids = new Set(
+    String(process.env.PI_SIDECAR_OLLAMA_MODELS || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean),
+  );
+  if (String(process.env.PI_SIDECAR_PROVIDER || "").toLowerCase() === "ollama" && process.env.PI_SIDECAR_MODEL) {
+    ids.add(process.env.PI_SIDECAR_MODEL.trim());
+  }
+  if (extra) ids.add(String(extra).trim());
+  if (ids.size === 0) ids.add("llama3.1:8b");
+  return [...ids];
+}
+
+function registerOllama(runtime, extraModelId) {
+  runtime.registerProvider("ollama", {
+    name: "Ollama",
+    baseUrl: ollamaBaseUrl(),
+    // Placeholder: Ollama ignores it, but pi requires auth before a model is usable.
+    apiKey: process.env.PI_SIDECAR_OLLAMA_API_KEY || "ollama",
+    api: "openai-completions",
+    models: ollamaModelIds(extraModelId).map(ollamaModelDef),
+  });
+}
+
 async function piRuntime() {
   if (!runtimePromise) {
     runtimePromise = ModelRuntime.create().then((runtime) => {
@@ -55,6 +110,7 @@ async function piRuntime() {
         const baseUrl = providerBaseUrl(provider);
         if (baseUrl) runtime.registerProvider(provider, { baseUrl });
       }
+      if (ollamaEnabled()) registerOllama(runtime);
       return runtime;
     });
   }
@@ -69,11 +125,16 @@ function isTransientError(error) {
 
 async function runPiPromptOnce(provider, modelId, prompt) {
   const modelRuntime = await piRuntime();
+  if (provider === "ollama" && !modelRuntime.getModel(provider, modelId)) {
+    registerOllama(modelRuntime, modelId);
+  }
   const model = modelRuntime.getModel(provider, modelId);
   if (!model) throw new Error(`Model ${provider}/${modelId} not found in Pi registry`);
-  const available = await modelRuntime.getAvailable();
-  if (!available.some((item) => item.provider === model.provider && item.id === model.id)) {
-    throw new Error(`No API key configured for ${model.provider}`);
+  if (provider !== "ollama") {
+    const available = await modelRuntime.getAvailable();
+    if (!available.some((item) => item.provider === model.provider && item.id === model.id)) {
+      throw new Error(`No API key configured for ${model.provider}`);
+    }
   }
   const maxTokens = Math.max(1, Number(process.env.PI_SIDECAR_MAX_TOKENS || 1200));
   const { session } = await createAgentSession({

@@ -37,6 +37,10 @@ services:
     environment:
       - AI_AGENT_HOST=0.0.0.0
       - AI_AGENT_PORT=3001
+    # Lets PI_SIDECAR_OLLAMA_BASE_URL=http://host.docker.internal:11434/v1 reach
+    # an Ollama instance running on the Docker host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     expose:
       - "3001"
     healthcheck:

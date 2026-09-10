@@ -40,7 +40,7 @@ Alle API-Routen, die lokale Dateien oder DuckDB nutzen, laufen im Node.js-Runtim
 ```bash
 npm install
 
-cp env.example .env
+cp .env.example .env
 cp eco.example.ts eco.ts
 
 mkdir -p DNT data
@@ -70,7 +70,8 @@ server: "api.ecowitt.net"
 
 ### Umgebungsvariablen
 
-`env.example` nach `.env` kopieren. Relevante Variablen:
+`.env.example` nach `.env` kopieren. Die Datei listet **alle** vom Server und vom
+PI-Sidecar ausgelesenen Variablen mit Defaults und Kommentaren; die wichtigsten:
 
 | Variable | Bedeutung |
 | --- | --- |
@@ -82,10 +83,23 @@ server: "api.ecowitt.net"
 | `ADMIN_API_TOKEN` | Token fuer administrative API-Routen. |
 | `WEATHER_ADMIN_TOKEN` | Fallback-Name fuer denselben Admin-Token. |
 | `STATISTICS_CHAT_ENABLED` | Aktiviert optional die KI-Formulierung ueber den internen Ecowitt-PI-Sidecar; lokale Antworten bleiben als Fallback verfuegbar. |
-| `PI_SIDECAR_PROVIDER`, `PI_SIDECAR_MODEL` | Provider und Modell fuer den Sidecar. Die API-Keys werden nur ueber `.env` an den Compose-Service gegeben. |
+| `PI_SIDECAR_PROVIDER`, `PI_SIDECAR_MODEL` | Provider (`openai` \| `anthropic` \| `ollama`) und Modell fuer den Sidecar. Cloud-API-Keys werden nur ueber `.env` an den Compose-Service gegeben. |
+| `PI_SIDECAR_OLLAMA_BASE_URL` | Aktiviert lokale Ollama-Modelle (kein API-Key noetig). Im Container den Host ueber `http://host.docker.internal:11434/v1` erreichen; Standard `http://localhost:11434/v1`. Optionale Modellliste: `PI_SIDECAR_OLLAMA_MODELS`. |
 | `STATISTICS_CHAT_STORAGE_DIR` | Persistenter Verlauf und Antwort-Cache, standardmaessig `data/statistics_chat`. |
 
 Admin-Routen akzeptieren entweder `Authorization: Bearer <token>` oder `x-admin-token: <token>`.
+
+#### Lokale Ollama-Modelle
+
+```bash
+PI_SIDECAR_PROVIDER=ollama
+PI_SIDECAR_MODEL=llama3.1:8b            # ein per `ollama pull` geladener Tag
+# nur im Docker-Compose-Betrieb noetig:
+PI_SIDECAR_OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
+```
+
+Der Sidecar spricht Ollamas OpenAI-kompatiblen Endpunkt an. Unbekannte Modell-Tags
+werden pro Request registriert; ein API-Key ist nicht erforderlich.
 
 ### Kanalnamen
 
@@ -237,7 +251,7 @@ src/scripts/prewarm.ts    Parquet-Vorwaermung
 ## Docker
 
 ```bash
-cp env.example .env
+cp .env.example .env
 cp eco.example.ts eco.ts
 mkdir -p DNT data
 
@@ -265,4 +279,4 @@ Die App lauscht im Compose-Setup auf `127.0.0.1:3010`.
 
 ## Sicherheit
 
-`.env*`, `eco.ts`, `DNT/`, `data/`, DuckDB-Dateien und generierte Temperaturdaten werden nicht versioniert. Echte API-Keys und Stationsdaten sollten nicht committet werden.
+`.env*` (ausser `.env.example`), `eco.ts`, `DNT/`, `data/`, DuckDB-Dateien und generierte Temperaturdaten werden nicht versioniert. Echte API-Keys und Stationsdaten sollten nicht committet werden.
