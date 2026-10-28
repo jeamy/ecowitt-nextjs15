@@ -824,7 +824,7 @@ export default function Dashboard() {
   const [year, setYear] = useState<string>("");
   const [mon, setMon] = useState<string>(""); // MM
   const [resolution, setResolution] = useState<Resolution>("day");
-  const [mode, setMode] = useState<"main" | "channel">("channel");
+  const [mode, setMode] = useState<"main" | "channel">("main");
   const [selectedChannel, setSelectedChannel] = useState<string>("all");
   const [dataAll, setDataAll] = useState<DataResp | null>(null);
   const [dataMain, setDataMain] = useState<DataResp | null>(null);
