@@ -2,7 +2,7 @@
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem 1.5rem 3rem;
+  padding: 0 0 3rem;
   display: flex;
   flex-direction: column;
   gap: 1.75rem;
@@ -37,18 +37,10 @@
   box-shadow: 0 25px 45px -35px rgba(15, 23, 42, 0.35);
 }
 
-@media (prefers-color-scheme: dark) {
-  .card {
-    background: rgba(15, 23, 42, 0.8);
-    border-color: rgba(148, 163, 184, 0.25);
-    box-shadow: 0 25px 45px -35px rgba(15, 23, 42, 0.8);
-  }
-  .title {
-    color: var(--foreground-strong, #e2e8f0);
-  }
-  .subtitle {
-    color: var(--foreground-muted, #94a3b8);
-  }
+:global(html[data-mode="dark"]) .card {
+  background: var(--surface-elevated);
+  border-color: var(--border);
+  box-shadow: var(--shadow);
 }
 
 .controlGrid {
@@ -172,19 +164,11 @@
   box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.25);
 }
 
-@media (prefers-color-scheme: dark) {
-  .tabList {
-    border-color: rgba(148, 163, 184, 0.2);
-  }
-  .tabButton,
-  .secondaryTabButton {
-    color: #cbd5f5;
-  }
-  .tabButtonActive,
-  .secondaryTabButtonActive {
-    color: #f8fafc;
-  }
-}
+:global(html[data-mode="dark"]) .tabList { border-color: var(--border); }
+:global(html[data-mode="dark"]) .tabButton,
+:global(html[data-mode="dark"]) .secondaryTabButton { color: var(--foreground-muted); }
+:global(html[data-mode="dark"]) .tabButtonActive,
+:global(html[data-mode="dark"]) .secondaryTabButtonActive { color: var(--foreground-strong); }
 
 .statusMessage {
   border-radius: 0.75rem;
@@ -232,11 +216,9 @@
   border: 1px solid transparent;
 }
 
-@media (prefers-color-scheme: dark) {
-  .sectionCard {
-    background: rgba(15, 23, 42, 0.45);
-    border-color: rgba(148, 163, 184, 0.08);
-  }
+:global(html[data-mode="dark"]) .sectionCard {
+  background: var(--surface-soft);
+  border-color: var(--border);
 }
 
 .sectionTitle {
@@ -246,11 +228,7 @@
   color: var(--foreground-strong, #0f172a);
 }
 
-@media (prefers-color-scheme: dark) {
-  .sectionTitle {
-    color: #e2e8f0;
-  }
-}
+:global(html[data-mode="dark"]) .sectionTitle { color: var(--foreground-strong); }
 
 .channelScroller {
   display: flex;
@@ -267,6 +245,40 @@
 .channelScroller::-webkit-scrollbar-thumb {
   background: rgba(100, 116, 139, 0.4);
   border-radius: 999px;
+}
+
+/* Archive layout: sticky filter sidebar next to the charts (docs/ui-mockups) */
+.archiveLayout {
+  display: grid;
+  grid-template-columns: 270px minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.filters {
+  position: sticky;
+  top: 133px;
+  align-self: start;
+}
+
+.filters .controlGrid {
+  grid-template-columns: 1fr;
+}
+
+.archiveContent {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+@media (max-width: 1050px) {
+  .archiveLayout {
+    grid-template-columns: 1fr;
+  }
+  .filters {
+    position: static;
+  }
 }
 
 @media (max-width: 768px) {

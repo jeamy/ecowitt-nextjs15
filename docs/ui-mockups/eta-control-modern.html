@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="de" data-mode="dark" data-palette="spaces_default">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Weather Control – modernes UI-Mockup</title>
+  <style>
+    :root {
+      --color-a: #aed83c;
+      --color-b: #152b35;
+      --color-c: #5c8ea0;
+      --accent-ink: #101010;
+      --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      --hot: #f97316;
+      --cold: #38bdf8;
+      --rain: #4f8df7;
+      --humidity: #31c48d;
+      --wind: #a78bfa;
+      --solar: #f6b73c;
+      --danger: #ef5a67;
+      --warning: #e4ae34;
+      --success: #2fc68c;
+    }
+
+    :root, :root[data-mode="dark"] {
+      --bg: color-mix(in srgb, var(--color-b) 34%, #090d12);
+      --surface: color-mix(in srgb, var(--color-b) 48%, #0e141b);
+      --surface-raised: color-mix(in srgb, var(--color-b) 62%, #151d26);
+      --surface-soft: color-mix(in srgb, var(--color-b) 39%, #101820);
+      --header: color-mix(in srgb, var(--color-b) 40%, #0a0f15);
+      --line: color-mix(in srgb, var(--color-c) 20%, #1b2430);
+      --line-strong: color-mix(in srgb, var(--color-c) 38%, #283546);
+      --text: #d5dce3;
+      --text-strong: #f4f6f8;
+      --muted: #97a2ad;
+      --accent: var(--color-a);
+      --accent-fill: var(--color-a);
+      --accent-soft: color-mix(in srgb, var(--color-a) 14%, transparent);
+      --shadow: 0 22px 60px rgba(0, 0, 0, .28);
+      --chart-grid: rgba(148, 163, 184, .14);
+      color-scheme: dark;
+    }
+
+    :root[data-mode="light"] {
+      --bg: color-mix(in srgb, var(--color-b) 18%, #f5f7f9);
+      --surface: #fff;
+      --surface-raised: color-mix(in srgb, var(--color-b) 10%, #fff);
+      --surface-soft: color-mix(in srgb, var(--color-b) 7%, #f7fafc);
+      --header: color-mix(in srgb, var(--color-b) 14%, #f9fbfd);
+      --line: color-mix(in srgb, var(--color-c) 22%, #d5dde6);
+      --line-strong: color-mix(in srgb, var(--color-c) 38%, #b8c4d2);
+      --text: #263240;
+      --text-strong: #0f1722;
+      --muted: #5c6877;
+      --accent: color-mix(in srgb, var(--color-a) 65%, #081018);
+      --accent-fill: var(--color-a);
+      --accent-soft: color-mix(in srgb, var(--color-a) 16%, transparent);
+      --shadow: 0 20px 55px rgba(15, 23, 34, .11);
+      --chart-grid: rgba(71, 85, 105, .13);
+      color-scheme: light;
+    }
+
+    * { box-sizing: border-box; }
+    html { min-height: 100%; background: var(--bg); }
+    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font: 14px/1.5 var(--font-sans); }
+    button, select, input { color: inherit; font: inherit; }
+    button, select { cursor: pointer; }
+    button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+      outline: 2px solid var(--accent); outline-offset: 2px;
+    }
+
+    .app-header {
+      position: sticky; top: 0; z-index: 20;
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in srgb, var(--header) 88%, transparent);
+      backdrop-filter: blur(18px);
+    }
+    .header-inner { max-width: 1460px; margin: auto; padding: 14px 24px 12px; }
+    .top-row { display: flex; align-items: center; gap: 18px; }
+    .brand { display: flex; align-items: center; gap: 12px; min-width: 250px; }
+    .brand-mark {
+      width: 42px; height: 42px; display: grid; place-items: center; flex: none;
+      border-radius: 13px; color: var(--accent-ink); background: var(--accent-fill);
+      box-shadow: 0 8px 28px color-mix(in srgb, var(--accent-fill) 25%, transparent);
+      font-size: 22px;
+    }
+    .brand-name { color: var(--text-strong); font-size: 17px; font-weight: 750; letter-spacing: .01em; }
+    .brand-sub { color: var(--muted); font-size: 12px; }
+    .live { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; color: var(--muted); font-size: 12px; }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 9px var(--success); }
+    .controls { display: flex; align-items: center; gap: 8px; }
+    .segmented { display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+    .segmented button { border: 0; background: transparent; color: var(--muted); border-radius: 6px; min-width: 34px; height: 29px; padding: 0 9px; }
+    .segmented button.active { background: var(--accent-fill); color: var(--accent-ink); font-weight: 750; }
+    .palette {
+      height: 37px; max-width: 178px; padding: 0 32px 0 11px;
+      border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text);
+    }
+    .nav-scroll { overflow-x: auto; scrollbar-width: none; margin-top: 12px; }
+    .nav-scroll::-webkit-scrollbar { display: none; }
+    .nav { display: flex; gap: 6px; min-width: max-content; }
+    .nav button {
+      border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--muted);
+      padding: 8px 12px; display: inline-flex; align-items: center; gap: 7px; font-weight: 620;
+    }
+    .nav button:hover { background: var(--surface); color: var(--text-strong); }
+    .nav button.active { color: var(--text-strong); border-color: var(--line-strong); background: var(--surface-raised); box-shadow: inset 0 -2px var(--accent); }
+
+    main { max-width: 1460px; margin: auto; padding: 22px 24px 56px; }
+    .view { display: none; }
+    .view.active { display: block; animation: fade .18s ease-out; }
+    @keyframes fade { from { opacity: .55; transform: translateY(2px); } }
+    .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 18px; margin-bottom: 18px; }
+    .eyebrow { color: var(--accent); font: 700 11px/1.2 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+    h1 { margin: 5px 0 2px; color: var(--text-strong); font-size: clamp(24px, 3vw, 34px); line-height: 1.15; }
+    h2 { margin: 0; color: var(--text-strong); font-size: 15px; }
+    h3 { margin: 0; color: var(--text-strong); font-size: 13px; }
+    p { margin: 0; }
+    .updated { color: var(--muted); font-size: 12px; }
+
+    .grid { display: grid; gap: 14px; }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .card {
+      min-width: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--surface);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, .055); overflow: hidden;
+    }
+    .card-pad { padding: 16px; }
+    .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .card-title { display: flex; align-items: center; gap: 9px; color: var(--text-strong); font-weight: 700; }
+    .card-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: var(--accent-soft); }
+    .badge { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line-strong); border-radius: 999px; padding: 2px 8px; color: var(--muted); font-size: 11px; }
+    .badge.ok { color: var(--success); border-color: color-mix(in srgb, var(--success) 55%, var(--line)); }
+    .badge.warn { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 55%, var(--line)); }
+    .rows { display: grid; gap: 0; }
+    .metric-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 8px 0; border-top: 1px solid var(--line); }
+    .metric-row:first-child { border-top: 0; }
+    .metric-label { color: var(--muted); }
+    .metric-value { color: var(--text-strong); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .metric-value small { color: var(--muted); font-size: 11px; font-weight: 500; }
+    .minmax { display: inline-flex; gap: 5px; margin-left: 8px; vertical-align: middle; }
+    .mini { border-radius: 999px; padding: 2px 7px; background: var(--surface-raised); color: var(--muted); font-size: 10px; }
+    .mini.hot { color: var(--hot); }.mini.cold { color: var(--cold); }
+
+    .hero-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 14px; }
+    .hero-kpi { padding: 15px 16px; position: relative; }
+    .hero-kpi::after { content: ""; position: absolute; left: 0; top: 13px; bottom: 13px; width: 3px; border-radius: 3px; background: var(--kpi-color, var(--accent)); }
+    .kpi-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+    .kpi-value { margin-top: 5px; color: var(--text-strong); font-size: 25px; font-weight: 760; font-variant-numeric: tabular-nums; }
+    .kpi-note { color: var(--muted); font-size: 11px; }
+
+    details { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+    summary { padding: 12px 15px; cursor: pointer; color: var(--text-strong); font-weight: 650; }
+    pre { margin: 0; padding: 14px; border-top: 1px solid var(--line); overflow: auto; color: var(--muted); background: var(--surface-soft); font: 11px/1.5 var(--font-mono); }
+
+    .gauge-card { padding: 15px; min-height: 250px; display: flex; flex-direction: column; }
+    .gauge-title { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 12px; }
+    .icon-btn { border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); color: var(--muted); height: 30px; padding: 0 9px; }
+    .gauge-wrap { flex: 1; display: grid; place-items: center; }
+    .gauge {
+      --value: 72; --gauge-color: var(--accent);
+      width: 152px; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center;
+      background: conic-gradient(var(--gauge-color) calc(var(--value) * 1%), var(--surface-raised) 0);
+      position: relative;
+    }
+    .gauge::before { content: ""; position: absolute; inset: 13px; border-radius: inherit; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+    .gauge-data { z-index: 1; text-align: center; }
+    .gauge-data b { display: block; color: var(--text-strong); font-size: 30px; line-height: 1; }
+    .gauge-data span { color: var(--muted); }
+
+    .toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 14px; margin-bottom: 14px; }
+    .field { display: grid; gap: 5px; min-width: 165px; flex: 1; }
+    .field label { color: var(--muted); font-size: 11px; font-weight: 650; }
+    .field select, .field input {
+      width: 100%; height: 40px; border: 1px solid var(--line-strong); border-radius: 9px;
+      background: var(--surface-soft); padding: 0 11px;
+    }
+    .button { height: 40px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface-raised); padding: 0 15px; font-weight: 680; }
+    .button.primary { background: var(--accent-fill); color: var(--accent-ink); border-color: var(--accent-fill); }
+    .button.danger { color: var(--danger); }
+
+    .forecast-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .forecast-card { padding: 15px; }
+    .forecast-day { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .weather-icon { font-size: 29px; }
+    .temperatures { display: flex; gap: 8px; align-items: baseline; margin: 12px 0; }
+    .temp-max { color: var(--hot); font-size: 25px; font-weight: 760; }
+    .temp-min { color: var(--cold); font-size: 17px; font-weight: 650; }
+    .source-head { display: flex; align-items: center; justify-content: space-between; margin: 22px 0 10px; }
+
+    .table-wrap { overflow: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 660px; }
+    th { color: var(--muted); font-size: 11px; font-weight: 650; text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line-strong); }
+    td { padding: 11px 12px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+    tbody tr:hover { background: var(--surface-raised); }
+    .score { display: inline-flex; min-width: 46px; justify-content: center; border-radius: 7px; padding: 2px 6px; background: var(--surface-raised); }
+    .score.good { color: var(--success); }.score.mid { color: var(--warning); }.score.bad { color: var(--danger); }
+
+    .chart-card { padding: 16px; }
+    .chart { height: 250px; margin-top: 10px; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); position: relative; overflow: hidden; }
+    .chart::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(to bottom, transparent 0 48px, var(--chart-grid) 49px 50px); }
+    .chart svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); font-size: 11px; }
+    .legend i { display: inline-block; width: 15px; height: 3px; border-radius: 4px; margin-right: 5px; vertical-align: middle; background: currentColor; }
+
+    .checkbox-row { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; color: var(--text); }
+    .checkbox-row input { accent-color: var(--accent); width: 17px; height: 17px; }
+    .archive-layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 14px; }
+    .filters { padding: 15px; align-self: start; position: sticky; top: 133px; }
+    .filters .field { margin-top: 12px; }
+
+    .stat-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .stat-kpi { padding: 13px; }
+    .stat-kpi .kpi-value { font-size: 21px; }
+    .heatmap { display: grid; grid-template-columns: repeat(26, 1fr); gap: 4px; margin-top: 12px; }
+    .heatmap span { aspect-ratio: 1; min-width: 5px; border-radius: 3px; background: color-mix(in srgb, var(--cold) calc(var(--heat, 30) * 1%), var(--surface-raised)); }
+    .chat { display: grid; grid-template-columns: minmax(0, 1fr) 230px; min-height: 335px; }
+    .chat-main { padding: 16px; border-right: 1px solid var(--line); }
+    .chat-side { padding: 13px; background: var(--surface-soft); }
+    .chat-input { display: flex; gap: 8px; margin-top: 12px; }
+    .chat-input input { flex: 1; min-width: 0; height: 40px; border: 1px solid var(--line-strong); border-radius: 9px; padding: 0 11px; background: var(--surface-soft); }
+    .bubble { max-width: 82%; padding: 10px 12px; border-radius: 12px; margin-top: 14px; }
+    .bubble.q { margin-right: auto; color: var(--accent-ink); background: var(--accent-fill); border-bottom-left-radius: 3px; }
+    .bubble.a { margin-left: auto; background: var(--surface-raised); border: 1px solid var(--line); border-bottom-right-radius: 3px; }
+    .question { padding: 8px; border-radius: 8px; color: var(--muted); font-size: 12px; }
+    .question.active { background: var(--accent-soft); color: var(--text-strong); }
+
+    .mock-note { margin-top: 18px; color: var(--muted); font-size: 11px; text-align: center; }
+
+    @media (max-width: 1050px) {
+      .grid-3, .forecast-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-4, .hero-kpis, .stat-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .archive-layout { grid-template-columns: 1fr; }
+      .filters { position: static; }
+    }
+    @media (max-width: 720px) {
+      .header-inner, main { padding-left: 14px; padding-right: 14px; }
+      .top-row { flex-wrap: wrap; gap: 10px; }
+      .brand { min-width: 0; flex: 1; }
+      .live { order: 3; width: 100%; margin-left: 54px; }
+      .controls { margin-left: auto; }
+      .palette { max-width: 120px; padding: 0 24px 0 8px; color: var(--text); font-size: 11px; }
+      .grid-2, .grid-3, .forecast-grid { grid-template-columns: 1fr; }
+      .grid-4, .hero-kpis, .stat-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .page-head { align-items: flex-start; flex-direction: column; }
+      .chat { grid-template-columns: 1fr; }
+      .chat-main { border-right: 0; border-bottom: 1px solid var(--line); }
+      .chat-side { display: none; }
+      .toolbar .field { min-width: calc(50% - 8px); }
+    }
+    @media (max-width: 430px) {
+      .brand-mark { width: 38px; height: 38px; }
+      .brand-sub { max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .controls { width: 100%; justify-content: flex-end; }
+      .live { margin-left: 50px; }
+      .grid-4, .hero-kpis, .stat-kpis { grid-template-columns: 1fr 1fr; }
+      .hero-kpi { padding: 13px 13px 13px 15px; }
+      .kpi-value { font-size: 21px; }
+      .toolbar .field { min-width: 100%; }
+      .gauge-card { min-height: 225px; }
+      .heatmap { grid-template-columns: repeat(13, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="top-row">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">⌁</div>
+          <div>
+            <div class="brand-name">Weather Control</div>
+            <div class="brand-sub">Ecowitt Wetterstation · Zuhause</div>
+          </div>
+        </div>
+        <div class="live"><span class="live-dot"></span><span>Live · aktualisiert vor 18 Sekunden</span></div>
+        <div class="controls">
+          <div class="segmented" aria-label="Sprache">
+            <button class="active" type="button">DE</button><button type="button">EN</button>
+          </div>
+          <div class="segmented" aria-label="Darstellung">
+            <button id="darkMode" class="active" type="button" title="Dunkel">☾</button>
+            <button id="lightMode" type="button" title="Hell">☀</button>
+          </div>
+          <select id="palette" class="palette" aria-label="Farbpalette"></select>
+        </div>
+      </div>
+      <div class="nav-scroll">
+        <nav class="nav" role="tablist" aria-label="Hauptnavigation">
+          <button class="active" data-view="realtime" role="tab">◉ Echtzeit</button>
+          <button data-view="graphics" role="tab">◌ Grafik</button>
+          <button data-view="forecast" role="tab">☁ Prognose</button>
+          <button data-view="analysis" role="tab">⌁ Analyse</button>
+          <button data-view="archive" role="tab">▤ Gespeicherte Daten</button>
+          <button data-view="statistics" role="tab">▥ Statistik</button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="view active" id="realtime">
+      <div class="page-head">
+        <div><div class="eyebrow">Aktuelle Bedingungen</div><h1>Wetter jetzt</h1><p class="updated">Mittwoch, 28. Oktober · 14:21:04</p></div>
+        <span class="badge ok">● Alle Sensoren erreichbar</span>
+      </div>
+      <div class="grid hero-kpis">
+        <div class="card hero-kpi" style="--kpi-color:var(--hot)"><div class="kpi-label">Außentemperatur</div><div class="kpi-value">21,8 °C</div><div class="kpi-note">Gefühlt 23,9 °C</div></div>
+        <div class="card hero-kpi" style="--kpi-color:var(--humidity)"><div class="kpi-label">Luftfeuchte</div><div class="kpi-value">71 %</div><div class="kpi-note">Taupunkt 16,3 °C</div></div>
+        <div class="card hero-kpi" style="--kpi-color:var(--wind)"><div class="kpi-label">Wind</div><div class="kpi-value">0,0 km/h</div><div class="kpi-note">Süd · Böe 0,0 km/h</div></div>
+        <div class="card hero-kpi" style="--kpi-color:var(--rain)"><div class="kpi-label">Regen heute</div><div class="kpi-value">0,0 mm</div><div class="kpi-note">Monat 8,8 mm</div></div>
+      </div>
+      <div class="grid grid-2">
+        <article class="card card-pad"><div class="card-head"><div class="card-title"><span class="card-icon">⌂</span>Innen</div><span class="badge ok">Normal</span></div><div class="rows">
+          <div class="metric-row"><span class="metric-label">Temperatur</span><span class="metric-value">25,9 °C <span class="minmax"><span class="mini cold">min 22,1</span><span class="mini hot">max 26,4</span></span></span></div>
+          <div class="metric-row"><span class="metric-label">Feuchte</span><span class="metric-value">56 %</span></div><div class="metric-row"><span class="metric-label">Luftdruck relativ</span><span class="metric-value">1021,6 hPa</span></div><div class="metric-row"><span class="metric-label">Luftdruck absolut</span><span class="metric-value">972,8 hPa</span></div>
+        </div></article>
+        <article class="card card-pad"><div class="card-head"><div class="card-title"><span class="card-icon">◒</span>Außen</div><span class="badge">CH0</span></div><div class="rows">
+          <div class="metric-row"><span class="metric-label">Temperatur</span><span class="metric-value">21,8 °C <span class="minmax"><span class="mini cold">min 13,2</span><span class="mini hot">max 22,5</span></span></span></div><div class="metric-row"><span class="metric-label">Feuchte</span><span class="metric-value">71 %</span></div><div class="metric-row"><span class="metric-label">Wind / Böe</span><span class="metric-value">0,0 / 0,0 <small>km/h</small></span></div><div class="metric-row"><span class="metric-label">Richtung</span><span class="metric-value">271°</span></div>
+        </div></article>
+        <article class="card card-pad"><div class="card-head"><div class="card-title"><span class="card-icon">☀</span>Solar & UV</div><span class="badge">Nacht</span></div><div class="rows"><div class="metric-row"><span class="metric-label">Solarstrahlung</span><span class="metric-value">0 W/m²</span></div><div class="metric-row"><span class="metric-label">UV-Index</span><span class="metric-value">0</span></div><div class="metric-row"><span class="metric-label">Sonnenaufgang / -untergang</span><span class="metric-value">07:33 / 17:52</span></div></div></article>
+        <article class="card card-pad"><div class="card-head"><div class="card-title"><span class="card-icon">♒</span>Niederschlag</div><span class="badge ok">Trocken</span></div><div class="rows"><div class="metric-row"><span class="metric-label">Rate</span><span class="metric-value">0,0 mm/h</span></div><div class="metric-row"><span class="metric-label">Stündlich / täglich</span><span class="metric-value">0,0 / 0,0 mm</span></div><div class="metric-row"><span class="metric-label">Wöchentlich / jährlich</span><span class="metric-value">0,0 / 140,2 mm</span></div></div></article>
+      </div>
+      <div class="source-head"><h2>Kanalsensoren</h2><span class="updated">7 aktive Kanäle</span></div>
+      <div class="grid grid-4">
+        <article class="card card-pad"><div class="card-head"><h3>Vorratskammer</h3><span class="badge">CH1</span></div><div class="metric-row"><span class="metric-label">Temperatur</span><b>23,2 °C</b></div><div class="metric-row"><span class="metric-label">Feuchte</span><b>65 %</b></div></article>
+        <article class="card card-pad"><div class="card-head"><h3>Küche</h3><span class="badge">CH2</span></div><div class="metric-row"><span class="metric-label">Temperatur</span><b>25,0 °C</b></div><div class="metric-row"><span class="metric-label">Feuchte</span><b>60 %</b></div></article>
+        <article class="card card-pad"><div class="card-head"><h3>Garten</h3><span class="badge">CH3</span></div><div class="metric-row"><span class="metric-label">Temperatur</span><b>25,8 °C</b></div><div class="metric-row"><span class="metric-label">Feuchte</span><b>55 %</b></div></article>
+        <article class="card card-pad"><div class="card-head"><h3>Bad</h3><span class="badge">CH5</span></div><div class="metric-row"><span class="metric-label">Temperatur</span><b>25,3 °C</b></div><div class="metric-row"><span class="metric-label">Feuchte</span><b>60 %</b></div></article>
+      </div>
+      <div style="margin-top:14px"><details><summary>Technische Rohdaten anzeigen</summary><pre>{ "outdoor": { "temperature": 21.8, "humidity": 71 }, "wind": { "speed": 0.0 } }</pre></details></div>
+    </section>
+
+    <section class="view" id="graphics">
+      <div class="page-head"><div><div class="eyebrow">Visuelle Messwerte</div><h1>Grafik</h1><p class="updated">Karte anklicken, um zum Tagesverlauf zu wechseln</p></div><span class="badge">↻ Tagesverlauf verfügbar</span></div>
+      <div class="grid grid-3">
+        <article class="card gauge-card"><div class="gauge-title"><span>Außen-Temperatur</span><button class="icon-btn" data-toggle-chart>⌁ Verlauf</button></div><div class="gauge-wrap"><div class="gauge" style="--value:58;--gauge-color:var(--hot)"><div class="gauge-data"><b>21,8</b><span>°C</span></div></div></div></article>
+        <article class="card gauge-card"><div class="gauge-title"><span>Außen-Feuchte</span><button class="icon-btn" data-toggle-chart>⌁ Verlauf</button></div><div class="gauge-wrap"><div class="gauge" style="--value:71;--gauge-color:var(--humidity)"><div class="gauge-data"><b>71</b><span>%</span></div></div></div></article>
+        <article class="card gauge-card"><div class="gauge-title"><span>Wind</span><button class="icon-btn" data-toggle-chart>⌁ Verlauf</button></div><div class="gauge-wrap"><div style="text-align:center"><div style="font-size:70px;color:var(--wind);line-height:1">↓</div><div class="kpi-value">0,0 <small style="font-size:13px">km/h</small></div><div class="updated">271° · S</div></div></div></article>
+        <article class="card gauge-card"><div class="gauge-title"><span>Luftdruck</span><button class="icon-btn" data-toggle-chart>⌁ Verlauf</button></div><div class="gauge-wrap"><div class="gauge" style="--value:72;--gauge-color:var(--wind)"><div class="gauge-data"><b>1022</b><span>hPa</span></div></div></div></article>
+        <article class="card gauge-card"><div class="gauge-title"><span>Niederschlag</span><button class="icon-btn" data-toggle-chart>⌁ Verlauf</button></div><div class="gauge-wrap"><div class="grid grid-2" style="width:100%"><div class="hero-kpi"><div class="kpi-label">Rate</div><div class="kpi-value">0,0</div><div class="kpi-note">mm/h</div></div><div class="hero-kpi"><div class="kpi-label">Jährlich</div><div class="kpi-value">140,2</div><div class="kpi-note">mm</div></div></div></div></article>
+        <article class="card gauge-card"><div class="gauge-title"><span>Solar / UV</span><button class="icon-btn" data-toggle-chart>⌁ Verlauf</button></div><div class="gauge-wrap"><div style="display:flex;gap:22px"><div class="gauge" style="width:112px;--value:2;--gauge-color:var(--solar)"><div class="gauge-data"><b>0</b><span>W/m²</span></div></div><div class="gauge" style="width:112px;--value:1;--gauge-color:var(--humidity)"><div class="gauge-data"><b>0</b><span>UVI</span></div></div></div></div></article>
+      </div>
+    </section>
+
+    <section class="view" id="forecast">
+      <div class="page-head"><div><div class="eyebrow">Mehrere Datenquellen</div><h1>Prognose</h1><p class="updated">Vorhersagen im direkten Vergleich</p></div></div>
+      <div class="card toolbar"><div class="field"><label for="station">Wetterstation</label><select id="station"><option>Wien Hohe Warte</option><option>St. Pölten</option><option>Eisenstadt</option></select></div><div class="field"><label>Ansicht</label><select><option>7 Tage</option><option>14 Tage</option></select></div><button class="button primary">Aktualisieren</button></div>
+      <div class="source-head"><h2>🇦🇹 Geosphere Austria</h2><span class="badge ok">Aktuell · vor 12 Min.</span></div>
+      <div class="grid forecast-grid">
+        <article class="card forecast-card"><div class="forecast-day"><div><h3>Heute</h3><span class="updated">28. Okt.</span></div><span class="weather-icon">🌤️</span></div><div class="temperatures"><span class="temp-max">22°</span><span class="temp-min">12°</span></div><div class="metric-row"><span class="metric-label">Niederschlag</span><b>0,2 mm</b></div><div class="metric-row"><span class="metric-label">Wind</span><b>11 km/h</b></div></article>
+        <article class="card forecast-card"><div class="forecast-day"><div><h3>Donnerstag</h3><span class="updated">29. Okt.</span></div><span class="weather-icon">☀️</span></div><div class="temperatures"><span class="temp-max">20°</span><span class="temp-min">10°</span></div><div class="metric-row"><span class="metric-label">Niederschlag</span><b>0,0 mm</b></div><div class="metric-row"><span class="metric-label">Wind</span><b>8 km/h</b></div></article>
+        <article class="card forecast-card"><div class="forecast-day"><div><h3>Freitag</h3><span class="updated">30. Okt.</span></div><span class="weather-icon">🌧️</span></div><div class="temperatures"><span class="temp-max">16°</span><span class="temp-min">9°</span></div><div class="metric-row"><span class="metric-label">Niederschlag</span><b>7,4 mm</b></div><div class="metric-row"><span class="metric-label">Wind</span><b>17 km/h</b></div></article>
+        <article class="card forecast-card"><div class="forecast-day"><div><h3>Samstag</h3><span class="updated">31. Okt.</span></div><span class="weather-icon">☁️</span></div><div class="temperatures"><span class="temp-max">15°</span><span class="temp-min">8°</span></div><div class="metric-row"><span class="metric-label">Niederschlag</span><b>1,3 mm</b></div><div class="metric-row"><span class="metric-label">Wind</span><b>14 km/h</b></div></article>
+      </div>
+      <div class="source-head"><h2>Quellenvergleich</h2><span class="updated">Meteoblue · Open-Meteo · OpenWeatherMap</span></div>
+      <div class="card table-wrap"><table><thead><tr><th>Quelle</th><th>Zeitraum</th><th>Temperatur morgen</th><th>Niederschlag</th><th>Wind</th><th>Status</th></tr></thead><tbody><tr><td>Meteoblue</td><td>7 Tage</td><td>10–20 °C</td><td>0,0 mm</td><td>9 km/h</td><td><span class="badge ok">Verfügbar</span></td></tr><tr><td>Open-Meteo DWD</td><td>7 Tage</td><td>9–19 °C</td><td>0,1 mm</td><td>8 km/h</td><td><span class="badge ok">Verfügbar</span></td></tr><tr><td>OpenWeatherMap</td><td>5 Tage</td><td>10–21 °C</td><td>0,0 mm</td><td>10 km/h</td><td><span class="badge ok">Verfügbar</span></td></tr></tbody></table></div>
+    </section>
+
+    <section class="view" id="analysis">
+      <div class="page-head"><div><div class="eyebrow">Prognosegüte</div><h1>Analyse</h1><p class="updated">Niedrigere MAE-Werte bedeuten höhere Genauigkeit</p></div></div>
+      <div class="card toolbar"><div class="field"><label>Station</label><select><option>Wien Hohe Warte</option></select></div><div class="field"><label>Zeitraum</label><select><option>30 Tage</option><option>60 Tage</option><option>90 Tage</option><option>Alles</option></select></div><button class="button primary">Aktualisieren</button></div>
+      <article class="card card-pad"><div class="card-head"><div><h2>Vorhersage-Genauigkeit</h2><p class="updated">Mittlerer absoluter Fehler nach Quelle</p></div><span class="badge">MAE</span></div><div class="table-wrap"><table><thead><tr><th>Quelle</th><th>Anzahl</th><th>Temp. min</th><th>Temp. max</th><th>Niederschlag</th><th>Wind</th></tr></thead><tbody><tr><td><b>Geosphere 🇦🇹</b></td><td>28</td><td><span class="score good">1,1</span></td><td><span class="score good">1,4</span></td><td><span class="score mid">0,8</span></td><td><span class="score good">3,2</span></td></tr><tr><td><b>Meteoblue 🇨🇭</b></td><td>30</td><td><span class="score good">1,3</span></td><td><span class="score mid">1,8</span></td><td><span class="score good">0,6</span></td><td><span class="score mid">4,8</span></td></tr><tr><td><b>Open-Meteo 🌍</b></td><td>29</td><td><span class="score mid">1,6</span></td><td><span class="score bad">2,3</span></td><td><span class="score mid">0,9</span></td><td><span class="score good">3,9</span></td></tr></tbody></table></div></article>
+      <div class="source-head"><h2>Tägliche Vergleiche</h2><span class="updated">30 Tage</span></div>
+      <div class="grid"><details open><summary>Mittwoch, 28. Oktober 2026</summary><div class="grid grid-3" style="padding:0 14px 14px"><div class="card card-pad"><h3>Geosphere</h3><div class="metric-row"><span class="metric-label">Max Prognose / Ist</span><b>22,0 / 21,8 °C</b></div><div class="metric-row"><span class="metric-label">Abweichung</span><span class="score good">0,2 °C</span></div></div><div class="card card-pad"><h3>Meteoblue</h3><div class="metric-row"><span class="metric-label">Max Prognose / Ist</span><b>23,5 / 21,8 °C</b></div><div class="metric-row"><span class="metric-label">Abweichung</span><span class="score mid">1,7 °C</span></div></div><div class="card card-pad"><h3>Open-Meteo</h3><div class="metric-row"><span class="metric-label">Max Prognose / Ist</span><b>24,2 / 21,8 °C</b></div><div class="metric-row"><span class="metric-label">Abweichung</span><span class="score bad">2,4 °C</span></div></div></div></details><details><summary>Dienstag, 27. Oktober 2026</summary></details></div>
+    </section>
+
+    <section class="view" id="archive">
+      <div class="page-head"><div><div class="eyebrow">Historische Daten</div><h1>Gespeicherte Daten</h1><p class="updated">Zeitraum wählen und Messreihen vergleichen</p></div><button class="button">⇩ Export</button></div>
+      <div class="archive-layout">
+        <aside class="card filters"><div class="card-head"><h2>Zeitraum & Anzeige</h2></div><label class="checkbox-row"><input type="checkbox" /> Freien Zeitraum verwenden</label><div class="field"><label>Jahr</label><select><option>2026</option><option>2025</option></select></div><div class="field"><label>Monat</label><select><option>Oktober</option><option>September</option></select></div><div class="field"><label>Auflösung</label><select><option>Stunden</option><option>Tage</option><option>Minuten</option></select></div><div class="field"><label>Ansicht</label><select><option>Hauptsensoren</option><option>Sensor CH1–CH8</option></select></div><button class="button primary" style="width:100%;margin-top:14px">Übernehmen</button></aside>
+        <div class="grid">
+          <article class="card chart-card"><div class="card-head"><div><h2>Außentemperatur</h2><p class="updated">01.–28. Oktober 2026 · stündlich</p></div><button class="icon-btn">↻</button></div><div class="legend"><span style="color:var(--hot)"><i></i>Temperatur</span><span style="color:var(--cold)"><i></i>Taupunkt</span></div><div class="chart"><svg viewBox="0 0 900 250" preserveAspectRatio="none"><path d="M0,170 C90,80 130,155 210,118 S360,65 430,116 S570,165 660,87 S810,55 900,98" fill="none" stroke="var(--hot)" stroke-width="3"/><path d="M0,200 C90,150 155,190 240,160 S390,120 470,155 S610,195 700,145 S825,120 900,150" fill="none" stroke="var(--cold)" stroke-width="2"/></svg></div></article>
+          <div class="grid grid-2"><article class="card chart-card"><div class="card-head"><h2>Luftfeuchte außen</h2><span class="badge">Ø 64 %</span></div><div class="chart" style="height:180px"><svg viewBox="0 0 500 180" preserveAspectRatio="none"><path d="M0,110 C50,40 90,145 145,80 S250,125 310,63 S410,90 500,42" fill="none" stroke="var(--humidity)" stroke-width="3"/></svg></div></article><article class="card chart-card"><div class="card-head"><h2>Niederschlag</h2><span class="badge">8,8 mm</span></div><div class="chart" style="height:180px"><svg viewBox="0 0 500 180" preserveAspectRatio="none"><path d="M40,180V130 M90,180V164 M160,180V80 M230,180V145 M310,180V115 M390,180V170 M450,180V95" stroke="var(--rain)" stroke-width="18"/></svg></div></article></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="statistics">
+      <div class="page-head"><div><div class="eyebrow">Langzeit-Auswertung</div><h1>Statistik</h1><p class="updated">Letzte Berechnung: heute, 14:18</p></div><div class="segmented"><button class="active">2026</button><button>2025</button><button>2024</button></div></div>
+      <div class="grid stat-kpis"><div class="card stat-kpi"><div class="kpi-label">Maximum</div><div class="kpi-value" style="color:var(--hot)">36,7 °C</div><div class="kpi-note">12. August</div></div><div class="card stat-kpi"><div class="kpi-label">Minimum</div><div class="kpi-value" style="color:var(--cold)">−8,4 °C</div><div class="kpi-note">17. Januar</div></div><div class="card stat-kpi"><div class="kpi-label">Mittel</div><div class="kpi-value">14,2 °C</div><div class="kpi-note">Temperatur</div></div><div class="card stat-kpi"><div class="kpi-label">Regen</div><div class="kpi-value" style="color:var(--rain)">541 mm</div><div class="kpi-note">Gesamt</div></div><div class="card stat-kpi"><div class="kpi-label">Regentag max.</div><div class="kpi-value">38 mm</div><div class="kpi-note">04. Juni</div></div><div class="card stat-kpi"><div class="kpi-label">Stärkste Böe</div><div class="kpi-value" style="color:var(--wind)">72 km/h</div><div class="kpi-note">18. März</div></div></div>
+      <div class="grid grid-2" style="margin-top:14px"><article class="card card-pad"><div class="card-head"><div><h2>Kalender-Heatmap</h2><p class="updated">Tagesmaximum</p></div><span class="badge">−10 bis 40 °C</span></div><div class="heatmap" id="heatmap"></div></article><article class="card card-pad"><div class="card-head"><h2>Top-Extremwerte</h2><span class="badge">Top 5</span></div><div class="rows"><div class="metric-row"><span class="metric-label">Heißester Tag</span><b style="color:var(--hot)">36,7 °C</b></div><div class="metric-row"><span class="metric-label">Kältester Tag</span><b style="color:var(--cold)">−8,4 °C</b></div><div class="metric-row"><span class="metric-label">Nassester Tag</span><b style="color:var(--rain)">38,2 mm</b></div><div class="metric-row"><span class="metric-label">Stärkste Böe</span><b style="color:var(--wind)">72 km/h</b></div></div></article></div>
+      <article class="card chat" style="margin-top:14px"><div class="chat-main"><div class="card-head"><div><h2>Wetterstatistik-Chat</h2><p class="updated">Frage nach Temperaturen, Niederschlag, Vergleichen und Extremen</p></div><button class="button danger">Verlauf löschen</button></div><div class="chat-input"><input value="War es 2025 wärmer als 2024?" aria-label="Frage zur Wetterstatistik" /><button class="button primary">Fragen</button></div><div class="bubble q">War es 2025 wärmer als 2024?</div><div class="bubble a">Ja. Die mittlere Temperatur lag 2025 um <b>0,8 °C</b> über dem Vergleichswert von 2024.</div></div><aside class="chat-side"><div class="kpi-label">Gestellte Fragen</div><div class="question active">War es 2025 wärmer als 2024?</div><div class="question">Wann war der heißeste Tag?</div><div class="question">Wie viel Regen fiel im Juni?</div></aside></article>
+    </section>
+
+    <p class="mock-note">Interaktiver UI-Klickdummy · keine API-Verbindung · statische Beispieldaten</p>
+  </main>
+
+  <script>
+    const palettes = [
+      ["spaces_default", "Ecowitt Standard", "#AED83C", "#152B35", "#5C8EA0"],
+      ["ocean_pulse", "Ozean-Puls", "#55A8FF", "#1E3531", "#8B80F9"],
+      ["amber_signal", "Bernstein-Signal", "#E4AE34", "#091F29", "#F06292"],
+      ["raspberry_velvet", "Himbeer-Samt", "#B24C70", "#251F11", "#D577A4"],
+      ["duo_neon", "Duo-Neon", "#96E255", "#1A270D", "#E4529B"],
+      ["infrared_blueprint", "Infrarot-Blueprint", "#FF4E64", "#161E3F", "#39D6FF"],
+      ["jade_clay", "Jade & Ton", "#35CFA2", "#2C2118", "#D36A3A"],
+      ["violet_cream", "Violett-Creme", "#C084FC", "#2B183A", "#F4D35E"],
+      ["pearl_graphite", "Perle & Graphit", "#E6E0C8", "#20242A", "#FF5A36"],
+      ["cobalt_saffron", "Kobalt & Safran", "#3B67FF", "#241B10", "#E7C447"],
+      ["classic_amber", "Klassischer Bernstein", "#F0B33A", "#2F2A22", "#A86B16"],
+      ["jade_mono", "Jade-Mono", "#42DCA3", "#123247", "#2A8A69"],
+      ["cyan_mono", "Cyan-Mono", "#55D6F2", "#18264D", "#2D94AA"],
+      ["violet_mono", "Violett-Mono", "#B389FF", "#3A1729", "#7D5AC7"]
+    ];
+    const root = document.documentElement;
+    const paletteSelect = document.querySelector("#palette");
+    palettes.forEach(([id, label]) => paletteSelect.add(new Option(label, id)));
+
+    function contrastInk(hex) {
+      const rgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+      const luminance = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000;
+      return luminance > 150 ? "#101010" : "#fff";
+    }
+    function setPalette(id) {
+      const p = palettes.find(x => x[0] === id) || palettes[0];
+      root.dataset.palette = p[0];
+      root.style.setProperty("--color-a", p[2]); root.style.setProperty("--color-b", p[3]);
+      root.style.setProperty("--color-c", p[4]); root.style.setProperty("--accent-ink", contrastInk(p[2]));
+      paletteSelect.value = p[0]; localStorage.setItem("eta-mock.palette", p[0]);
+    }
+    function setMode(mode) {
+      root.dataset.mode = mode;
+      document.querySelector("#darkMode").classList.toggle("active", mode === "dark");
+      document.querySelector("#lightMode").classList.toggle("active", mode === "light");
+      localStorage.setItem("eta-mock.mode", mode);
+    }
+    document.querySelector("#darkMode").addEventListener("click", () => setMode("dark"));
+    document.querySelector("#lightMode").addEventListener("click", () => setMode("light"));
+    paletteSelect.addEventListener("change", e => setPalette(e.target.value));
+    setMode(localStorage.getItem("eta-mock.mode") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
+    setPalette(localStorage.getItem("eta-mock.palette") || "spaces_default");
+
+    document.querySelectorAll(".nav button").forEach(button => button.addEventListener("click", () => {
+      document.querySelectorAll(".nav button").forEach(x => x.classList.toggle("active", x === button));
+      document.querySelectorAll(".view").forEach(x => x.classList.toggle("active", x.id === button.dataset.view));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }));
+    document.querySelectorAll(".segmented button").forEach(button => {
+      if (button.id) return;
+      button.addEventListener("click", () => {
+        button.parentElement.querySelectorAll("button").forEach(x => x.classList.toggle("active", x === button));
+      });
+    });
+    document.querySelectorAll("[data-toggle-chart]").forEach(button => button.addEventListener("click", () => {
+      button.textContent = button.textContent.includes("Verlauf") ? "◉ Messwert" : "⌁ Verlauf";
+      button.closest(".gauge-card").classList.toggle("show-chart");
+    }));
+    const heatmap = document.querySelector("#heatmap");
+    Array.from({length: 104}, (_, i) => {
+      const cell = document.createElement("span"); cell.style.setProperty("--heat", 20 + ((i * 17) % 76));
+      heatmap.appendChild(cell);
+    });
+  </script>
+</body>
+</html>

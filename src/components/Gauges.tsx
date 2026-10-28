@@ -122,7 +122,7 @@ function TempGradientBar(props: { min: number; max: number; step: number; height
       {ticks.map((v) => (
         <g key={v}>
           <line x1={x + width} y1={posY(v)} x2={x + width + 8} y2={posY(v)} stroke="#475569" strokeWidth={1} />
-          <text x={x + width + 10} y={posY(v) + 3} fontSize={10} fill="#1f2937">{v}°</text>
+          <text x={x + width + 10} y={posY(v) + 3} fontSize={10} fill="var(--foreground-muted)">{v}°</text>
         </g>
       ))}
     </svg>
@@ -190,7 +190,7 @@ function HumGradientBar(props: { min: number; max: number; step: number; height?
       {ticks.map((v, i) => (
         <g key={`${v}-${i}`}>
           <line x1={x + width} y1={posY(v)} x2={x + width + 8} y2={posY(v)} stroke="#475569" strokeWidth={1} />
-          <text x={x + width + 10} y={posY(v) + 3} fontSize={10} fill="#1f2937">{v}%</text>
+          <text x={x + width + 10} y={posY(v) + 3} fontSize={10} fill="var(--foreground-muted)">{v}%</text>
         </g>
       ))}
     </svg>
@@ -240,14 +240,14 @@ function MinMaxDisplay(props: {
   return (
     <div className="absolute inset-0 flex flex-col justify-between pointer-events-none text-xs">
       {/* Max temp at top */}
-      <div className="text-center text-red-600 font-medium bg-white/80 rounded px-1 mx-2 mt-2">
+      <div className="text-center text-red-600 dark:text-red-400 font-medium bg-white/80 dark:bg-neutral-800/90 rounded px-1 mx-2 mt-2">
         <div className="text-[14px]">↑ {sensor.max.toFixed(1)}{unit}</div>
-        <div className="text-[14px] text-gray-500">{formatTime(sensor.maxTime)}</div>
+        <div className="text-[14px] text-gray-500 dark:text-gray-400">{formatTime(sensor.maxTime)}</div>
       </div>
-      
+
       {/* Min temp at bottom */}
-      <div className="text-center text-blue-600 font-medium bg-white/80 rounded px-1 mx-2 mb-2">
-        <div className="text-[14px] text-gray-500">{formatTime(sensor.minTime)}</div>
+      <div className="text-center text-blue-600 dark:text-blue-400 font-medium bg-white/80 dark:bg-neutral-800/90 rounded px-1 mx-2 mb-2">
+        <div className="text-[14px] text-gray-500 dark:text-gray-400">{formatTime(sensor.minTime)}</div>
         <div className="text-[14px]">↓ {sensor.min.toFixed(1)}{unit}</div>
       </div>
     </div>
@@ -320,7 +320,7 @@ function DonutGauge(props: {
   const rest = C - dash;
   const fontMain = Math.round(size * 0.16); // slightly smaller to avoid overlap
   const fontUnit = Math.round(size * 0.10);
-  const labelColor = "#374151";
+  const labelColor = "var(--foreground-muted)";
 
   // angle helper starting from top
   const ang = (p: number) => -Math.PI / 2 + p * Math.PI * 2;
@@ -339,9 +339,9 @@ function DonutGauge(props: {
     if (showTicks && i < ticks) {
       tickEls.push(
         <g key={`t${i}`}>
-          <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#cbd5e1" strokeWidth={2} />
+          <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--border-strong)" strokeWidth={2} />
           {showTickLabels && (
-            <text x={lx} y={ly + 3} textAnchor="middle" fontSize={9} fill="#9ca3af" style={{ pointerEvents: 'none' }}>{labelVal}</text>
+            <text x={lx} y={ly + 3} textAnchor="middle" fontSize={9} fill="var(--foreground-muted)" style={{ pointerEvents: 'none' }}>{labelVal}</text>
           )}
         </g>
       );
@@ -354,7 +354,7 @@ function DonutGauge(props: {
         const my1 = cy + Math.sin(aa) * (r + stroke / 2 - 1);
         const mx2 = cx + Math.cos(aa) * (r + stroke / 2 + 5);
         const my2 = cy + Math.sin(aa) * (r + stroke / 2 + 5);
-        tickEls.push(<line key={`m${i}-${m}`} x1={mx1} y1={my1} x2={mx2} y2={my2} stroke="#e5e7eb" strokeWidth={1.5} />);
+        tickEls.push(<line key={`m${i}-${m}`} x1={mx1} y1={my1} x2={mx2} y2={my2} stroke="var(--border)" strokeWidth={1.5} />);
       }
     }
   }
@@ -409,7 +409,7 @@ function DonutGauge(props: {
       <div className="relative">
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ overflow: "visible" }}>
           {/* background or full-color ring */}
-          <circle cx={cx} cy={cy} r={r} fill="none" stroke={fullColorRing ? color : "#e5e7eb"} strokeOpacity={fullColorRing ? ringOpacity : 1} strokeWidth={stroke} />
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke={fullColorRing ? color : "var(--surface-raised)"} strokeOpacity={fullColorRing ? ringOpacity : 1} strokeWidth={stroke} />
           {/* segments */}
           {!fullColorRing && segEls}
           {/* extra rings (e.g., dew point, feels like) */}
@@ -432,7 +432,7 @@ function DonutGauge(props: {
           {/* ticks & labels */}
           {showTicks && tickEls}
           {showValueText && (
-            <text x={cx} y={cy - 4} textAnchor="middle" fontSize={fontMain} fontWeight={500} fill={valueColor ?? "#1f2937"}>
+            <text x={cx} y={cy - 4} textAnchor="middle" fontSize={fontMain} fontWeight={500} fill={valueColor ?? "var(--foreground-strong)"}>
               {value == null || !isFinite(value) ? "—" : (props.valuePrecision != null ? value.toFixed(props.valuePrecision) : Math.round(value))}
             </text>
           )}
@@ -793,16 +793,20 @@ export default function Gauges() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-gray-600 dark:text-gray-400">{t('statuses.lastUpdate')} {timeText}</div>
-        {loading && <div className="text-xs text-amber-600">{t('statuses.loading')}</div>}
-        {error && <div className="text-xs text-red-600">{error}</div>}
+      <div className="app-page-head">
+        <div>
+          <div className="app-eyebrow">{t('page.graphicsEyebrow')}</div>
+          <h1 className="app-page-title">{t('tabs.graphics', 'Grafik')}</h1>
+          <p className="app-updated">{t('statuses.lastUpdate')} {timeText} · {t('page.graphicsHint')}</p>
+        </div>
+        <span className={`app-badge ${error ? 'is-error' : ''}`}>{error ? error : t('page.progressionAvailable')}</span>
       </div>
+      {loading && <div className="text-xs text-amber-600">{t('statuses.loading')}</div>}
 
       {/* Top row: Outdoor Temp, Humidity, Wind */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <ProgressionToggle
-          className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center"
+          className="rounded border border-gray-200 dark:border-neutral-800 p-3"
           cardTitle={t('gauges.outdoorTemp')}
           series={[
             { label: t('gauges.outdoorTemp'), color: tempColor(outdoorT), yUnit: '°C', match: (n) => n.includes('temp') && (n.includes('aussen') || n.includes('auss') || n.includes('outdoor') || n.includes('outside')) && !n.includes('innen') && !n.includes('indoor') && !n.includes('gefuehlte') && !n.includes('taupunkt') && !n.includes('dewpoint') },
@@ -830,7 +834,7 @@ export default function Gauges() {
           </div>
         </ProgressionToggle>
         <ProgressionToggle
-          className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center"
+          className="rounded border border-gray-200 dark:border-neutral-800 p-3"
           cardTitle={t('gauges.outdoorHumidity')}
           series={[
             { label: t('gauges.outdoorHumidity'), color: humColor(outdoorH), yUnit: '%', match: (n) => (n.includes('feucht') || n.includes('humid')) && (n.includes('aussen') || n.includes('auss') || n.includes('outdoor') || n.includes('outside')) && !n.includes('innen') && !n.includes('indoor') }
@@ -857,7 +861,7 @@ export default function Gauges() {
           </div>
         </ProgressionToggle>
         <ProgressionToggle
-          className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center"
+          className="rounded border border-gray-200 dark:border-neutral-800 p-3"
           cardTitle={t('gauges.wind')}
           series={[
             { label: t('gauges.wind'), color: '#0ea5e9', yUnit: windUnit || 'km/h', match: (n) => n.includes('wind') && !n.includes('boe') && !n.includes('gust') && !n.includes('richtung') && !n.includes('direction') && !n.includes('degree') },
@@ -871,7 +875,7 @@ export default function Gauges() {
       {/* Second row: Pressure, Rain, Solar/UV */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <ProgressionToggle
-          className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center"
+          className="rounded border border-gray-200 dark:border-neutral-800 p-3"
           cardTitle={t('gauges.pressureRel')}
           series={[
             { label: t('gauges.pressureRel'), color: '#8b5cf6', yUnit: 'hPa', match: (n) => n.includes('druck') || n.includes('pressure') || n.includes('barometer') }
@@ -880,15 +884,14 @@ export default function Gauges() {
           <DonutGauge label={t('gauges.pressureRel')} value={numVal(pressureRel.value)} min={950} max={1050} unit="hPa" color="#8b5cf6" showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} />
         </ProgressionToggle>
         <ProgressionToggle
-          className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex flex-col gap-2"
+          className="rounded border border-gray-200 dark:border-neutral-800 p-3"
           cardTitle={t('gauges.precipitation')}
           series={[
             { label: t('gauges.rate'), color: '#0ea5e9', yUnit: rainRate.unit || 'mm/h', match: (n) => (n.includes('rain') || n.includes('regen')) && n.includes('rate') },
             { label: t('gauges.hourly'), color: '#3b82f6', yUnit: 'mm', match: (n) => (n.includes('rain') || n.includes('regen')) && (n.includes('hour') || n.includes('stunde')) }
           ]}
         >
-          <div className="text-sm text-sky-700 text-center w-full">{t('gauges.precipitation')}</div>
-          <div className="grid grid-cols-2 gap-3 items-center">
+          <div className="grid grid-cols-2 gap-3 items-center w-full">
             <div className="flex items-center justify-center">
               <Raindrop rate={numVal(rainRate.value)} unit={rainRate.unit || "mm/hr"} size={84} />
             </div>
@@ -924,7 +927,7 @@ export default function Gauges() {
       {/* Third row: Indoor */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <ProgressionToggle
-          className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center"
+          className="rounded border border-gray-200 dark:border-neutral-800 p-3"
           cardTitle={t('gauges.indoorTemp')}
           series={[
             { label: t('gauges.indoorTemp'), color: tempColor(indoorT), yUnit: '°C', match: (n) => n.includes('temp') && (n.includes('innen') || n.includes('indoor') || n.includes('inside')) && !n.includes('aussen') && !n.includes('auss') && !n.includes('outdoor') && !n.includes('outside') && !n.includes('gefuehlte') && !n.includes('taupunkt') && !n.includes('dewpoint') }
@@ -933,7 +936,7 @@ export default function Gauges() {
           <DonutGauge label={t('gauges.indoorTemp')} value={indoorT} min={10} max={35} unit="°C" color={tempColor(indoorT)} valuePrecision={1} showTicks={false} showTickLabels={false} showMinorTicks={false} fullColorRing={true} ringOpacity={0.6} sensorKey="indoor" tempMinMax={tempMinMax} />
         </ProgressionToggle>
         <ProgressionToggle
-          className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex items-center justify-center"
+          className="rounded border border-gray-200 dark:border-neutral-800 p-3"
           cardTitle={t('gauges.indoorHumidity')}
           series={[
             { label: t('gauges.indoorHumidity'), color: humColor(indoorH), yUnit: '%', match: (n) => (n.includes('feucht') || n.includes('humid')) && (n.includes('innen') || n.includes('indoor') || n.includes('inside')) && !n.includes('aussen') && !n.includes('auss') && !n.includes('outdoor') }
@@ -947,6 +950,10 @@ export default function Gauges() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Sun */}
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex flex-col items-center justify-center">
+          <div className="app-gauge-head w-full">
+            <span className="app-gauge-title">{t('astro.sun')}</span>
+            <span className="app-badge">{sunUp ? t('page.day') : t('page.night')}</span>
+          </div>
           <div className="flex items-center justify-center" aria-label={sunUp ? t('astro.sunrise') : t('astro.sunset')}>
             {/* Sun SVG with rays */}
             <svg width="112" height="112" viewBox="0 0 112 112" role="img" aria-hidden="true">
@@ -977,6 +984,9 @@ export default function Gauges() {
         </div>
         {/* Moon */}
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3 flex flex-col items-center justify-center">
+          <div className="app-gauge-head w-full">
+            <span className="app-gauge-title">{t('astro.moon')}</span>
+          </div>
           <div className="text-6xl select-none" aria-label={t('astro.moonPhase')}>
             {moonEmoji(astro?.phase)}
           </div>
@@ -996,7 +1006,10 @@ export default function Gauges() {
       {/* Channel mini-gauges grid */}
       {channelKeys.length > 0 && (
         <div className="rounded border border-gray-200 dark:border-neutral-800 p-3">
-          <div className="text-sm font-semibold text-black dark:text-black mb-3">{t('gauges.channelSensors')}</div>
+          <div className="app-card-head">
+            <h2 className="app-card-title">{t('gauges.channelSensors')}</h2>
+            <span className="app-updated">{t('page.activeChannels', { count: Math.min(channelKeys.length, 8) })}</span>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-3 gap-6">
             {channelKeys.slice(0, 8).map((ck) => {
               const ch = (payload as any)[ck] || {};
@@ -1007,13 +1020,13 @@ export default function Gauges() {
               const colT = tempColor(tempVal);
               return (
                 <div key={ck} className="rounded border border-gray-100 dark:border-neutral-800 p-4" style={{ borderTop: `3px solid ${colT}` }}>
-                  <div className="text-sm mb-2 text-black dark:text-black">
+                  <div className="text-sm mb-2 text-gray-800 dark:text-gray-200">
                     <span className="inline-block w-2.5 h-2.5 rounded-full mr-2 align-middle" style={{ backgroundColor: colT }} />
                     <span className="align-middle">{channelName(ck)}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 items-center">
-                    <DonutGauge label={t('gauges.tempShort')} value={tempVal} min={-20} max={45} unit="°C" color={colT} valuePrecision={1} size={180} ticks={0} showTicks={false} showMinorTicks={false} showTickLabels={false} fullColorRing={true} ringOpacity={0.6} captionColor="#000" valueColor="#000" unitColor="#000" sensorKey={ck} tempMinMax={tempMinMax} />
-                    <DonutGauge label={t('gauges.humidityShort')} value={h} min={0} max={100} unit="%" color={humColor(h)} size={180} ticks={0} showTicks={false} showMinorTicks={false} showTickLabels={false} fullColorRing={true} ringOpacity={0.6} captionColor="#000" valueColor="#000" unitColor="#000" sensorKey={ck} tempMinMax={tempMinMax} isHumidity={true} />
+                    <DonutGauge label={t('gauges.tempShort')} value={tempVal} min={-20} max={45} unit="°C" color={colT} valuePrecision={1} size={180} ticks={0} showTicks={false} showMinorTicks={false} showTickLabels={false} fullColorRing={true} ringOpacity={0.6} sensorKey={ck} tempMinMax={tempMinMax} />
+                    <DonutGauge label={t('gauges.humidityShort')} value={h} min={0} max={100} unit="%" color={humColor(h)} size={180} ticks={0} showTicks={false} showMinorTicks={false} showTickLabels={false} fullColorRing={true} ringOpacity={0.6} sensorKey={ck} tempMinMax={tempMinMax} isHumidity={true} />
                   </div>
                 </div>
               );

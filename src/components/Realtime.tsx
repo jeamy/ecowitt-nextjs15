@@ -25,33 +25,38 @@ function fmtFixed(value: string | number | null, unit: string) {
   return Number.isFinite(n) ? `${n.toFixed(1)}${unit}` : "—";
 }
 
-function TemperatureLabelValue({ 
-  label, 
-  currentTemp, 
-  minMax, 
-  field, 
-  unit = "°C", 
-  t 
-}: { 
-  label: string; 
-  currentTemp: { value: string | number | null; unit?: string }; 
-  minMax: any; 
-  field: string; 
+function MinMaxPills({ sensorData, unit }: { sensorData: any; unit: string }) {
+  if (!sensorData) return null;
+  const timeTitle = (time: string) =>
+    time ? `${new Date(time).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr` : '';
+  return (
+    <span className="app-minmax">
+      {sensorData?.min != null && (
+        <span className="app-mini app-mini--cold" title={timeTitle(sensorData.minTime)}>min {sensorData.min.toFixed(1)}{unit}</span>
+      )}
+      {sensorData?.max != null && (
+        <span className="app-mini app-mini--hot" title={timeTitle(sensorData.maxTime)}>max {sensorData.max.toFixed(1)}{unit}</span>
+      )}
+    </span>
+  );
+}
+
+function TemperatureLabelValue({
+  label,
+  currentTemp,
+  minMax,
+  field,
+  unit = "°C",
+  t
+}: {
+  label: string;
+  currentTemp: { value: string | number | null; unit?: string };
+  minMax: any;
+  field: string;
   unit?: string;
   t: (key: string) => string;
 }) {
   const sensorData = minMax?.sensors?.[field];
-  
-  const formatMinMax = (value: number, time: string, label: string, isMax: boolean) => {
-    const timeStr = time ? new Date(time).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
-    const colorClass = isMax ? 'text-red-600' : 'text-blue-600';
-    return (
-      <div className={`flex justify-between text-sm ${colorClass}`}>
-        <span>{label} {timeStr} Uhr</span>
-        <span>{value.toFixed(1)}{unit}</span>
-      </div>
-    );
-  };
 
   return (
     <div className="py-1">
@@ -59,47 +64,33 @@ function TemperatureLabelValue({
         <div className="flex flex-col w-full">
           <div className="flex justify-between items-center">
             <span className="text-gray-600 dark:text-gray-300 text-sm">{label}</span>
-            <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{fmtFixed(currentTemp.value, unit)}</span>
+            <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">
+              {fmtFixed(currentTemp.value, unit)}
+              {minMax && <MinMaxPills sensorData={sensorData} unit="" />}
+            </span>
           </div>
-          {minMax && sensorData && (
-            <div className="mt-1 space-y-0.5">
-              {sensorData?.min != null && formatMinMax(sensorData.min, sensorData.minTime, 'Min', false)}
-              {sensorData?.max != null && formatMinMax(sensorData.max, sensorData.maxTime, 'Max', true)}
-            </div>
-          )}
         </div>
       </div>
     </div>
   );
 }
 
-function HumidityLabelValue({ 
-  label, 
-  currentHumidity, 
-  minMax, 
-  field, 
-  unit = "%", 
-  t 
-}: { 
-  label: string; 
-  currentHumidity: { value: string | number | null; unit?: string }; 
-  minMax: any; 
-  field: string; 
+function HumidityLabelValue({
+  label,
+  currentHumidity,
+  minMax,
+  field,
+  unit = "%",
+  t
+}: {
+  label: string;
+  currentHumidity: { value: string | number | null; unit?: string };
+  minMax: any;
+  field: string;
   unit?: string;
   t: (key: string) => string;
 }) {
   const sensorData = minMax?.humidity?.[field];
-  
-  const formatMinMax = (value: number, time: string, label: string, isMax: boolean) => {
-    const timeStr = time ? new Date(time).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
-    const colorClass = isMax ? 'text-red-600' : 'text-blue-600';
-    return (
-      <div className={`flex justify-between text-sm ${colorClass}`}>
-        <span>{label} {timeStr} Uhr</span>
-        <span>{value.toFixed(1)}{unit}</span>
-      </div>
-    );
-  };
 
   return (
     <div className="py-1">
@@ -107,14 +98,11 @@ function HumidityLabelValue({
         <div className="flex flex-col w-full">
           <div className="flex justify-between items-center">
             <span className="text-gray-600 dark:text-gray-300 text-sm">{label}</span>
-            <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{fmtFixed(currentHumidity.value, unit)}</span>
+            <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">
+              {fmtFixed(currentHumidity.value, unit)}
+              {minMax && <MinMaxPills sensorData={sensorData} unit="%" />}
+            </span>
           </div>
-          {minMax && sensorData && (
-            <div className="mt-1 space-y-0.5">
-              {sensorData?.min != null && formatMinMax(sensorData.min, sensorData.minTime, 'Min', false)}
-              {sensorData?.max != null && formatMinMax(sensorData.max, sensorData.maxTime, 'Max', true)}
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -318,24 +306,62 @@ export default function Realtime() {
     const m = key.match(/(?:^ch|_ch)(\d+)$/i);
     const id = m ? `ch${m[1]}`.toLowerCase() : key.toLowerCase();
     const name = channels?.[id]?.name;
-    if (name) return `${name} (${id.toUpperCase()})`;
+    if (name) return name;
     return key.replace(/^temp_and_humidity_/i, "").toUpperCase();
   }
 
+  function channelBadge(key: string) {
+    const m = key.match(/(?:^ch|_ch)(\d+)$/i);
+    return m ? `CH${m[1]}` : key.toUpperCase();
+  }
+
+  const rainRateNum = numVal(rainRate.value);
+  const isRaining = rainRateNum != null && rainRateNum > 0;
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-gray-600 dark:text-gray-400">{t('statuses.lastUpdate')} {timeText}</div>
-        {loading && <div className="text-xs text-amber-600">{t('statuses.loading')}</div>}
+      <div className="app-page-head">
+        <div>
+          <div className="app-eyebrow">{t('page.conditionsEyebrow')}</div>
+          <h1 className="app-page-title">{t('page.weatherNow')}</h1>
+          <p className="app-updated">{t('statuses.lastUpdate')} {timeText}{loading ? ` · ${t('statuses.loading')}` : ''}</p>
+        </div>
+        <span className={`app-badge ${error ? 'is-error' : 'is-ok'}`}>● {error ? t('statuses.connectionIssue') : t('page.sensorsOk')}</span>
       </div>
 
       {error && (
         <div className="rounded border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm">{error}</div>
       )}
 
+      <div className="app-hero-kpis">
+        <div className="app-hero-kpi" style={{ "--kpi-color": "var(--weather-hot)" } as React.CSSProperties}>
+          <div className="app-kpi-label">{t('fields.outdoorTemperature')}</div>
+          <div className="app-kpi-value">{fmtVU(outdoorT, "°C")}</div>
+          <div className="app-kpi-note">{t('fields.feelsLike')} {fmtVU(feelsLike, "°C")}</div>
+        </div>
+        <div className="app-hero-kpi" style={{ "--kpi-color": "var(--weather-humidity)" } as React.CSSProperties}>
+          <div className="app-kpi-label">{t('fields.humidity')}</div>
+          <div className="app-kpi-value">{fmtVU(outdoorH, "%")}</div>
+          <div className="app-kpi-note">{t('fields.dewPoint')} {fmtVU(dewPoint, "°C")}</div>
+        </div>
+        <div className="app-hero-kpi" style={{ "--kpi-color": "var(--weather-wind)" } as React.CSSProperties}>
+          <div className="app-kpi-label">{t('gauges.wind')}</div>
+          <div className="app-kpi-value">{fmtVU(wind)}</div>
+          <div className="app-kpi-note">{fmtVU(windDir, "°")} · {t('gauges.gust')} {fmtVU(gust)}</div>
+        </div>
+        <div className="app-hero-kpi" style={{ "--kpi-color": "var(--weather-rain)" } as React.CSSProperties}>
+          <div className="app-kpi-label">{t('page.rainToday')}</div>
+          <div className="app-kpi-value">{fmtVU(rainDaily, "mm")}</div>
+          <div className="app-kpi-note">{t('gauges.monthly')} {fmtVU(rainMonthly, "mm")}</div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="rounded border border-gray-200 p-3">
-          <div className="font-semibold mb-2 text-emerald-700">{t('realtime.indoor')}</div>
+          <div className="app-card-head">
+            <div className="app-card-title"><span className="app-card-icon">⌂</span>{t('realtime.indoor')}</div>
+            <span className="app-badge is-ok">{t('page.normal')}</span>
+          </div>
           <TemperatureLabelValue 
             label={t('fields.temperature')} 
             currentTemp={indoorT}
@@ -354,7 +380,10 @@ export default function Realtime() {
           <LabelValue label={t('gauges.pressureAbs')} value={fmtVU(pressureAbs, "hPa")} />
         </div>
         <div className="rounded border border-gray-200 p-3">
-          <div className="font-semibold mb-2 text-sky-700">{t('realtime.outdoor')}</div>
+          <div className="app-card-head">
+            <div className="app-card-title"><span className="app-card-icon">◒</span>{t('realtime.outdoor')}</div>
+            <span className="app-badge">CH0</span>
+          </div>
           <TemperatureLabelValue 
             label={t('fields.temperature')} 
             currentTemp={outdoorT}
@@ -384,12 +413,18 @@ export default function Realtime() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="rounded border border-gray-200 p-3">
-          <div className="font-semibold mb-2 text-amber-700">{t('realtime.solarUv')}</div>
+          <div className="app-card-head">
+            <div className="app-card-title"><span className="app-card-icon">☀</span>{t('realtime.solarUv')}</div>
+            <span className="app-badge">{sunUp ? t('page.day') : t('page.night')}</span>
+          </div>
           <LabelValue label={t('gauges.solar')} value={fmtVU(solar, "W/m²")} />
           <LabelValue label={t('gauges.uvIndex')} value={fmtVU(uvi)} />
         </div>
         <div className="rounded border border-gray-200 p-3">
-          <div className="font-semibold mb-2 text-blue-700">{t('gauges.precipitation')}</div>
+          <div className="app-card-head">
+            <div className="app-card-title"><span className="app-card-icon">♒</span>{t('gauges.precipitation')}</div>
+            <span className={`app-badge ${isRaining ? 'is-warn' : 'is-ok'}`}>{isRaining ? t('page.raining') : t('page.dry')}</span>
+          </div>
           <LabelValue label={t('gauges.rate')} value={fmtVU(rainRate)} />
           <LabelValue label={t('gauges.hourly')} value={fmtVU(rainHourly, "mm")} />
           <LabelValue label={t('gauges.daily')} value={fmtVU(rainDaily, "mm")} />
@@ -403,7 +438,9 @@ export default function Realtime() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* Sun (text only) */}
         <div className="rounded border border-gray-200 p-3">
-          <div className="font-semibold mb-2 text-amber-700">{t('astro.sun')}</div>
+          <div className="app-card-head">
+            <div className="app-card-title"><span className="app-card-icon">☀</span>{t('astro.sun')}</div>
+          </div>
           <div className="text-sm text-gray-600 dark:text-gray-300 text-center">
             {t('astro.sunrise')} <span className="font-bold">{formatTime(sunrise, tz, i18n.language)}</span> — <span className="font-bold">{formatTime(sunset, tz, i18n.language)}</span> {t('astro.sunset')}
           </div>
@@ -420,7 +457,9 @@ export default function Realtime() {
         </div>
         {/* Moon (text only) */}
         <div className="rounded border border-gray-200 p-3">
-          <div className="font-semibold mb-2 text-stone-700">{t('astro.moon')}</div>
+          <div className="app-card-head">
+            <div className="app-card-title"><span className="app-card-icon">☾</span>{t('astro.moon')}</div>
+          </div>
           <div className="text-sm text-gray-600 dark:text-gray-300 text-center">
             {t('astro.moonPhase')}: <span className="font-bold">{astro?.phaseName || "—"}{moonIllumPct != null ? ` (${Math.round(moonIllumPct)}%)` : ''}</span>
           </div>
@@ -436,9 +475,12 @@ export default function Realtime() {
       </div>
 
       {channelKeys.length > 0 && (
-        <div className="rounded border border-gray-200 p-3">
-          <div className="font-semibold mb-2 text-purple-700">{t('gauges.channelSensors')}</div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <>
+          <div className="app-source-head">
+            <h2>{t('gauges.channelSensors')}</h2>
+            <span className="app-updated">{t('page.activeChannels', { count: channelKeys.length })}</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
             {channelKeys.map((ck) => {
               const ch = payload[ck] || {};
               const entries = Object.entries(ch) as [string, any][];
@@ -466,7 +508,10 @@ export default function Realtime() {
               
               return (
                 <div key={ck} className="rounded border border-gray-100 p-3">
-                  <div className="font-medium mb-1">{channelDisplayName(ck)}</div>
+                  <div className="app-card-head">
+                    <h3 className="app-card-title" style={{ fontSize: 13 }}>{channelDisplayName(ck)}</h3>
+                    <span className="app-badge">{channelBadge(ck)}</span>
+                  </div>
                   {entries.length === 0 && <div className="text-xs text-gray-500">{t('statuses.noData')}</div>}
                   {entries.map(([name, val]) => {
                     const vu = valueAndUnit(val);
@@ -513,12 +558,14 @@ export default function Realtime() {
               );
             })}
           </div>
-        </div>
+        </>
       )}
 
       {payload?.battery && typeof payload.battery === "object" && (
         <div className="rounded border border-gray-200 p-3">
-          <div className="font-semibold mb-2 text-stone-700">{t('realtime.battery')}</div>
+          <div className="app-card-head">
+            <div className="app-card-title"><span className="app-card-icon">⚡</span>{t('realtime.battery')}</div>
+          </div>
           {Object.entries(payload.battery as Record<string, any>).map(([name, val]) => (
             <LabelValue key={name} label={name} value={fmtBattery(val, t)} />
           ))}

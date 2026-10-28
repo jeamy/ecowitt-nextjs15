@@ -321,26 +321,26 @@ export default function Statistics() {
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">{t("tabs.statistics", "Statistics")}</h2>
-        <div className="flex items-center gap-3">
-          <fieldset className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-            <legend className="sr-only">{t("dashboard.year")}</legend>
-            <span aria-hidden>{t("dashboard.year")}:</span>
-            {yearsSorted.map((y) => (
-              <label key={y.year} className="inline-flex items-center gap-1 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selectedYears.includes(y.year)}
-                  onChange={() => toggleYear(y.year)}
-                />
-                <span>{y.year}</span>
-              </label>
-            ))}
-          </fieldset>
-          <div className="text-xs text-gray-500">
-            {t("statuses.lastUpdate")} {data?.updatedAt ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(data.updatedAt)) : "–"}
-          </div>
+      <div className="app-page-head">
+        <div>
+          <div className="app-eyebrow">{t('page.statisticsEyebrow')}</div>
+          <h1 className="app-page-title">{t("tabs.statistics", "Statistics")}</h1>
+          <p className="app-updated">
+            {t('page.lastCalculation')} {data?.updatedAt ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(data.updatedAt)) : "–"}
+          </p>
+        </div>
+        <div className="app-segmented" role="group" aria-label={t("dashboard.year")}>
+          {yearsSorted.map((y) => (
+            <button
+              key={y.year}
+              type="button"
+              className={selectedYears.includes(y.year) ? "is-active" : ""}
+              aria-pressed={selectedYears.includes(y.year)}
+              onClick={() => toggleYear(y.year)}
+            >
+              {y.year}
+            </button>
+          ))}
         </div>
       </div>
       <StatisticsChat />

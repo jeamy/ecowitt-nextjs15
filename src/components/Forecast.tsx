@@ -176,6 +176,7 @@ export default function Forecast() {
   const [errorOM, setErrorOM] = useState<string | null>(null);
   const [failedPictos, setFailedPictos] = useState<Record<number, boolean>>({});
   const [meteogramFailed, setMeteogramFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // Load stations on component mount
   useEffect(() => {
@@ -340,7 +341,7 @@ export default function Forecast() {
     loadMeteoblue();
     loadOpenMeteo();
     loadOpenWeather();
-  }, [selectedStation]);
+  }, [selectedStation, reloadKey]);
 
   // Group forecast data by day
   const groupedForecast = forecastData.reduce((acc: Record<string, ForecastDataPoint[]>, point) => {
@@ -384,35 +385,101 @@ export default function Forecast() {
     };
   });
 
+  const anyLoading = loading || loadingOWM || loadingMB || loadingOM;
+
+  // Source comparison for tomorrow (index 1 of each chronologically sorted series)
+  const comparisonRows = [
+    {
+      key: "geosphere",
+      name: "Geosphere 🇦🇹",
+      days: dailyForecast.length,
+      tempMin: dailyForecast[1]?.minTemp,
+      tempMax: dailyForecast[1]?.maxTemp,
+      precip: dailyForecast[1]?.totalPrecip,
+      wind: dailyForecast[1]?.maxWind ?? dailyForecast[1]?.avgWind,
+      error,
+      available: dailyForecast.length > 0,
+    },
+    {
+      key: "meteoblue",
+      name: "Meteoblue 🇨🇭",
+      days: meteoblueData.length,
+      tempMin: meteoblueData[1]?.tempMin,
+      tempMax: meteoblueData[1]?.tempMax,
+      precip: meteoblueData[1]?.precipitation,
+      wind: meteoblueData[1]?.windSpeed,
+      error: errorMB,
+      available: meteoblueData.length > 0,
+    },
+    {
+      key: "openmeteo",
+      name: "Open-Meteo 🌍",
+      days: openMeteoData.length,
+      tempMin: openMeteoData[1]?.tempMin,
+      tempMax: openMeteoData[1]?.tempMax,
+      precip: openMeteoData[1]?.precipitation,
+      wind: openMeteoData[1]?.windSpeed,
+      error: errorOM,
+      available: openMeteoData.length > 0,
+    },
+    {
+      key: "openweathermap",
+      name: "OpenWeatherMap 🌍",
+      days: openWeatherData.length,
+      tempMin: openWeatherData[1]?.tempMin,
+      tempMax: openWeatherData[1]?.tempMax,
+      precip: openWeatherData[1]?.precipitation,
+      wind: openWeatherData[1]?.windSpeed,
+      error: errorOWM,
+      available: openWeatherData.length > 0,
+    },
+  ];
+  const anySourceAvailable = comparisonRows.some((row) => row.available);
+
   return (
     <div className="w-full">
-      <h1 className="text-2xl font-bold mb-6">{t("tabs.forecast", "Prognose")}</h1>
-      
-      {/* Station selection dropdown */}
-      <div className="mb-6">
-        <label htmlFor="station-select" className="block text-sm font-medium mb-2">
-          {t("forecast.selectStation", "Wetterstation auswählen")}
-        </label>
-        <select
-          id="station-select"
-          value={selectedStation}
-          onChange={(e) => setSelectedStation(e.target.value)}
-          className="w-full p-2 border border-gray-300 dark:border-neutral-700 rounded bg-white dark:bg-neutral-800 text-gray-900 dark:text-gray-100"
-          disabled={loading}
-        >
-          <option value="">{t("forecast.selectPlaceholder", "Station auswählen...")}</option>
-          {Object.entries(stations).map(([state, stateStations]) => (
-            <optgroup key={state} label={state}>
-              {stateStations.map((station) => (
-                <option key={station.id} value={station.id}>
-                  {station.name}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+      <div className="app-page-head">
+        <div>
+          <div className="app-eyebrow">{t('page.forecastEyebrow')}</div>
+          <h1 className="app-page-title">{t("tabs.forecast", "Prognose")}</h1>
+          <p className="app-updated">{t('page.forecastHint')}</p>
+        </div>
       </div>
-      
+
+      {/* Station selection + reload */}
+      <div className="app-toolbar">
+        <div className="app-field">
+          <label htmlFor="station-select">
+            {t("forecast.selectStation", "Wetterstation auswählen")}
+          </label>
+          <select
+            id="station-select"
+            value={selectedStation}
+            onChange={(e) => setSelectedStation(e.target.value)}
+            disabled={loading}
+          >
+            <option value="">{t("forecast.selectPlaceholder", "Station auswählen...")}</option>
+            {Object.entries(stations).map(([state, stateStations]) => (
+              <optgroup key={state} label={state}>
+                {stateStations.map((station) => (
+                  <option key={station.id} value={station.id}>
+                    {station.name}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+        <button
+          type="button"
+          className="app-button app-button--primary"
+          onClick={() => setReloadKey((k) => k + 1)}
+          disabled={anyLoading || !selectedStation}
+        >
+          {t("page.refresh")}
+        </button>
+      </div>
+
       {/* Loading and error states */}
       {loading && (
         <div className="text-center py-8">
@@ -430,7 +497,7 @@ export default function Forecast() {
       {/* Geosphere Forecast */}
       {dailyForecast.length > 0 && (
         <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">🇦🇹 Geosphere Austria (~2.5 Tage)</h2>
+          <div className="app-source-head"><h2>🇦🇹 Geosphere Austria</h2><span className="app-badge is-ok">{t('page.available')} · ~2.5 {t('dashboard.days')}</span></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {dailyForecast.map((dayData, index) => (
               <div 
@@ -533,7 +600,7 @@ export default function Forecast() {
       
       {meteoblueData.length > 0 && selectedStation && (
         <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">🇨🇭 Meteoblue (7 Tage)</h2>
+          <div className="app-source-head"><h2>🇨🇭 Meteoblue</h2><span className="app-badge is-ok">{t('page.available')} · 7 {t('dashboard.days')}</span></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {meteoblueData.map((dayData, index) => {
               const date = new Date(dayData.date);
@@ -690,7 +757,7 @@ export default function Forecast() {
       
       {openMeteoData.length > 0 && (
         <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">🌍 Open-Meteo DWD (7 Tage)</h2>
+          <div className="app-source-head"><h2>🌍 Open-Meteo DWD</h2><span className="app-badge is-ok">{t('page.available')} · 7 {t('dashboard.days')}</span></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {openMeteoData.map((dayData, index) => {
               const date = new Date(dayData.date);
@@ -813,7 +880,7 @@ export default function Forecast() {
       
       {openWeatherData.length > 0 && (
         <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">🌍 OpenWeatherMap (5 Tage)</h2>
+          <div className="app-source-head"><h2>🌍 OpenWeatherMap</h2><span className="app-badge is-ok">{t('page.available')} · 5 {t('dashboard.days')}</span></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {openWeatherData.map((dayData, index) => {
               const date = new Date(dayData.date);
@@ -924,6 +991,50 @@ export default function Forecast() {
             })}
           </div>
         </div>
+      )}
+
+      {/* Source comparison */}
+      {selectedStation && anySourceAvailable && (
+        <>
+          <div className="app-source-head">
+            <h2>{t('page.sourcesComparison')}</h2>
+            <span className="app-updated">Geosphere · Meteoblue · Open-Meteo · OpenWeatherMap</span>
+          </div>
+          <div className="rounded border border-gray-200 dark:border-neutral-700 overflow-x-auto">
+            <table className="w-full border-collapse min-w-[660px]">
+              <thead>
+                <tr className="border-b border-gray-200 dark:border-neutral-700">
+                  <th className="text-left p-3 text-xs font-medium text-gray-500">{t('page.colSource')}</th>
+                  <th className="text-left p-3 text-xs font-medium text-gray-500">{t('page.colRange')}</th>
+                  <th className="text-left p-3 text-xs font-medium text-gray-500">{t('page.colTempTomorrow')}</th>
+                  <th className="text-left p-3 text-xs font-medium text-gray-500">{t('forecast.precipitation', 'Niederschlag')}</th>
+                  <th className="text-left p-3 text-xs font-medium text-gray-500">{t('forecast.wind', 'Wind')}</th>
+                  <th className="text-left p-3 text-xs font-medium text-gray-500">{t('page.colStatus')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {comparisonRows.map((row) => (
+                  <tr key={row.key} className="border-b border-gray-100 dark:border-neutral-800">
+                    <td className="p-3 font-medium">{row.name}</td>
+                    <td className="p-3">{row.days > 0 ? `${row.days} ${t('dashboard.days')}` : "—"}</td>
+                    <td className="p-3 tabular-nums">
+                      {row.tempMin != null && row.tempMax != null
+                        ? `${Math.round(row.tempMin)}–${Math.round(row.tempMax)} °C`
+                        : "—"}
+                    </td>
+                    <td className="p-3 tabular-nums">{row.precip != null ? `${row.precip.toFixed(1)} mm` : "—"}</td>
+                    <td className="p-3 tabular-nums">{row.wind != null ? `${Math.round(row.wind)} km/h` : "—"}</td>
+                    <td className="p-3">
+                      <span className={`app-badge ${row.available ? 'is-ok' : 'is-warn'}`}>
+                        {row.available ? t('page.available') : t('page.unavailable')}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

@@ -167,16 +167,30 @@ export default function ForecastAnalysis() {
     return error.toFixed(1);
   };
 
+  const scoreClass = (error: number | null, goodBelow = 1.5, midBelow = 3) => {
+    if (error === null) return "";
+    if (error < goodBelow) return "app-score--good";
+    if (error < midBelow) return "app-score--mid";
+    return "app-score--bad";
+  };
+
   return (
-    <div className="p-6 space-y-6">
-      {/* Controls */}
-      <div className="flex flex-wrap gap-4 items-end bg-white p-4 rounded-lg shadow">
+    <div className="space-y-6">
+      <div className="app-page-head">
         <div>
-          <label className="block text-sm font-medium mb-1">{t("analysis.stationLabel")}</label>
+          <div className="app-eyebrow">{t('page.analysisEyebrow')}</div>
+          <h1 className="app-page-title">{t('tabs.analysis', 'Analyse')}</h1>
+          <p className="app-updated">{t('page.analysisHint')}</p>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div className="app-toolbar">
+        <div className="app-field">
+          <label>{t("analysis.stationLabel")}</label>
           <select
             value={stationId}
             onChange={(e) => setStationId(e.target.value)}
-            className="border rounded px-3 py-2"
           >
             {Object.entries(stations).map(([state, stateStations]) => (
               <optgroup key={state} label={state}>
@@ -190,12 +204,11 @@ export default function ForecastAnalysis() {
           </select>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">{t("analysis.daysLabel")}</label>
+        <div className="app-field">
+          <label>{t("analysis.daysLabel")}</label>
           <select
             value={String(days)}
             onChange={(e) => setDays(e.target.value === "all" ? "all" : parseInt(e.target.value))}
-            className="border rounded px-3 py-2"
           >
             <option value={7}>{t("analysis.days7")}</option>
             <option value={14}>{t("analysis.days14")}</option>
@@ -208,7 +221,7 @@ export default function ForecastAnalysis() {
 
         <button
           onClick={fetchAnalysis}
-          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+          className="app-button app-button--primary"
           disabled={loading}
         >
           {loading ? t("analysis.refreshLoading") : t("analysis.refresh")}
@@ -233,7 +246,10 @@ export default function ForecastAnalysis() {
         <>
       {/* Summary Stats */}
       <div className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-xl font-bold mb-4">{t("analysis.summaryTitle")}</h2>
+        <div className="app-card-head">
+          <h2 className="text-xl font-bold">{t("analysis.summaryTitle")}</h2>
+          <span className="app-badge">MAE</span>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>
@@ -251,10 +267,10 @@ export default function ForecastAnalysis() {
                 <tr key={source} className="border-b hover:bg-gray-50">
                   <td className="p-2 font-medium">{getSourceName(source)}</td>
                   <td className="p-2">{stats.sampleSize}</td>
-                  <td className="p-2">{formatError(stats.tempMin.mae)}</td>
-                  <td className="p-2">{formatError(stats.tempMax.mae)}</td>
-                  <td className="p-2">{formatError(stats.precipitation.mae)}</td>
-                  <td className="p-2">{formatError(stats.windSpeed.mae)}</td>
+                  <td className="p-2"><span className={`app-score ${scoreClass(stats.tempMin.mae)}`}>{formatError(stats.tempMin.mae)}</span></td>
+                  <td className="p-2"><span className={`app-score ${scoreClass(stats.tempMax.mae)}`}>{formatError(stats.tempMax.mae)}</span></td>
+                  <td className="p-2"><span className={`app-score ${scoreClass(stats.precipitation.mae, 0.7, 1.5)}`}>{formatError(stats.precipitation.mae)}</span></td>
+                  <td className="p-2"><span className={`app-score ${scoreClass(stats.windSpeed.mae, 4.5, 7)}`}>{formatError(stats.windSpeed.mae)}</span></td>
                 </tr>
               ))}
             </tbody>

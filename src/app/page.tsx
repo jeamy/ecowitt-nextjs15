@@ -1,85 +1,84 @@
 "use client";
 
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import Dashboard from "@/components/Dashboard";
-import Realtime from "@/components/Realtime";
-import Gauges from "@/components/Gauges";
-import Statistics from "@/components/Statistics";
 import Forecast from "@/components/Forecast";
 import ForecastAnalysis from "@/components/ForecastAnalysis";
-import { useTranslation } from "react-i18next";
-import LanguageSwitcher from "@/components/LanguageSwitcher";
-import { RealtimeProvider } from "@/contexts/RealtimeContext";
+import Gauges from "@/components/Gauges";
+import Realtime from "@/components/Realtime";
+import Statistics from "@/components/Statistics";
+import ThemeControls from "@/components/ThemeControls";
+import { RealtimeProvider, useRealtime } from "@/contexts/RealtimeContext";
+import { useTheme } from "@/lib/theme";
 
-/**
- * The main page component for the weather dashboard.
- * It provides a tabbed interface to switch between different views:
- * - Realtime: A list of current sensor readings.
- * - Graphics: A set of gauges and visual displays for current data.
- * - Forecast: 7-day weather forecast from multiple APIs.
- * - Analysis: Forecast accuracy analysis comparing predictions with actual data.
- * - Saved: A dashboard for viewing historical data with charts.
- * - Statistics: Statistical analysis of historical data.
- *
- * @returns The Home page component.
- */
-export default function Home() {
-  const { t } = useTranslation();
-  const [tab, setTab] = useState<"rt" | "gfx" | "stored" | "stats" | "forecast" | "analysis">("rt");
+type Tab = "rt" | "gfx" | "forecast" | "analysis" | "stored" | "stats";
+
+const TABS: Array<{ id: Tab; icon: string; key: string; fallback: string }> = [
+  { id: "rt", icon: "◉", key: "tabs.realtime", fallback: "Realtime" },
+  { id: "gfx", icon: "◌", key: "tabs.graphics", fallback: "Graphics" },
+  { id: "forecast", icon: "☁", key: "tabs.forecast", fallback: "Forecast" },
+  { id: "analysis", icon: "⌁", key: "tabs.analysis", fallback: "Analysis" },
+  { id: "stored", icon: "▤", key: "tabs.saved", fallback: "Saved data" },
+  { id: "stats", icon: "▥", key: "tabs.statistics", fallback: "Statistics" },
+];
+
+function Shell() {
+  const { t, i18n } = useTranslation();
+  const [tab, setTab] = useState<Tab>("rt");
+  const theme = useTheme();
+  const { loading, error, lastUpdated } = useRealtime();
+  const language = i18n.language?.startsWith("en") ? "en" : "de";
+  const status = error
+    ? (language === "de" ? "Verbindung gestört" : "Connection issue")
+    : loading && !lastUpdated
+      ? t("statuses.loading")
+      : lastUpdated
+        ? `${t("statuses.lastUpdate")} ${new Intl.DateTimeFormat(language, { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(lastUpdated)}`
+        : (language === "de" ? "Warte auf Messwerte" : "Waiting for readings");
+
   return (
-    <RealtimeProvider>
-      <div className="min-h-screen w-full bg-gray-50 dark:bg-neutral-950 text-gray-900 dark:text-gray-100 p-4 sm:p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="mb-4 flex items-center gap-2 border-b border-gray-200 dark:border-neutral-800">
-            <button
-              className={`px-3 py-2 text-sm font-medium rounded-t ${tab === "rt" ? "bg-white dark:bg-neutral-900 border border-b-0 border-gray-200 dark:border-neutral-800" : "text-gray-600 hover:text-gray-900"}`}
-              onClick={() => setTab("rt")}
-            >
-              {t("tabs.realtime")}
-            </button>
-            <button
-              className={`px-3 py-2 text-sm font-medium rounded-t ${tab === "gfx" ? "bg-white dark:bg-neutral-900 border border-b-0 border-gray-200 dark:border-neutral-800" : "text-gray-600 hover:text-gray-900"}`}
-              onClick={() => setTab("gfx")}
-            >
-              {t("tabs.graphics")}
-            </button>
-            <button
-              className={`px-3 py-2 text-sm font-medium rounded-t ${tab === "forecast" ? "bg-white dark:bg-neutral-900 border border-b-0 border-gray-200 dark:border-neutral-800" : "text-gray-600 hover:text-gray-900"}`}
-              onClick={() => setTab("forecast")}
-            >
-              {t("tabs.forecast", "Forecast")}
-            </button>
-            <button
-              className={`px-3 py-2 text-sm font-medium rounded-t ${tab === "analysis" ? "bg-white dark:bg-neutral-900 border border-b-0 border-gray-200 dark:border-neutral-800" : "text-gray-600 hover:text-gray-900"}`}
-              onClick={() => setTab("analysis")}
-            >
-              {t("tabs.analysis", "Analysis")}
-            </button>
-            <button
-              className={`px-3 py-2 text-sm font-medium rounded-t ${tab === "stored" ? "bg-white dark:bg-neutral-900 border border-b-0 border-gray-200 dark:border-neutral-800" : "text-gray-600 hover:text-gray-900"}`}
-              onClick={() => setTab("stored")}
-            >
-              {t("tabs.saved")}
-            </button>
-            <button
-              className={`px-3 py-2 text-sm font-medium rounded-t ${tab === "stats" ? "bg-white dark:bg-neutral-900 border border-b-0 border-gray-200 dark:border-neutral-800" : "text-gray-600 hover:text-gray-900"}`}
-              onClick={() => setTab("stats")}
-            >
-              {t("tabs.statistics", "Statistics")}
-            </button>
-            <LanguageSwitcher />
+    <div className="weather-app">
+      <header className="app-header">
+        <div className="app-header-inner">
+          <div className="app-top-row">
+            <div className="app-brand">
+              <div className="app-brand-mark" aria-hidden="true">⌁</div>
+              <div>
+                <div className="app-brand-name">Weather Control</div>
+                <div className="app-brand-sub">Ecowitt {language === "de" ? "Wetterstation" : "weather station"}</div>
+              </div>
+            </div>
+            <div className={`app-live ${error ? "is-error" : ""}`}>
+              <span className="app-live-dot" />
+              <span>{status}</span>
+            </div>
+            <ThemeControls {...theme} />
           </div>
-
-          <div className="rounded-b border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4">
-            {tab === "rt" && <Realtime />}
-            {tab === "gfx" && <Gauges />}
-            {tab === "forecast" && <Forecast />}
-            {tab === "analysis" && <ForecastAnalysis />}
-            {tab === "stored" && <Dashboard />}
-            {tab === "stats" && <Statistics />}
+          <div className="app-nav-scroll">
+            <nav className="app-nav" role="tablist" aria-label={language === "de" ? "Hauptnavigation" : "Main navigation"}>
+              {TABS.map((item) => (
+                <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} className={tab === item.id ? "is-active" : ""} onClick={() => setTab(item.id)}>
+                  <span aria-hidden="true">{item.icon}</span>{t(item.key, item.fallback)}
+                </button>
+              ))}
+            </nav>
           </div>
         </div>
-      </div>
-    </RealtimeProvider>
+      </header>
+
+      <main className="app-main" role="tabpanel">
+        {tab === "rt" && <Realtime />}
+        {tab === "gfx" && <Gauges />}
+        {tab === "forecast" && <Forecast />}
+        {tab === "analysis" && <ForecastAnalysis />}
+        {tab === "stored" && <Dashboard />}
+        {tab === "stats" && <Statistics />}
+      </main>
+    </div>
   );
+}
+
+export default function Home() {
+  return <RealtimeProvider><Shell /></RealtimeProvider>;
 }

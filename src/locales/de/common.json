@@ -18,7 +18,8 @@
     "loadErrorAllsensors": "Fehler beim Laden der Allsensors-Daten",
     "loadErrorMain": "Fehler beim Laden der Hauptdaten",
     "minuteDataWarning": "Warnung: Minutendaten für Statistik konnten nicht geladen werden",
-    "minuteDataWarningAllsensors": "Warnung: Minutendaten (Allsensors) für Statistik konnten nicht geladen werden"
+    "minuteDataWarningAllsensors": "Warnung: Minutendaten (Allsensors) für Statistik konnten nicht geladen werden",
+    "connectionIssue": "Verbindung gestört"
   },
   "gauges": {
     "outdoorTemp": "🌡️ Außen-Temperatur",
@@ -294,5 +295,37 @@
       "27": "Starker Regen",
       "unknown": "Unbekannt"
     }
+  },
+  "page": {
+    "conditionsEyebrow": "Aktuelle Bedingungen",
+    "weatherNow": "Wetter jetzt",
+    "sensorsOk": "Alle Sensoren erreichbar",
+    "normal": "Normal",
+    "day": "Tag",
+    "night": "Nacht",
+    "dry": "Trocken",
+    "raining": "Regen",
+    "rainToday": "Regen heute",
+    "activeChannels": "{count} aktive Kanäle",
+    "graphicsEyebrow": "Visuelle Messwerte",
+    "graphicsHint": "Karte anklicken, um zum Tagesverlauf zu wechseln",
+    "progressionAvailable": "↻ Tagesverlauf verfügbar",
+    "history": "Verlauf",
+    "forecastEyebrow": "Mehrere Datenquellen",
+    "forecastHint": "Vorhersagen im direkten Vergleich",
+    "available": "Verfügbar",
+    "unavailable": "Nicht verfügbar",
+    "analysisEyebrow": "Prognosegüte",
+    "analysisHint": "Niedrigere MAE-Werte bedeuten höhere Genauigkeit",
+    "archiveEyebrow": "Historische Daten",
+    "archiveHint": "Zeitraum wählen und Messreihen vergleichen",
+    "statisticsEyebrow": "Langzeit-Auswertung",
+    "lastCalculation": "Letzte Berechnung:",
+    "refresh": "Aktualisieren",
+    "sourcesComparison": "Quellenvergleich",
+    "colSource": "Quelle",
+    "colRange": "Zeitraum",
+    "colTempTomorrow": "Temperatur morgen",
+    "colStatus": "Status"
   }
 }

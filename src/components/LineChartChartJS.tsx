@@ -105,7 +105,24 @@ export default function LineChart({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const chartRef = useRef<Chart | null>(null);
   const [isZoomed, setIsZoomed] = useState(false);
+  const [themeVersion, setThemeVersion] = useState(0);
   const zoomRegisteredRef = useRef(false);
+
+  useEffect(() => {
+    const updateTheme = () => setThemeVersion((version) => version + 1);
+    window.addEventListener("ecowitt-theme-change", updateTheme);
+    return () => window.removeEventListener("ecowitt-theme-change", updateTheme);
+  }, []);
+
+  const themeColors = useMemo(() => {
+    void themeVersion;
+    if (typeof window === "undefined") return { text: "#64748b", grid: "rgba(148,163,184,.2)" };
+    const styles = getComputedStyle(document.documentElement);
+    return {
+      text: styles.getPropertyValue("--foreground-muted").trim() || "#64748b",
+      grid: styles.getPropertyValue("--border").trim() || "rgba(148,163,184,.2)",
+    };
+  }, [themeVersion]);
 
   // Register zoom plugin only on the client to avoid SSR window errors
   useEffect(() => {
@@ -309,13 +326,14 @@ export default function LineChart({
           position: cfg.position || (id === "y1" ? "right" : "left"),
           grid: { drawOnChartArea: false },
           ticks: {
+            color: themeColors.text,
             callback: (val: any) => {
               const v = typeof val === "number" ? val : Number(val);
               return Number.isFinite(v) ? v.toFixed(1) : String(val);
             },
           },
           title: cfg.title
-            ? { display: true, text: cfg.title }
+            ? { display: true, text: cfg.title, color: themeColors.text }
             : undefined,
         };
         if (cfg.min != null) scale.min = cfg.min;
@@ -332,6 +350,7 @@ export default function LineChart({
         x: {
           type: "linear",
           ticks: {
+            color: themeColors.text,
             // Optimiert für Tagesanzeige
             maxTicksLimit: 15,
             autoSkip: true,
@@ -351,18 +370,20 @@ export default function LineChart({
             display: true,
             drawOnChartArea: true,
             drawTicks: true,
-            color: 'rgba(200, 200, 200, 0.2)'
+            color: themeColors.grid
           },
           title: xLabel
             ? {
                 display: true,
                 text: xLabel,
+                color: themeColors.text,
               }
             : undefined,
         },
         y: {
           type: "linear",
           ticks: {
+            color: themeColors.text,
             callback: (val: any) => {
               const v = typeof val === "number" ? val : Number(val);
               return Number.isFinite(v) ? v.toFixed(1) : String(val);
@@ -372,6 +393,7 @@ export default function LineChart({
             ? {
                 display: true,
                 text: yLabel,
+                color: themeColors.text,
               }
             : undefined,
         },
@@ -381,6 +403,7 @@ export default function LineChart({
         legend: {
           display: showLegend,
           labels: {
+            color: themeColors.text,
             filter: (legendItem: any, data: any) => {
               const ds = data?.datasets?.[legendItem.datasetIndex] as any;
               return !(ds && ds.skipLegend);
@@ -442,7 +465,7 @@ export default function LineChart({
       },
     };
     return opts;
-  }, [xTickFormatter, hoverTimeFormatter, xLabel, yLabel, yScales, showLegend, showHover, valueFormatter, yUnit, bars, minX, maxX]);
+  }, [xTickFormatter, hoverTimeFormatter, xLabel, yLabel, yScales, showLegend, showHover, valueFormatter, yUnit, bars, minX, maxX, themeColors]);
 
   // Create/update chart
   useEffect(() => {

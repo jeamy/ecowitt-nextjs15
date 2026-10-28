@@ -18,7 +18,8 @@
     "loadErrorAllsensors": "Error loading allsensors data",
     "loadErrorMain": "Error loading main data",
     "minuteDataWarning": "Warning: minute data for statistics failed to load",
-    "minuteDataWarningAllsensors": "Warning: minute data (Allsensors) for statistics failed to load"
+    "minuteDataWarningAllsensors": "Warning: minute data (Allsensors) for statistics failed to load",
+    "connectionIssue": "Connection issue"
   },
   "gauges": {
     "outdoorTemp": "🌡️ Outdoor Temperature",
@@ -290,5 +291,37 @@
       "27": "Heavy rain",
       "unknown": "Unknown"
     }
+  },
+  "page": {
+    "conditionsEyebrow": "Current conditions",
+    "weatherNow": "Weather now",
+    "sensorsOk": "All sensors reachable",
+    "normal": "Normal",
+    "day": "Day",
+    "night": "Night",
+    "dry": "Dry",
+    "raining": "Raining",
+    "rainToday": "Rain today",
+    "activeChannels": "{count} active channels",
+    "graphicsEyebrow": "Visual readings",
+    "graphicsHint": "Click a card to switch to the daily progression",
+    "progressionAvailable": "↻ Daily progression available",
+    "history": "Progression",
+    "forecastEyebrow": "Multiple data sources",
+    "forecastHint": "Forecasts side by side",
+    "available": "Available",
+    "unavailable": "Unavailable",
+    "analysisEyebrow": "Forecast skill",
+    "analysisHint": "Lower MAE values mean higher accuracy",
+    "archiveEyebrow": "Historical data",
+    "archiveHint": "Pick a range and compare series",
+    "statisticsEyebrow": "Long-term evaluation",
+    "lastCalculation": "Last calculation:",
+    "refresh": "Refresh",
+    "sourcesComparison": "Source comparison",
+    "colSource": "Source",
+    "colRange": "Range",
+    "colTempTomorrow": "Temperature tomorrow",
+    "colStatus": "Status"
   }
 }

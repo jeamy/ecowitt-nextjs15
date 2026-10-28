@@ -81,7 +81,7 @@ export function ProgressionToggle({
   const activeClasses = showProgression && progressionClassName ? progressionClassName : className;
   return (
     <div
-      className={`${activeClasses} cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/50`.trim()}
+      className={`${activeClasses} app-gauge-card cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/50`.trim()}
       title={titleAttr}
       onClick={() => setShowProgression((v) => !v)}
       role="button"
@@ -93,10 +93,23 @@ export function ProgressionToggle({
         }
       }}
     >
+      <div className="app-gauge-head">
+        <span className="app-gauge-title">{cardTitle}</span>
+        <button
+          type="button"
+          className="app-icon-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowProgression((v) => !v);
+          }}
+        >
+          ⌁ {t("page.history")}
+        </button>
+      </div>
       {showProgression ? (
         <ProgressionChart series={series} cardTitle={cardTitle} yScales={yScales} />
       ) : (
-        children
+        <div className="app-gauge-body">{children}</div>
       )}
     </div>
   );

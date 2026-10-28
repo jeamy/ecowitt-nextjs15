@@ -1130,12 +1130,16 @@ export default function Dashboard() {
 
   return (
     <div className={styles.container}>
-      <header className={styles.header}>
-        <h1 className={styles.title}>{t('dashboard.title')}</h1>
-        {subtitle ? <p className={styles.subtitle}>{subtitle}</p> : null}
-      </header>
+      <div className="app-page-head">
+        <div>
+          <div className="app-eyebrow">{t('page.archiveEyebrow')}</div>
+          <h1 className="app-page-title">{t('dashboard.title')}</h1>
+          {subtitle ? <p className="app-updated">{subtitle}</p> : null}
+        </div>
+      </div>
 
-      <section className={styles.card}>
+      <div className={styles.archiveLayout}>
+      <aside className={`${styles.card} ${styles.filters}`}>
         <span className={styles.sectionTitle}>{controlsHeading}</span>
         <div className={styles.controlGrid}>
           <label className={styles.toggleRow}>
@@ -1271,8 +1275,9 @@ export default function Dashboard() {
             </button>
           </div>
         )}
-      </section>
+      </aside>
 
+      <div className={styles.archiveContent}>
       {loading && (
         <div className={`${styles.card} ${styles.statusMessage} ${styles.statusInfo}`}>
           {t('statuses.loading')}
@@ -1359,6 +1364,8 @@ export default function Dashboard() {
           </div>
         </section>
       )}
+      </div>
+      </div>
     </div>
   );
 }
