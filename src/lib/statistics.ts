@@ -31,6 +31,12 @@ export interface DailyAggregateRow {
   wind_avg: number | null;
   tfmax?: number | null;
   tfmin?: number | null;
+  tmax_time?: string | null;
+  tmin_time?: string | null;
+  tfmax_time?: string | null;
+  tfmin_time?: string | null;
+  wind_max_time?: string | null;
+  gust_max_time?: string | null;
 }
 
 function coalesceNumeric(
@@ -69,7 +75,6 @@ export async function queryDailyAggregatesInRange(
 
   const whereStart = start ? `ts >= strptime(${sqlLiteral(formatDuck(start))}, ['%Y-%m-%d %H:%M'])` : '1=1';
   const whereEnd = end ? `ts <= strptime(${sqlLiteral(formatDuck(end))}, ['%Y-%m-%d %H:%M'])` : '1=1';
-  const dayFormat = start || end ? "%Y-%m-%d %H:%M:%S" : "%Y-%m-%d";
 
   const sql = `
     WITH src AS (
@@ -89,12 +94,18 @@ export async function queryDailyAggregatesInRange(
     ),
     daily AS (
       SELECT
-        date_trunc('day', ts) + INTERVAL '12 hours' AS d,
+        date_trunc('day', ts) AS d,
         max(t) AS tmax,
         min(t) AS tmin,
         avg(t) AS tavg,
         max(tf) AS tfmax,
         min(tf) AS tfmin,
+        arg_max(ts, t ORDER BY ts) AS tmax_time,
+        arg_min(ts, t ORDER BY ts) AS tmin_time,
+        arg_max(ts, tf ORDER BY ts) AS tfmax_time,
+        arg_min(ts, tf ORDER BY ts) AS tfmin_time,
+        arg_max(ts, wind ORDER BY ts) AS wind_max_time,
+        arg_max(ts, gust ORDER BY ts) AS gust_max_time,
         max(rain_d) AS rdaily,
         sum(rain_h) AS rhourly,
         sum(rain_g) AS rgeneric,
@@ -104,9 +115,15 @@ export async function queryDailyAggregatesInRange(
       FROM casted
       GROUP BY 1
     )
-    SELECT strftime(d, '${dayFormat}') AS day,
+    SELECT strftime(d, '%Y-%m-%d') AS day,
       tmax, tmin, tavg,
       tfmax, tfmin,
+      strftime(tmax_time, '%Y-%m-%d %H:%M:%S') AS tmax_time,
+      strftime(tmin_time, '%Y-%m-%d %H:%M:%S') AS tmin_time,
+      strftime(tfmax_time, '%Y-%m-%d %H:%M:%S') AS tfmax_time,
+      strftime(tfmin_time, '%Y-%m-%d %H:%M:%S') AS tfmin_time,
+      strftime(wind_max_time, '%Y-%m-%d %H:%M:%S') AS wind_max_time,
+      strftime(gust_max_time, '%Y-%m-%d %H:%M:%S') AS gust_max_time,
       COALESCE(rdaily, rhourly, rgeneric) AS rain_day,
       wind_max, gust_max, wind_avg
     FROM daily
@@ -168,14 +185,14 @@ export function computeStatsFromDaily(rows: DailyAggregateRow[]): {
     const tn = toNum(r.tmin);
     const ta = toNum(r.tavg);
     if (tx !== null) {
-      if (tx > tMax) { tMax = tx; tMaxDate = d; }
+      if (tx > tMax) { tMax = tx; tMaxDate = r.tmax_time ?? d; }
       if (tx > 35) over35.push({ date: d, value: tx });
       if (tx > 30) over30.push({ date: d, value: tx });
       if (tx > 25) over25.push({ date: d, value: tx });
       if (tx > 20) over20.push({ date: d, value: tx });
     }
     if (tn !== null) {
-      if (tn < tMin) { tMin = tn; tMinDate = d; }
+      if (tn < tMin) { tMin = tn; tMinDate = r.tmin_time ?? d; }
       if (tn < 0) under0.push({ date: d, value: tn });
       if (tn <= -10) under10.push({ date: d, value: tn });
     }
@@ -194,14 +211,14 @@ export function computeStatsFromDaily(rows: DailyAggregateRow[]): {
     const wmx = toNum(r.wind_max);
     const gmx = toNum(r.gust_max);
     const wav = toNum(r.wind_avg);
-    if (wmx !== null && wmx > windMax) { windMax = wmx; windMaxDate = d; }
-    if (gmx !== null && gmx > gustMax) { gustMax = gmx; gustMaxDate = d; }
+    if (wmx !== null && wmx > windMax) { windMax = wmx; windMaxDate = r.wind_max_time ?? d; }
+    if (gmx !== null && gmx > gustMax) { gustMax = gmx; gustMaxDate = r.gust_max_time ?? d; }
     if (wav !== null) { windAvgSum += wav; windAvgCnt++; }
 
     const fmx = toNum((r as any).tfmax);
     const fmn = toNum((r as any).tfmin);
-    if (fmx !== null && fmx > feltMax) { feltMax = fmx; feltMaxDate = d; }
-    if (fmn !== null && fmn < feltMin) { feltMin = fmn; feltMinDate = d; }
+    if (fmx !== null && fmx > feltMax) { feltMax = fmx; feltMaxDate = r.tfmax_time ?? d; }
+    if (fmn !== null && fmn < feltMin) { feltMin = fmn; feltMinDate = r.tfmin_time ?? d; }
   }
 
   const temp = {

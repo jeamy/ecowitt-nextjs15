@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import { ensureAllsensorsParquetsInRange } from "@/lib/db/ingest";
 import { parquetListLiteral, quoteIdent, sqlLiteral, sqlNum } from "@/lib/data/columns";
+import type { DailyAggregateRow } from "@/lib/statistics";
 
 export const runtime = "nodejs";
 
@@ -123,19 +124,27 @@ export async function GET(req: NextRequest) {
             min(t) AS tmin,
             avg(t) AS tavg,
             max(tf) AS tfmax,
-            min(tf) AS tfmin
+            min(tf) AS tfmin,
+            arg_max(ts, t ORDER BY ts) AS tmax_time,
+            arg_min(ts, t ORDER BY ts) AS tmin_time,
+            arg_max(ts, tf ORDER BY ts) AS tfmax_time,
+            arg_min(ts, tf ORDER BY ts) AS tfmin_time
           FROM casted
           GROUP BY 1
         )
         SELECT strftime(d, '%Y-%m-%d') AS day,
           tmax, tmin, tavg,
-          tfmax, tfmin
+          tfmax, tfmin,
+          strftime(tmax_time, '%Y-%m-%d %H:%M:%S') AS tmax_time,
+          strftime(tmin_time, '%Y-%m-%d %H:%M:%S') AS tmin_time,
+          strftime(tfmax_time, '%Y-%m-%d %H:%M:%S') AS tfmax_time,
+          strftime(tfmin_time, '%Y-%m-%d %H:%M:%S') AS tfmin_time
         FROM daily
         ORDER BY day;
       `;
 
       const reader = await conn.runAndReadAll(sql);
-      return reader.getRowObjects() as Array<{ day: string; tmax: number | null; tmin: number | null; tavg: number | null; tfmax: number | null; tfmin: number | null; }>;
+      return reader.getRowObjects() as unknown as DailyAggregateRow[];
     });
 
     // Compute stats from daily rows
@@ -150,8 +159,8 @@ export async function GET(req: NextRequest) {
       const tx = typeof r.tmax === 'number' && Number.isFinite(r.tmax) ? r.tmax : null;
       const tn = typeof r.tmin === 'number' && Number.isFinite(r.tmin) ? r.tmin : null;
       const ta = typeof r.tavg === 'number' && Number.isFinite(r.tavg) ? r.tavg : null;
-      if (tx !== null) { if (tx > tMax) { tMax = tx; tMaxDate = d; } if (tx > 35) over35.push({ date: d, value: tx }); if (tx > 30) over30.push({ date: d, value: tx }); }
-      if (tn !== null) { if (tn < tMin) { tMin = tn; tMinDate = d; } if (tn < 0) under0.push({ date: d, value: tn }); }
+      if (tx !== null) { if (tx > tMax) { tMax = tx; tMaxDate = r.tmax_time ?? d; } if (tx > 35) over35.push({ date: d, value: tx }); if (tx > 30) over30.push({ date: d, value: tx }); }
+      if (tn !== null) { if (tn < tMin) { tMin = tn; tMinDate = r.tmin_time ?? d; } if (tn < 0) under0.push({ date: d, value: tn }); }
       if (ta !== null) { tAvgSum += ta; tAvgCnt++; }
     }
     const temp = {
@@ -176,8 +185,8 @@ export async function GET(req: NextRequest) {
         const d = r.day;
         const fx = typeof r.tfmax === 'number' && Number.isFinite(r.tfmax) ? r.tfmax : null;
         const fn = typeof r.tfmin === 'number' && Number.isFinite(r.tfmin) ? r.tfmin : null;
-        if (fx !== null && (feelMax == null || fx > (feelMax as number))) { feelMax = fx; feelMaxDate = d; }
-        if (fn !== null && (feelMin == null || fn < (feelMin as number))) { feelMin = fn; feelMinDate = d; }
+        if (fx !== null && (feelMax == null || fx > (feelMax as number))) { feelMax = fx; feelMaxDate = r.tfmax_time ?? d; }
+        if (fn !== null && (feelMin == null || fn < (feelMin as number))) { feelMin = fn; feelMinDate = r.tfmin_time ?? d; }
       }
     }
 

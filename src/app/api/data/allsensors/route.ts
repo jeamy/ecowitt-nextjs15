@@ -5,6 +5,7 @@ import { getAllsensorsFilename, getAllsensorsFilesInRange } from "@/lib/files";
 import { parseTimestamp, type Resolution } from "@/lib/time";
 import { ensureAllsensorsParquetForMonth, ensureAllsensorsParquetsInRange } from "@/lib/db/ingest";
 import { discoverMainColumns as discoverColumns, parquetListLiteral, quoteIdent, sqlLiteral, sqlNum, speedExprFor } from "@/lib/data/columns";
+import { isChannelMetricColumn } from "@/lib/data/channels";
 
 export const runtime = "nodejs";
 
@@ -80,6 +81,7 @@ export async function GET(req: Request) {
           .map((r: any) => String(r.column_name || r.ColumnName || r.column || ""))
           .filter((c) => c && c !== "ts" && c !== "Time" && c !== "Zeit");
         for (const c of typedNumeric) pushCol(c);
+        for (const c of allNames.filter(isChannelMetricColumn)) pushCol(c);
 
         const candidates: (string | null)[] = [
           hints.temp,
